@@ -1,0 +1,42 @@
+# TMC Load Tracker - Upcoming Features Scratchpad
+
+## 🗑️ Feature: Delete Record Query Logic
+
+### 1. Add to LoadDao.kt
+
+```kotlin
+@Delete
+suspend fun deleteLoad(load: CurrentLoad)
+```
+
+### 2. Add to LoadViewModel.kt
+
+```kotlin
+fun deleteLoad(loadOriginal: CurrentLoad) {
+    viewModelScope.launch {
+        loadDao.deleteLoad(loadOriginal)
+    }
+}
+```
+
+### 3. Add to MainActivity.kt (Inside "dashboard" block)
+
+```kotlin
+onDeleteTripClick = { loadToDelete ->
+    viewModel.deleteLoad(loadOriginal = loadToDelete)
+}
+```
+
+### 4. Add to DashboardScreen.kt (History Card Loop)
+
+```kotlin
+IconButton(onClick = { onDeleteTripClick(load) }) {
+    Icon(
+        imageVector = Icons.Default.Delete,
+        contentDescription = "Delete",
+        tint = MaterialTheme.colorScheme.error
+    )
+}
+```
+Load Help not working.
+Theme not working.
