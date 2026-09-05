@@ -98,11 +98,10 @@ planned for future updates:
 * **Shipper/Consignee Database:** Save notes about specific facilities (e.g., "Tight back-in," "Slow
   loading," or "Overnight parking available").
 
-### ☁️ Cloud Sync & Multi-Device
-
-* **Automatic Backups:** Securely sync your data to the cloud so you never lose your records, even
-  if you switch phones.
-* **Web Dashboard:** Access your hauling history and payroll estimates from any computer.
+### ☁️ Cloud Sync & Data Portability
+* **Google Drive Integration:** Securely back up your hauling database to your personal Google Drive account for private, long-term storage.
+* **Cross-Device Sync:** Implement real-time synchronization allowing you to monitor active loads and view history across multiple devices (e.g., phone and tablet).
+* **Automated Disaster Recovery:** Seamlessly protect your mileage and payroll records from being lost if your phone is damaged, lost, or reset.
 
 ### 📊 Performance Analytics
 

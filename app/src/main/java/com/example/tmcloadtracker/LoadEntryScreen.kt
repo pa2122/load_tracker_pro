@@ -1,6 +1,7 @@
 package com.example.tmcloadtracker
 
 import android.content.Intent
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -19,16 +20,19 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.Icon
+import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -41,6 +45,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -78,6 +85,16 @@ fun LoadEntryScreen(
 
     var manualActBounce by remember { mutableStateOf("") }
     var manualActLoaded by remember { mutableStateOf("") }
+    var matchDispatched by remember { mutableStateOf(true) }
+
+    var showDatePicker by remember { mutableStateOf(false) }
+    var selectedDateMillis by remember { mutableStateOf(System.currentTimeMillis()) }
+    val dateLabel = remember(selectedDateMillis) {
+        val instant = Instant.ofEpochMilli(selectedDateMillis)
+        val zone = ZoneId.systemDefault()
+        val formatter = DateTimeFormatter.ofPattern("MM/dd/yyyy")
+        instant.atZone(zone).toLocalDate().format(formatter)
+    }
 
     var tripStatus by remember { mutableStateOf(editingLoad?.tripState ?: "NOT_STARTED") }
 
@@ -171,26 +188,66 @@ fun LoadEntryScreen(
         }
 
         if (isManualEntry) {
-            Text("Actual Miles Driven", style = MaterialTheme.typography.titleMedium)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(
-                    value = manualActBounce,
-                    onValueChange = { input ->
-                        manualActBounce = input.filter { it.isDigit() || it == '.' }
-                    },
-                    label = { Text("Actual Bounce mi") },
-                    modifier = Modifier.weight(1f),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
-                )
-                OutlinedTextField(
-                    value = manualActLoaded,
-                    onValueChange = { input ->
-                        manualActLoaded = input.filter { it.isDigit() || it == '.' }
-                    },
-                    label = { Text("Actual Loaded mi") },
-                    modifier = Modifier.weight(1f),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
-                )
+            Text("Historical Data Points", style = MaterialTheme.typography.titleMedium)
+            
+            OutlinedTextField(
+                value = dateLabel,
+                onValueChange = {},
+                readOnly = true,
+                label = { Text("Trip Pickup Date") },
+                trailingIcon = {
+                    IconButton(onClick = { showDatePicker = true }) {
+                        Icon(Icons.Default.ArrowDropDown, contentDescription = "Pick Date")
+                    }
+                },
+                modifier = Modifier.fillMaxWidth().clickable { showDatePicker = true }
+            )
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Checkbox(checked = matchDispatched, onCheckedChange = { matchDispatched = it })
+                Text("Ignore Out-of-Route (Match Dispatched Miles)")
+            }
+
+            if (!matchDispatched) {
+                Text("Actual Miles Driven", style = MaterialTheme.typography.titleMedium)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = manualActBounce,
+                        onValueChange = { input ->
+                            manualActBounce = input.filter { it.isDigit() || it == '.' }
+                        },
+                        label = { Text("Actual Bounce mi") },
+                        modifier = Modifier.weight(1f),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                    )
+                    OutlinedTextField(
+                        value = manualActLoaded,
+                        onValueChange = { input ->
+                            manualActLoaded = input.filter { it.isDigit() || it == '.' }
+                        },
+                        label = { Text("Actual Loaded mi") },
+                        modifier = Modifier.weight(1f),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                    )
+                }
+            }
+        }
+
+        if (showDatePicker) {
+            val datePickerState = rememberDatePickerState(initialSelectedDateMillis = selectedDateMillis)
+            DatePickerDialog(
+                onDismissRequest = { showDatePicker = false },
+                confirmButton = {
+                    TextButton(onClick = {
+                        selectedDateMillis = datePickerState.selectedDateMillis ?: selectedDateMillis
+                        showDatePicker = false
+                    }) { Text("OK") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showDatePicker = false }) { Text("Cancel") }
+                }
+            ) {
+                DatePicker(state = datePickerState)
             }
         }
 
@@ -290,8 +347,7 @@ fun LoadEntryScreen(
         when {
             isManualEntry -> {
                 val isFormValid = proNum.trim().isNotEmpty() &&
-                        manualActBounce.trim().isNotEmpty() &&
-                        manualActLoaded.trim().isNotEmpty() &&
+                        (matchDispatched || (manualActBounce.trim().isNotEmpty() && manualActLoaded.trim().isNotEmpty())) &&
                         loadPay.trim().isNotEmpty()
 
                 Button(
@@ -301,23 +357,27 @@ fun LoadEntryScreen(
                             selectedTarp.contains("Steel") || selectedTarp.contains("S") -> "S"
                             else -> "N"
                         }
+                        
+                        val dispB = dBounce.toDoubleOrNull() ?: 0.0
+                        val dispL = dLoaded.toDoubleOrNull() ?: 0.0
+                        
                         val manualData = CurrentLoad(
                             proNumber = proNum.trim(),
-                            dispatchedBounceMiles = dBounce.toDoubleOrNull() ?: 0.0,
-                            dispatchedLoadedMiles = dLoaded.toDoubleOrNull() ?: 0.0,
+                            dispatchedBounceMiles = dispB,
+                            dispatchedLoadedMiles = dispL,
                             bounceMilesStart = 0.0,
-                            bounceMilesEnd = manualActBounce.toDoubleOrNull() ?: 0.0,
+                            bounceMilesEnd = if (matchDispatched) dispB else manualActBounce.toDoubleOrNull() ?: 0.0,
                             loadedMilesStart = 0.0,
-                            loadedMilesEnd = manualActLoaded.toDoubleOrNull() ?: 0.0,
+                            loadedMilesEnd = if (matchDispatched) dispL else manualActLoaded.toDoubleOrNull() ?: 0.0,
                             percentageRate = ratePct.toDoubleOrNull() ?: 80.0,
                             loadPay = loadPay.toDoubleOrNull() ?: 0.0,
                             tarpType = tChar,
                             isPreTarped = isPreTarped,
                             isGoingHome = isGoingHome,
-                            pickupTimestamp = System.currentTimeMillis(),
+                            pickupTimestamp = selectedDateMillis,
                             tripState = "COMPLETED",
                             tripNotes = if (tripNotes.isBlank()) null else tripNotes,
-                            deliveryTimestamp = System.currentTimeMillis()
+                            deliveryTimestamp = selectedDateMillis + 3600000 // Placeholder +1 hour
                         )
                         onSaveClick(manualData)
                     },
