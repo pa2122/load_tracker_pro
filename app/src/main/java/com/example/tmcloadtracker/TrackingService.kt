@@ -43,6 +43,10 @@ class TrackingService : Service() {
         
         var activeProNumber: String? = null
 
+        // 📍 NEW: Pinned Home for Auto-Pause
+        var homeLat: Double? = null
+        var homeLong: Double? = null
+
         var targetLat: Double? = null
         var targetLong: Double? = null
         var targetName: String? = null
@@ -121,6 +125,35 @@ class TrackingService : Service() {
     }
 
     private fun checkGeofence(currentLocation: Location) {
+        // 1. Check for Home Arrival if on a "Going Home" load
+        if (homeLat != null && homeLong != null) {
+            val homeLoc = Location("").apply {
+                latitude = homeLat!!
+                longitude = homeLong!!
+            }
+            if (currentLocation.distanceTo(homeLoc) < 305.0) { // 1,000 feet
+                // 📍 AUTO-PAUSE LOGIC
+                activeSegment = "PAUSED_AT_HOME"
+                isGeofenceActive = false
+                updateNotification()
+
+                // Update Database so Dashboard reflects the "At Home" state
+                val pro = activeProNumber
+                if (pro != null) {
+                    serviceScope.launch {
+                        try {
+                            val dao = AppDatabase.getDatabase(applicationContext).loadDao()
+                            dao.updateTripState(pro, "PAUSED_AT_HOME")
+                            // 📍 STOP SERVICE TO SAVE BATTERY & PRIVACY
+                            stopSelf()
+                        } catch (e: Exception) { e.printStackTrace() }
+                    }
+                }
+                return 
+            }
+        }
+
+        // 2. Standard Facility Geofencing
         if (!isGeofenceActive || targetLat == null || targetLong == null) return
 
         val targetLoc = Location("").apply {
@@ -145,12 +178,17 @@ class TrackingService : Service() {
     private fun updateNotification() {
         val miles = if (activeSegment == "Bounce") totalBounceMilesTracked.value else totalLoadedMilesTracked.value
         
-        val hudTitle = if (activeSegment == "Paused") {
-            "📍 ARRIVED AT ${targetName?.uppercase(Locale.US) ?: "DESTINATION"}"
-        } else {
-            "Load Tracker Pro - Active"
+        val hudTitle = when (activeSegment) {
+            "Paused" -> "📍 ARRIVED AT ${targetName?.uppercase(Locale.US) ?: "DESTINATION"}"
+            "PAUSED_AT_HOME" -> "🏠 HOME BASE DETECTED"
+            else -> "Load Tracker Pro - Active"
         }
-        val contentText = if (activeSegment == "Paused") "Status: Arrived / Loading Mode" else "$activeSegment: ${String.format(Locale.US, "%.1f", miles)} mi"
+
+        val contentText = when (activeSegment) {
+            "Paused" -> "Status: Arrived / Loading Mode"
+            "PAUSED_AT_HOME" -> "GPS Paused - Enjoy your time off!"
+            else -> "$activeSegment: ${String.format(Locale.US, "%.1f", miles)} mi"
+        }
 
         val notificationIntent = Intent(this, MainActivity::class.java)
         val pendingIntent = PendingIntent.getActivity(

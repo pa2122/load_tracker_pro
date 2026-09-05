@@ -22,6 +22,9 @@ interface LoadDao {
     @Delete
     suspend fun deleteLoad(load: CurrentLoad)
 
+    @Query("UPDATE trucking_loads SET tripState = :newState WHERE proNumber = :pro")
+    suspend fun updateTripState(pro: String, newState: String)
+
     @Insert
     suspend fun insertBreadcrumb(breadcrumb: TripBreadcrumb)
 

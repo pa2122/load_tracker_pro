@@ -145,7 +145,11 @@ class MainActivity : ComponentActivity() {
                     val savedLoads by viewModel.allLoads.collectAsState(initial = emptyList())
 
                     LaunchedEffect(key1 = savedLoads) {
-                        val active = savedLoads.find { (it.tripState != "COMPLETED") && (it.tripState != "NOT_STARTED") }
+                        val active = savedLoads.find { 
+                            (it.tripState != "COMPLETED") && 
+                            (it.tripState != "NOT_STARTED") && 
+                            (it.tripState != "PAUSED_AT_HOME") 
+                        }
                         if (active != null) {
                             val fineLocation = ContextCompat.checkSelfPermission(
                                 this@MainActivity, Manifest.permission.ACCESS_FINE_LOCATION,
@@ -174,6 +178,12 @@ class MainActivity : ComponentActivity() {
                                 startService(Intent(this@MainActivity, TrackingService::class.java))
                             }
                         }
+                    }
+
+                    // 📍 SYNC HOME COORDS TO SERVICE
+                    LaunchedEffect(key1 = homeLat, key2 = homeLong) {
+                        TrackingService.homeLat = homeLat
+                        TrackingService.homeLong = homeLong
                     }
 
                     val weeklySummary by remember(

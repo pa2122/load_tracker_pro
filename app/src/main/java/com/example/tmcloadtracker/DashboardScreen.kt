@@ -1,7 +1,7 @@
 package com.example.tmcloadtracker
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -32,6 +32,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import dev.jeziellago.compose.markdowntext.MarkdownText
@@ -65,11 +66,11 @@ fun DashboardScreen(
     val completedLoads = pastLoads.filter { it.tripState == "COMPLETED" }
 
     var showCompletionDialog by remember { mutableStateOf(value = false) }
-    var showHistoryDetailsDialog by remember { mutableStateOf(false) }
-    var showWeeklyBreakdownDialog by remember { mutableStateOf(false) } 
+    var showHistoryDetailsDialog by remember { mutableStateOf(value = false) }
+    var showWeeklyBreakdownDialog by remember { mutableStateOf(value = false) } 
     var selectedTripData by remember { mutableStateOf<CurrentLoad?>(null) }
-    var showActiveOptionsDialog by remember { mutableStateOf(false) }
-    var showStatementHistoryDialog by remember { mutableStateOf(false) }
+    var showActiveOptionsDialog by remember { mutableStateOf(value = false) }
+    var showStatementHistoryDialog by remember { mutableStateOf(value = false) }
     var selectedWeekFriday by remember { mutableStateOf(value = null as LocalDate?) }
     var showDeleteConfirmation by remember { mutableStateOf(value = false) }
     var tripToDelete by remember { mutableStateOf(value = null as CurrentLoad?) }
@@ -78,13 +79,13 @@ fun DashboardScreen(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding)
+                .padding(paddingValues = innerPadding)
         ) {
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                    .padding(all = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(space = 16.dp)
             ) {
                 item {
                     Text("Load Tracker Pro", style = MaterialTheme.typography.headlineMedium)
@@ -103,8 +104,8 @@ fun DashboardScreen(
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
                     ) {
                         Column(
-                            modifier = Modifier.padding(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                            modifier = Modifier.padding(all = 16.dp),
+                            verticalArrangement = Arrangement.spacedBy(space = 12.dp)
                         ) {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
@@ -157,8 +158,20 @@ fun DashboardScreen(
                                 .clickable { showActiveOptionsDialog = true },
                             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer)
                         ) {
+                            val label = when (activeTrip.tripState) {
+                                "ACTIVE_BOUNCE" -> "En Route to: ${activeTrip.shipperName ?: "Shipper"}"
+                                "ACTIVE_SHIPPER" -> "Arrived at: ${activeTrip.shipperName ?: "Shipper"}"
+                                "ACTIVE_LOADED" -> "En Route to: ${activeTrip.consigneeName ?: "Consignee"}"
+                                "PAUSED_AT_HOME" -> "🏠 PARKED AT HOME BASE"
+                                else -> "Active Journey"
+                            }
+
+                            val isAtHome = activeTrip.tripState == "PAUSED_AT_HOME"
+
                             Column(
-                                modifier = Modifier.padding(16.dp),
+                                modifier = Modifier
+                                    .padding(all = 16.dp)
+                                    .graphicsLayer(alpha = if (isAtHome) 0.6f else 1.0f),
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
                                 Text(
@@ -167,12 +180,7 @@ fun DashboardScreen(
                                     color = MaterialTheme.colorScheme.onTertiaryContainer
                                 )
                                 Spacer(modifier = Modifier.height(4.dp))
-                                val label = when (activeTrip.tripState) {
-                                    "ACTIVE_BOUNCE" -> "En Route to: ${activeTrip.shipperName ?: "Shipper"}"
-                                    "ACTIVE_SHIPPER" -> "Arrived at: ${activeTrip.shipperName ?: "Shipper"}"
-                                    "ACTIVE_LOADED" -> "En Route to: ${activeTrip.consigneeName ?: "Consignee"}"
-                                    else -> "Active Journey"
-                                }
+                                
                                 Text(label, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onTertiaryContainer)
                                 Spacer(modifier = Modifier.height(12.dp))
                                 Row(
@@ -200,6 +208,22 @@ fun DashboardScreen(
                                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.2f))
 
                                 when (activeTrip.tripState) {
+                                    "PAUSED_AT_HOME" -> {
+                                        Button(
+                                            onClick = {
+                                                TrackingService.activeSegment = "Loaded"
+                                                TrackingService.targetLat = activeTrip.consigneeLat
+                                                TrackingService.targetLong = activeTrip.consigneeLong
+                                                TrackingService.targetName = activeTrip.consigneeName ?: "Consignee"
+                                                TrackingService.isGeofenceActive = activeTrip.consigneeLat != null
+                                                onUpdateTripClick(activeTrip.copy(tripState = "ACTIVE_LOADED"))
+                                            },
+                                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Text("Departing Home (Resume Tracking)")
+                                        }
+                                    }
                                     "ACTIVE_BOUNCE" -> {
                                         Button(
                                             onClick = {
@@ -281,7 +305,7 @@ fun DashboardScreen(
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(32.dp),
+                                .padding(all = 32.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
@@ -292,7 +316,7 @@ fun DashboardScreen(
                     }
                 } else {
                     items(items = completedLoads) { load ->
-                        val dateLabel = remember(load.pickupTimestamp) {
+                        val dateLabel = remember(key1 = load.pickupTimestamp) {
                             val instant = Instant.ofEpochMilli(load.pickupTimestamp)
                             val zone = ZoneId.systemDefault()
                             val formatter =
@@ -316,7 +340,7 @@ fun DashboardScreen(
                                     }
                                 )
                         ) {
-                            Column(modifier = Modifier.padding(16.dp)) {
+                            Column(modifier = Modifier.padding(all = 16.dp)) {
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -385,7 +409,7 @@ fun DashboardScreen(
                     onDismissRequest = { },
                     title = { Text("Load Settlement Summary - PRO #${trip.proNumber}") },
                     text = {
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Column(verticalArrangement = Arrangement.spacedBy(space = 8.dp)) {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween
@@ -470,7 +494,7 @@ fun DashboardScreen(
                     },
                     title = { Text("Historical Record: PRO #${trip.proNumber}") },
                     text = {
-                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Column(verticalArrangement = Arrangement.spacedBy(space = 10.dp)) {
                             Text(
                                 "Financial Payroll Statement",
                                 style = MaterialTheme.typography.labelLarge,
@@ -622,7 +646,7 @@ fun DashboardScreen(
                 }
 
                 LazyColumn(
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(space = 10.dp),
                     modifier = Modifier
                         .fillMaxWidth()
                         .heightIn(max = 400.dp)
@@ -662,8 +686,8 @@ fun DashboardScreen(
                                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                             ) {
                                 Column(
-                                    modifier = Modifier.padding(10.dp),
-                                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                                    modifier = Modifier.padding(all = 10.dp),
+                                    verticalArrangement = Arrangement.spacedBy(space = 4.dp)
                                 ) {
                                     Text(
                                         "PRO #: ${trip.proNumber}",
@@ -762,7 +786,7 @@ fun DashboardScreen(
             onDismissRequest = { showActiveOptionsDialog = false },
             title = { Text("Trip Management - PRO #${activeTrip.proNumber}") },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(space = 12.dp)) {
                     Text("Select an action for your currently active load.")
                     Button(
                         onClick = {
@@ -809,7 +833,7 @@ fun DashboardScreen(
             title = { Text("Historical Payroll Statements") },
             text = {
                 Box(modifier = Modifier.heightIn(max = 500.dp)) {
-                    LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    LazyColumn(verticalArrangement = Arrangement.spacedBy(space = 8.dp)) {
                         if (grouped.isEmpty()) {
                             item { Text("No historical records found.") }
                         } else {
@@ -827,7 +851,7 @@ fun DashboardScreen(
                                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                                     ) {
                                         Row(
-                                            modifier = Modifier.padding(16.dp).fillMaxWidth(),
+                                            modifier = Modifier.padding(all = 16.dp).fillMaxWidth(),
                                             horizontalArrangement = Arrangement.SpaceBetween
                                         ) {
                                             Column {
@@ -871,14 +895,14 @@ fun DashboardScreen(
             title = { Text("Statement: ${weekFriday.format(DateTimeFormatter.ofPattern("MM/dd/yyyy"))}") },
             text = {
                 Box(modifier = Modifier.heightIn(max = 500.dp)) {
-                    LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    LazyColumn(verticalArrangement = Arrangement.spacedBy(space = 10.dp)) {
                         items(weeklyTrips) { trip ->
                             val net = (trip.loadPay * (trip.percentageRate / 100.0)) + (if (trip.dispatchedBounceMiles >= 150.0) trip.dispatchedBounceMiles * 0.20 else 0.0)
                             Card(modifier = Modifier.fillMaxWidth().clickable { 
                                 selectedTripData = trip
                                 showHistoryDetailsDialog = true
                             }) {
-                                Column(modifier = Modifier.padding(12.dp)) {
+                                Column(modifier = Modifier.padding(all = 12.dp)) {
                                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                                         Text("PRO #${trip.proNumber}", style = MaterialTheme.typography.titleSmall)
                                         Text("$${String.format(Locale.US, "%.2f", net)}", color = MaterialTheme.colorScheme.primary)
