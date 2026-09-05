@@ -5,6 +5,7 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
+import android.content.pm.ServiceInfo
 import android.location.Location
 import android.os.Build
 import android.os.IBinder
@@ -17,6 +18,8 @@ import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import kotlinx.coroutines.flow.MutableStateFlow
+import java.util.Locale
+import com.example.tmcloadtracker.R
 
 class TrackingService : Service() {
 
@@ -58,9 +61,10 @@ class TrackingService : Service() {
                         // Route the calculated mileage accumulation based on current trip status
                         if (activeSegment == "Bounce") {
                             totalBounceMilesTracked.value += milesDriven
-                        } else {
+                        } else if (activeSegment == "Loaded") {
                             totalLoadedMilesTracked.value += milesDriven
                         }
+                        updateNotification()
                     }
                     lastLocation = location
                 }
@@ -80,6 +84,14 @@ class TrackingService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        updateNotification()
+        return START_STICKY // Forces background engine to automatically revive if crashed by system
+    }
+
+    private fun updateNotification() {
+        val miles = if (activeSegment == "Bounce") totalBounceMilesTracked.value else totalLoadedMilesTracked.value
+        val contentText = "$activeSegment: ${String.format(Locale.US, "%.1f", miles)} mi"
+
         // 4. LAUNCH PERSISTENT NOTIFICATION TO KEEP SERVICE ALIVE FOREVER IN BACKGROUND
         val notificationIntent = Intent(this, MainActivity::class.java)
         val pendingIntent = PendingIntent.getActivity(
@@ -88,15 +100,19 @@ class TrackingService : Service() {
         )
 
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("TMC GPS Tracker Active")
-            .setContentText("Automatically measuring hauling route distances...")
-            .setSmallIcon(android.R.drawable.ic_menu_mylocation)
+            .setContentTitle("TMC Load Tracker - Active")
+            .setContentText(contentText)
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setContentIntent(pendingIntent)
             .setOngoing(true)
+            .setOnlyAlertOnce(true) // Don't buzz the phone every 5 seconds
             .build()
 
-        startForeground(NOTIFICATION_ID, notification)
-        return START_STICKY // Forces background engine to automatically revive if crashed by system
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION)
+        } else {
+            startForeground(NOTIFICATION_ID, notification)
+        }
     }
 
     override fun onDestroy() {

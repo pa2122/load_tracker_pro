@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.Button
@@ -45,26 +46,35 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun LoadEntryScreen(
     initialPercentage: String,
+    editingLoad: CurrentLoad? = null,
     onSaveClick: (CurrentLoad) -> Unit,
     onCancelClick: () -> Unit
 ) {
     val ctx = LocalContext.current
     val scroll = rememberScrollState()
 
-    var proNum by remember { mutableStateOf("") }
-    var dBounce by remember { mutableStateOf("") }
-    var dLoaded by remember { mutableStateOf("") }
-    var ratePct by remember { mutableStateOf(initialPercentage) }
-    var loadPay by remember { mutableStateOf("") }
+    var proNum by remember { mutableStateOf(editingLoad?.proNumber ?: "") }
+    var dBounce by remember { mutableStateOf(editingLoad?.dispatchedBounceMiles?.toString() ?: "") }
+    var dLoaded by remember { mutableStateOf(editingLoad?.dispatchedLoadedMiles?.toString() ?: "") }
+    var ratePct by remember { mutableStateOf(editingLoad?.percentageRate?.toString() ?: initialPercentage) }
+    var loadPay by remember { mutableStateOf(editingLoad?.loadPay?.toString() ?: "") }
 
     var expanded by remember { mutableStateOf(false) }
     val tarpOpts = listOf("N (None)", "S (Steel)", "L (Lumber)")
-    var selectedTarp by remember { mutableStateOf("N (None)") }
+    var selectedTarp by remember {
+        val type = editingLoad?.tarpType ?: "N"
+        mutableStateOf(when(type) {
+            "S" -> "S (Steel)"
+            "L" -> "L (Lumber)"
+            else -> "N (None)"
+        })
+    }
 
-    var isPreTarped by remember { mutableStateOf(false) }
-    var isGoingHome by remember { mutableStateOf(false) }
+    var isPreTarped by remember { mutableStateOf(editingLoad?.isPreTarped ?: false) }
+    var isGoingHome by remember { mutableStateOf(editingLoad?.isGoingHome ?: false) }
+    var tripNotes by remember { mutableStateOf(editingLoad?.tripNotes ?: "") }
 
-    var tripStatus by remember { mutableStateOf("NOT_STARTED") }
+    var tripStatus by remember { mutableStateOf(editingLoad?.tripState ?: "NOT_STARTED") }
 
     val liveBounce by TrackingService.totalBounceMilesTracked.collectAsState()
     val liveLoaded by TrackingService.totalLoadedMilesTracked.collectAsState()
@@ -75,7 +85,7 @@ fun LoadEntryScreen(
             .verticalScroll(scroll),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        Text("Initialize New Freight Load", style = MaterialTheme.typography.headlineMedium)
+        Text(if (editingLoad == null) "Initialize New Freight Load" else "Edit Active Freight Load", style = MaterialTheme.typography.headlineMedium)
 
         // PRO # Field: Strips everything except digits
         OutlinedTextField(
@@ -83,6 +93,7 @@ fun LoadEntryScreen(
             onValueChange = { input -> proNum = input.filter { it.isDigit() } },
             label = { Text("PRO # (Required - Numbers Only)") },
             singleLine = true,
+            enabled = editingLoad == null, // Disable PRO # editing for existing loads
             keyboardOptions = KeyboardOptions(
                 keyboardType = KeyboardType.Number,
                 imeAction = ImeAction.Next
@@ -204,9 +215,9 @@ fun LoadEntryScreen(
                     IconButton(onClick = { expanded = true }) {
                         Icon(
                             imageVector = if (expanded) {
-                                androidx.compose.material.icons.Icons.Default.KeyboardArrowUp
+                                Icons.Default.KeyboardArrowUp
                             } else {
-                                androidx.compose.material.icons.Icons.Default.ArrowDropDown
+                                Icons.Default.ArrowDropDown
                             },
                             contentDescription = "Toggle Tarp Menu"
                         )
@@ -229,11 +240,19 @@ fun LoadEntryScreen(
             Text("Load Pre-Tarped at Shipper (Halves tarp bonus)")
         }
 
+        OutlinedTextField(
+            value = tripNotes,
+            onValueChange = { tripNotes = it },
+            label = { Text("Trip Notes (Optional)") },
+            modifier = Modifier.fillMaxWidth(),
+            minLines = 3
+        )
+
         HorizontalDivider()
         Text("Trip Operations Panel", style = MaterialTheme.typography.titleMedium)
 
         when (tripStatus) {
-            "NOT_STARTED" -> {
+            "NOT_STARTED", "ACTIVE_BOUNCE", "ACTIVE_SHIPPER", "ACTIVE_LOADED" -> {
                 // 📍 THE SECURITY GATE: Verifies required fields are not blank
                 val isFormValid = proNum.trim().isNotEmpty() &&
                         dBounce.trim().isNotEmpty() &&
@@ -242,10 +261,12 @@ fun LoadEntryScreen(
 
                 Button(
                     onClick = {
-                        TrackingService.totalBounceMilesTracked.value = 0.0
-                        TrackingService.totalLoadedMilesTracked.value = 0.0
-                        TrackingService.activeSegment = "Bounce"
-                        ctx.startService(Intent(ctx, TrackingService::class.java))
+                        if (editingLoad == null) {
+                            TrackingService.totalBounceMilesTracked.value = 0.0
+                            TrackingService.totalLoadedMilesTracked.value = 0.0
+                            TrackingService.activeSegment = "Bounce"
+                            ctx.startService(Intent(ctx, TrackingService::class.java))
+                        }
 
                         val tChar = when {
                             selectedTarp.contains("Lumber") || selectedTarp.contains("L") -> "L"
@@ -253,20 +274,23 @@ fun LoadEntryScreen(
                             else -> "N"
                         }
 
-                        val timeStr = System.currentTimeMillis().toString()
                         val draftData = CurrentLoad(
                             proNumber = proNum.trim(),
                             dispatchedBounceMiles = dBounce.toDoubleOrNull() ?: 0.0,
                             dispatchedLoadedMiles = dLoaded.toDoubleOrNull() ?: 0.0,
-                            bounceMilesStart = 0.0, bounceMilesEnd = 0.0,
-                            loadedMilesStart = 0.0, loadedMilesEnd = 0.0,
+                            bounceMilesStart = editingLoad?.bounceMilesStart ?: 0.0,
+                            bounceMilesEnd = editingLoad?.bounceMilesEnd ?: 0.0,
+                            loadedMilesStart = editingLoad?.loadedMilesStart ?: 0.0,
+                            loadedMilesEnd = editingLoad?.loadedMilesEnd ?: 0.0,
                             percentageRate = ratePct.toDoubleOrNull() ?: 80.0,
                             loadPay = loadPay.toDoubleOrNull() ?: 0.0,
                             tarpType = tChar,
                             isPreTarped = isPreTarped,
                             isGoingHome = isGoingHome,
-                            pickupTimestamp = System.currentTimeMillis(),
-                            tripState = "ACTIVE_BOUNCE"
+                            pickupTimestamp = editingLoad?.pickupTimestamp ?: System.currentTimeMillis(),
+                            tripState = if (editingLoad == null) "ACTIVE_BOUNCE" else tripStatus,
+                            tripNotes = if (tripNotes.isBlank()) null else tripNotes,
+                            deliveryTimestamp = editingLoad?.deliveryTimestamp
                         )
                         onSaveClick(draftData)
                     },
@@ -276,7 +300,7 @@ fun LoadEntryScreen(
                         .fillMaxWidth()
                         .height(48.dp)
                 ) {
-                    Text("Start Load (Dispatch En Route)")
+                    Text(if (editingLoad == null) "Start Load (Dispatch En Route)" else "Update Trip Details")
                 }
             }
 
@@ -351,7 +375,6 @@ fun LoadEntryScreen(
                                             selectedTarp.contains("Steel") -> "S"
                                             else -> "N"
                                         }
-                                        val timeStr = System.currentTimeMillis().toString()
                                         val finalData = CurrentLoad(
                                             proNumber = proNum.trim(),
                                             dispatchedBounceMiles = dBounce.toDoubleOrNull() ?: 0.0,
@@ -366,7 +389,9 @@ fun LoadEntryScreen(
                                             isPreTarped = isPreTarped,
                                             isGoingHome = isGoingHome,
                                             pickupTimestamp = System.currentTimeMillis(),
-                                            tripState = "COMPLETED"
+                                            tripState = "COMPLETED",
+                                            tripNotes = if (tripNotes.isBlank()) null else tripNotes,
+                                            deliveryTimestamp = System.currentTimeMillis()
                                         )
                                         onSaveClick(finalData)
                                     },
@@ -382,7 +407,7 @@ fun LoadEntryScreen(
 
         TextButton(
             onClick = {
-                if (tripStatus != "NOT_STARTED") {
+                if (tripStatus != "NOT_STARTED" && editingLoad == null) {
                     ctx.stopService(Intent(ctx, TrackingService::class.java))
                 }
                 onCancelClick()

@@ -65,4 +65,6 @@ dependencies {
     // 2. Standard Java Annotation Processing compiler
     kapt("androidx.room:room-compiler:2.8.4")
     implementation("com.google.android.gms:play-services-location:21.2.0")
+    implementation("com.github.jeziellago:compose-markdown:0.3.1")
+    implementation("io.coil-kt:coil-compose:2.7.0")
 }

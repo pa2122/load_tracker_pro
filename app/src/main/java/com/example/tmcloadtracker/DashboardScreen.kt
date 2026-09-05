@@ -30,7 +30,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import dev.jeziellago.compose.markdowntext.MarkdownText
+import java.time.DayOfWeek
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.time.temporal.TemporalAdjusters
+import java.util.Locale
 
 @Composable
 fun DashboardScreen(
@@ -38,6 +46,8 @@ fun DashboardScreen(
     pastLoads: List<CurrentLoad>,
     onAddNewLoadClick: () -> Unit,
     onUpdateTripClick: (CurrentLoad) -> Unit,
+    onEditTripClick: (CurrentLoad) -> Unit,
+    onDeleteTripClick: (CurrentLoad) -> Unit,
     liveBounceMiles: Double,
     liveLoadedMiles: Double,
     isTrainingActive: Boolean,
@@ -51,11 +61,9 @@ fun DashboardScreen(
     // Dialog control states
     var showCompletionDialog by remember { mutableStateOf(false) }
     var showHistoryDetailsDialog by remember { mutableStateOf(false) }
-    var showWeeklyBreakdownDialog by remember { mutableStateOf(false) } // 📍 NEW DIALOG CONTROLLER
+    var showWeeklyBreakdownDialog by remember { mutableStateOf(false) } 
     var selectedTripData by remember { mutableStateOf<CurrentLoad?>(null) }
-    var showHelpDialog by remember { mutableStateOf(false) }
-
-
+    var showActiveOptionsDialog by remember { mutableStateOf(false) }
 
     Scaffold { innerPadding ->
         Box(
@@ -96,7 +104,7 @@ fun DashboardScreen(
                             ) {
                                 Text("Current Week's Pay:")
                                 Text(
-                                    "$${String.format("%.2f", summary.weeklyPay)}",
+                                    "$${String.format(Locale.US, "%.2f", summary.weeklyPay)}",
                                     style = MaterialTheme.typography.titleLarge
                                 )
                             }
@@ -120,6 +128,7 @@ fun DashboardScreen(
                                 Text(
                                     "${summary.weeklyOutOfRoute.toInt()} mi (${
                                         String.format(
+                                            Locale.US,
                                             "%.1f",
                                             summary.weeklyOorPercentage
                                         )
@@ -134,7 +143,9 @@ fun DashboardScreen(
                 if (activeTrip != null) {
                     item {
                         Card(
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { showActiveOptionsDialog = true },
                             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer)
                         ) {
                             Column(
@@ -161,19 +172,21 @@ fun DashboardScreen(
                                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                         Text("Tracked Bounce")
                                         Text(
-                                            "${String.format("%.1f", liveBounceMiles)} mi",
+                                            "${String.format(Locale.US, "%.1f", liveBounceMiles)} mi",
                                             style = MaterialTheme.typography.titleMedium
                                         )
                                     }
                                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                         Text("Tracked Loaded")
                                         Text(
-                                            "${String.format("%.1f", liveLoadedMiles)} mi",
+                                            "${String.format(Locale.US, "%.1f", liveLoadedMiles)} mi",
                                             style = MaterialTheme.typography.titleMedium
                                         )
                                     }
                                 }
                                 Spacer(modifier = Modifier.height(16.dp))
+                                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+
                                 when (activeTrip.tripState) {
                                     "ACTIVE_BOUNCE" -> {
                                         Button(
@@ -205,7 +218,8 @@ fun DashboardScreen(
                                             onClick = {
                                                 selectedTripData = activeTrip.copy(
                                                     tripState = "COMPLETED",
-                                                    loadedMilesEnd = liveLoadedMiles
+                                                    loadedMilesEnd = liveLoadedMiles,
+                                                    deliveryTimestamp = System.currentTimeMillis()
                                                 )
                                                 showCompletionDialog = true
                                             },
@@ -252,10 +266,10 @@ fun DashboardScreen(
                     items(items = completedLoads) { load ->
                         // 📍 THE UPGRADE: Formats the raw database timestamp into a crisp calendar date
                         val dateLabel = remember(load.pickupTimestamp) {
-                            val instant = java.time.Instant.ofEpochMilli(load.pickupTimestamp)
-                            val zone = java.time.ZoneId.systemDefault()
+                            val instant = Instant.ofEpochMilli(load.pickupTimestamp)
+                            val zone = ZoneId.systemDefault()
                             val formatter =
-                                java.time.format.DateTimeFormatter.ofPattern("MM/dd/yyyy")
+                                DateTimeFormatter.ofPattern("MM/dd/yyyy")
                             instant.atZone(zone).toLocalDate().format(formatter)
                         }
 
@@ -342,6 +356,7 @@ fun DashboardScreen(
                                 Text(
                                     "$${
                                         String.format(
+                                            Locale.US,
                                             "%.2f",
                                             baseGross
                                         )
@@ -356,6 +371,7 @@ fun DashboardScreen(
                                 Text(
                                     "$${
                                         String.format(
+                                            Locale.US,
                                             "%.2f",
                                             baseCut
                                         )
@@ -371,6 +387,7 @@ fun DashboardScreen(
                                     Text(
                                         "+$${
                                             String.format(
+                                                Locale.US,
                                                 "%.2f",
                                                 tarp
                                             )
@@ -387,6 +404,7 @@ fun DashboardScreen(
                                     Text(
                                         "+$${
                                             String.format(
+                                                Locale.US,
                                                 "%.2f",
                                                 dhBonus
                                             )
@@ -406,6 +424,7 @@ fun DashboardScreen(
                                 Text(
                                     "$${
                                         String.format(
+                                            Locale.US,
                                             "%.2f",
                                             finalNet
                                         )
@@ -469,6 +488,7 @@ fun DashboardScreen(
                                 Text(
                                     "$${
                                         String.format(
+                                            Locale.US,
                                             "%.2f",
                                             baseGross
                                         )
@@ -483,6 +503,7 @@ fun DashboardScreen(
                                 Text(
                                     "$${
                                         String.format(
+                                            Locale.US,
                                             "%.2f",
                                             baseCut
                                         )
@@ -494,7 +515,7 @@ fun DashboardScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
                                 Text("Tarp Allowance:")
-                                Text("$${String.format("%.2f", tarp)}")
+                                Text("$${String.format(Locale.US, "%.2f", tarp)}")
                             }
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
@@ -504,6 +525,7 @@ fun DashboardScreen(
                                 Text(
                                     "$${
                                         String.format(
+                                            Locale.US,
                                             "%.2f",
                                             dhBonus
                                         )
@@ -521,6 +543,7 @@ fun DashboardScreen(
                                 Text(
                                     "$${
                                         String.format(
+                                            Locale.US,
                                             "%.2f",
                                             finalNet
                                         )
@@ -561,6 +584,19 @@ fun DashboardScreen(
                                     if (trip.isGoingHome) "0 mi (Home Run)" else "${if (tripOorVariance > 0) tripOorVariance.toInt() else 0} mi"
                                 Text(oorDisplay)
                             }
+
+                            if (!trip.tripNotes.isNullOrBlank()) {
+                                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                                Text(
+                                    "Trip Notes",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                Text(
+                                    trip.tripNotes,
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                            }
                         }
                     },
                     confirmButton = {
@@ -573,34 +609,33 @@ fun DashboardScreen(
         }
     }
     // 📍 NEW MODAL INTERFACE C: DETAILED WEEKLY PAYROLL STATEMENT BREAKDOWN POPUP
-    // 📍 UPDATED WEEKLY BREAKDOWNPOPUP STATEMENT
     if (showWeeklyBreakdownDialog) {
         AlertDialog(
             onDismissRequest = { showWeeklyBreakdownDialog = false },
             title = { Text("Weekly Earnings Breakdown") },
             text = {
-                val currentTargetFriday = java.time.Instant.ofEpochMilli(System.currentTimeMillis())
-                    .atZone(java.time.ZoneId.systemDefault()).toLocalDate()
+                val currentTargetFriday = Instant.ofEpochMilli(System.currentTimeMillis())
+                    .atZone(ZoneId.systemDefault()).toLocalDate()
                     .let { d ->
                         when (d.dayOfWeek) {
-                            java.time.DayOfWeek.FRIDAY, java.time.DayOfWeek.SATURDAY, java.time.DayOfWeek.SUNDAY -> d.with(
-                                java.time.temporal.TemporalAdjusters.next(java.time.DayOfWeek.FRIDAY)
+                            DayOfWeek.FRIDAY, DayOfWeek.SATURDAY, DayOfWeek.SUNDAY -> d.with(
+                                TemporalAdjusters.next(DayOfWeek.FRIDAY)
                             )
 
-                            else -> d.with(java.time.temporal.TemporalAdjusters.nextOrSame(java.time.DayOfWeek.FRIDAY))
+                            else -> d.with(TemporalAdjusters.nextOrSame(DayOfWeek.FRIDAY))
                         }
                     }
 
                 val weeklyTrips = pastLoads.filter { load ->
-                    val loadFriday = java.time.Instant.ofEpochMilli(load.pickupTimestamp)
-                        .atZone(java.time.ZoneId.systemDefault()).toLocalDate()
+                    val loadFriday = Instant.ofEpochMilli(load.pickupTimestamp)
+                        .atZone(ZoneId.systemDefault()).toLocalDate()
                         .let { d ->
                             when (d.dayOfWeek) {
-                                java.time.DayOfWeek.FRIDAY, java.time.DayOfWeek.SATURDAY, java.time.DayOfWeek.SUNDAY -> d.with(
-                                    java.time.temporal.TemporalAdjusters.next(java.time.DayOfWeek.FRIDAY)
+                                DayOfWeek.FRIDAY, DayOfWeek.SATURDAY, DayOfWeek.SUNDAY -> d.with(
+                                    TemporalAdjusters.next(DayOfWeek.FRIDAY)
                                 )
 
-                                else -> d.with(java.time.temporal.TemporalAdjusters.nextOrSame(java.time.DayOfWeek.FRIDAY))
+                                else -> d.with(TemporalAdjusters.nextOrSame(DayOfWeek.FRIDAY))
                             }
                         }
                     loadFriday == currentTargetFriday && load.tripState == "COMPLETED"
@@ -665,7 +700,7 @@ fun DashboardScreen(
                                             style = MaterialTheme.typography.bodySmall
                                         )
                                         Text(
-                                            "$${String.format("%.2f", trip.loadPay)}",
+                                            "$${String.format(Locale.US, "%.2f", trip.loadPay)}",
                                             style = MaterialTheme.typography.bodySmall
                                         )
                                     }
@@ -678,7 +713,7 @@ fun DashboardScreen(
                                             style = MaterialTheme.typography.bodySmall
                                         )
                                         Text(
-                                            "$${String.format("%.2f", baseDriverCut)}",
+                                            "$${String.format(Locale.US, "%.2f", baseDriverCut)}",
                                             style = MaterialTheme.typography.bodySmall
                                         )
                                     }
@@ -696,6 +731,7 @@ fun DashboardScreen(
                                             Text(
                                                 "+$${
                                                     String.format(
+                                                        Locale.US,
                                                         "%.2f",
                                                         tarpAddon + bounceBonus
                                                     )
@@ -719,7 +755,7 @@ fun DashboardScreen(
                                             style = MaterialTheme.typography.bodyMedium
                                         )
                                         Text(
-                                            "$${String.format("%.2f", totalTripPay)}",
+                                            "$${String.format(Locale.US, "%.2f", totalTripPay)}",
                                             style = MaterialTheme.typography.bodyMedium,
                                             color = MaterialTheme.colorScheme.primary
                                         )
@@ -751,8 +787,6 @@ fun DashboardScreen(
                                 if (t.dispatchedBounceMiles >= 150.0) t.dispatchedBounceMiles * 0.20 else 0.0
                             calculatedLoadAccumulations += (cut + tarp + dh)
                         }
-                        val trainerPayDifference = summary.weeklyPay - calculatedLoadAccumulations
-                        val isCurrentlyTraining = trainerPayDifference > 0.01
 
                         // 📍 FIX B: Clean line displaying your Training status explicitly
                         Row(
@@ -772,7 +806,7 @@ fun DashboardScreen(
                             ) {
                                 Text("Flat Trainer Premium Addon:")
                                 Text(
-                                    "+$${String.format("%.2f", flatTrainerPayRate)}",
+                                    "+$${String.format(Locale.US, "%.2f", flatTrainerPayRate)}",
                                     color = MaterialTheme.colorScheme.primary
                                 )
                             }
@@ -787,7 +821,7 @@ fun DashboardScreen(
                                 style = MaterialTheme.typography.titleSmall
                             )
                             Text(
-                                "$${String.format("%.2f", summary.weeklyPay)}",
+                                "$${String.format(Locale.US, "%.2f", summary.weeklyPay)}",
                                 style = MaterialTheme.typography.titleSmall,
                                 color = MaterialTheme.colorScheme.primary
                             )
@@ -802,27 +836,65 @@ fun DashboardScreen(
             }
         )
     }
+
+    if (showActiveOptionsDialog && activeTrip != null) {
+        AlertDialog(
+            onDismissRequest = { showActiveOptionsDialog = false },
+            title = { Text("Trip Management - PRO #${activeTrip.proNumber}") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("Select an action for your currently active load.")
+                    
+                    Button(
+                        onClick = {
+                            showActiveOptionsDialog = false
+                            onEditTripClick(activeTrip)
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
+                    ) { Text("Edit Trip Details") }
+
+                    Button(
+                        onClick = {
+                            showActiveOptionsDialog = false
+                            onDeleteTripClick(activeTrip)
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                    ) { Text("Cancel / Delete Trip") }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showActiveOptionsDialog = false }) { Text("Close") }
+            }
+        )
+    }
+
 // 📍 POPUP DIALOG THAT READS YOUR RAW ASSETS FILE AT RUNTIME
-    if (showHelpDialog) {
-        val context = androidx.compose.ui.platform.LocalContext.current
-        // Safely open and read the raw text stream lines from your assets directory
+    if (showHelpOnLaunch) {
+        val context = LocalContext.current
+
+        // Safely reads the text lines from your assets directory folder
         val helpTextString = remember {
             try {
-                context.assets.open("help.txt").bufferedReader().use { it.readText() }
-            } catch (e: Exception) {
-                "Help guide document not found in assets folder."
+                // Updated file path target to look for your new .md package file
+                context.assets.open("help_guide.md").bufferedReader().use { it.readText() }
+            } catch (_: Exception) {
+                "# Error\nCould not locate your `help_guide.md` asset file. Please check folder placement."
             }
         }
 
         AlertDialog(
-            onDismissRequest = onDismissHelpDialog, // Links back to reset state tracker flag
+            onDismissRequest = onDismissHelpDialog,
             title = { Text("App Reference Manual & Todo") },
             text = {
                 Box(modifier = Modifier.heightIn(max = 400.dp)) {
-                    androidx.compose.foundation.lazy.LazyColumn {
+                    LazyColumn {
                         item {
-                            Text(
-                                text = helpTextString,
+                            // 📍 THE UPGRADE: Swaps plain Text for dynamic stylized Markdown Rendering
+                            MarkdownText(
+                                markdown = helpTextString,
+                                color = MaterialTheme.colorScheme.onSurface,
                                 style = MaterialTheme.typography.bodyMedium
                             )
                         }
@@ -830,13 +902,11 @@ fun DashboardScreen(
                 }
             },
             confirmButton = {
-                Button(onClick = onDismissHelpDialog) { Text("Close Manual") }
+                Button(onClick = onDismissHelpDialog) {
+                    Text("Close Manual")
+                }
             }
         )
     }
 
-} // 📍 Closes Box container wrapper line
-//} // 📍 Closes Scaffold wrapper line
-//} // 📍 Closes the DashboardScreen function
-
-//}
+} 

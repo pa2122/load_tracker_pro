@@ -8,35 +8,36 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 
 private val DarkColorScheme = darkColorScheme(
-    primary = Purple80,
-    secondary = PurpleGrey80,
-    tertiary = Pink80
+    primary = TmcChrome,       // Chrome accents
+    secondary = Color.Gray,
+    tertiary = TmcDarkGrey,
+    background = TmcBlack,     // Pure black for OLED/Dark mode
+    surface = TmcBlack,
+    onPrimary = TmcBlack,
+    onBackground = Color.White,
+    onSurface = Color.White
 )
 
 private val LightColorScheme = lightColorScheme(
-    primary = Purple40,
-    secondary = PurpleGrey40,
-    tertiary = Pink40
-
-    /* Other default colors to override
-    background = Color(0xFFFFFBFE),
-    surface = Color(0xFFFFFBFE),
+    primary = TmcBlack,        // Black primary text/elements
+    secondary = TmcChrome,     // Chrome accents
+    tertiary = Color.DarkGray,
+    background = Color.White,
+    surface = Color.White,
     onPrimary = Color.White,
-    onSecondary = Color.White,
-    onTertiary = Color.White,
-    onBackground = Color(0xFF1C1B1F),
-    onSurface = Color(0xFF1C1B1F),
-    */
+    onBackground = TmcBlack,
+    onSurface = TmcBlack
 )
 
 @Composable
 fun TMCLoadTrackerTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     // Dynamic color is available on Android 12+
-    dynamicColor: Boolean = true,
+    dynamicColor: Boolean = false, // Disabled by default to prioritize TMC branding
     content: @Composable () -> Unit
 ) {
     val colorScheme = when {

@@ -12,6 +12,7 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.temporal.TemporalAdjusters
+import java.util.Locale
 
 class LoadViewModel(application: Application) :
     AndroidViewModel(application) {
@@ -47,7 +48,9 @@ class LoadViewModel(application: Application) :
         isPreTarped: Boolean,
         pickupTimestamp: Long,
         isGoingHome: Boolean,
-        tripState: String
+        tripState: String,
+        tripNotes: String? = null,
+        deliveryTimestamp: Long? = null
     ) {
         viewModelScope.launch {
             val newLoad = CurrentLoad(
@@ -64,9 +67,17 @@ class LoadViewModel(application: Application) :
                 isPreTarped = isPreTarped,
                 pickupTimestamp = pickupTimestamp,
                 isGoingHome = isGoingHome,
-                tripState = tripState
+                tripState = tripState,
+                tripNotes = tripNotes,
+                deliveryTimestamp = deliveryTimestamp
             )
             loadDao.insertLoad(newLoad)
+        }
+    }
+
+    fun deleteLoad(load: CurrentLoad) {
+        viewModelScope.launch {
+            loadDao.deleteLoad(load)
         }
     }
 
@@ -171,6 +182,43 @@ class LoadViewModel(application: Application) :
                 pDate.with(TemporalAdjusters.nextOrSame(DayOfWeek.FRIDAY))
             }
         }
+    }
+
+    fun generateCsvContent(): String {
+        val sb = StringBuilder()
+        // CSV Header
+        sb.append("PRO Number,Pickup Date,Dispatched Bounce,Dispatched Loaded,Actual Bounce,Actual Loaded,Pay Split (%),Gross Pay,Tarp Type,Pre-Tarped,Going Home,Trip Notes,Net Pay\n")
+
+        _allLoads.value.forEach { load ->
+            val date = Instant.ofEpochMilli(load.pickupTimestamp)
+                .atZone(ZoneId.systemDefault())
+                .toLocalDate()
+                .toString()
+
+            val actBounce = load.bounceMilesEnd - load.bounceMilesStart
+            val actLoaded = load.loadedMilesEnd - load.loadedMilesStart
+
+            // Calculate Net Pay for the CSV
+            val baseSplit = load.loadPay * (load.percentageRate / 100.0)
+            val bounceBonus = if (load.dispatchedBounceMiles >= 150.0) load.dispatchedBounceMiles * 0.20 else 0.0
+            // Note: Tarp rates aren't stored in the load entity, so we'll just note the type
+            val netPayEstimate = baseSplit + bounceBonus
+
+            sb.append("${load.proNumber},")
+            sb.append("$date,")
+            sb.append("${String.format(Locale.US, "%.1f", load.dispatchedBounceMiles)},")
+            sb.append("${String.format(Locale.US, "%.1f", load.dispatchedLoadedMiles)},")
+            sb.append("${String.format(Locale.US, "%.1f", actBounce)},")
+            sb.append("${String.format(Locale.US, "%.1f", actLoaded)},")
+            sb.append("${String.format(Locale.US, "%.1f", load.percentageRate)},")
+            sb.append("${String.format(Locale.US, "%.2f", load.loadPay)},")
+            sb.append("${load.tarpType},")
+            sb.append("${load.isPreTarped},")
+            sb.append("${load.isGoingHome},")
+            sb.append("\"${(load.tripNotes ?: "").replace("\"", "\"\"")}\",")
+            sb.append("${String.format(Locale.US, "%.2f", netPayEstimate)}\n")
+        }
+        return sb.toString()
     }
 }
 

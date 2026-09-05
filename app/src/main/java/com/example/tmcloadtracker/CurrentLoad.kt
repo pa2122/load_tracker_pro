@@ -18,5 +18,8 @@ data class CurrentLoad(
     val isPreTarped: Boolean,
     val pickupTimestamp: Long,
     val isGoingHome: Boolean,
-    val tripState: String
+    val tripState: String,
+    // 📍 New fields added in Version 4
+    val tripNotes: String? = null,
+    val deliveryTimestamp: Long? = null
 )

@@ -3,6 +3,7 @@ package com.example.tmcloadtracker
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -19,6 +20,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Menu
@@ -54,7 +56,12 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
+import com.example.tmcloadtracker.ui.theme.TMCLoadTrackerTheme
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.io.File
+import java.io.FileOutputStream
 
 class MainActivity : ComponentActivity() {
 
@@ -71,9 +78,7 @@ class MainActivity : ComponentActivity() {
         checkAndRequestPermissions()
 
         setContent {
-            MaterialTheme {
-                val useDarkTheme = androidx.compose.foundation.isSystemInDarkTheme()
-                val chosenColorScheme = if (useDarkTheme) DarkColors else LightColors
+            TMCLoadTrackerTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
@@ -82,12 +87,13 @@ class MainActivity : ComponentActivity() {
                     var loadingStatusText by remember { mutableStateOf("Initializing Odometer Engines...") }
 
                     LaunchedEffect(Unit) {
-                        kotlinx.coroutines.delay(1200) // Show spinner for 1.2 seconds
+                        delay(1200) // Show spinner for 1.2 seconds
                         loadingStatusText = "Loading Saved Trip Database Logs..."
-                        kotlinx.coroutines.delay(1000) // Hold state for another 1 second
+                        delay(1000) // Hold state for another 1 second
                         isAppStartingUp = false // Shuts down splash view, boots your home screen
                     }
                     var currentScreen by remember { mutableStateOf("dashboard") }
+                    var tripToEdit by remember { mutableStateOf<CurrentLoad?>(null) }
 
                     var defPercent by remember { mutableStateOf("31.0") }
                     var lTarpPay by remember { mutableStateOf("50.0") }
@@ -103,6 +109,26 @@ class MainActivity : ComponentActivity() {
                     val scope = rememberCoroutineScope()
 
                     val savedLoads by viewModel.allLoads.collectAsState(initial = emptyList())
+
+                    // 📍 AUTO-START TRACKING SERVICE IF AN ACTIVE TRIP EXISTS
+                    LaunchedEffect(savedLoads) {
+                        val active = savedLoads.find { it.tripState != "COMPLETED" && it.tripState != "NOT_STARTED" }
+                        if (active != null) {
+                            val fineLocation = ContextCompat.checkSelfPermission(
+                                this@MainActivity, Manifest.permission.ACCESS_FINE_LOCATION
+                            ) == PackageManager.PERMISSION_GRANTED
+                            
+                            if (fineLocation) {
+                                // Sync the service state with the database state
+                                TrackingService.activeSegment = when (active.tripState) {
+                                    "ACTIVE_BOUNCE" -> "Bounce"
+                                    "ACTIVE_LOADED" -> "Loaded"
+                                    else -> "Paused"
+                                }
+                                startService(Intent(this@MainActivity, TrackingService::class.java))
+                            }
+                        }
+                    }
 
                     // 📍 THE ADAPTIVE STATE ENGINE BLOCK CALCULATION CONTEXT LINK
                     val weeklySummary by remember(
@@ -226,11 +252,25 @@ class MainActivity : ComponentActivity() {
                                             keyboardType = KeyboardType.Number,
                                             imeAction = ImeAction.Done
                                         ),
-                                        keyboardActions = androidx.compose.foundation.text.KeyboardActions(
+                                        keyboardActions = KeyboardActions(
                                             onDone = { scope.launch { drawerState.close() } }),
                                         modifier = Modifier.fillMaxWidth()
                                     )
-// 📍 PLACE THIS BUTTON INSIDE YOUR SIDEBAR SHEET VERTICAL COLUMN
+
+                                    HorizontalDivider()
+                                    Button(
+                                        onClick = {
+                                            scope.launch { drawerState.close() }
+                                            exportToCsv()
+                                        },
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = MaterialTheme.colorScheme.tertiary
+                                        ),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text("Export Payroll to CSV (Email)")
+                                    }
+
                                     HorizontalDivider()
                                     Button(
                                         onClick = {
@@ -314,13 +354,25 @@ class MainActivity : ComponentActivity() {
                                             val liveBounce by TrackingService.totalBounceMilesTracked.collectAsState()
                                             val liveLoaded by TrackingService.totalLoadedMilesTracked.collectAsState()
 
-                                            //
-                                            // var triggerHelpView by remember { mutableStateOf(false) }
-
                                             DashboardScreen(
                                                 summary = weeklySummary,
                                                 pastLoads = savedLoads,
-                                                onAddNewLoadClick = { currentScreen = "entry" },
+                                                onAddNewLoadClick = { 
+                                                    tripToEdit = null
+                                                    currentScreen = "entry" 
+                                                },
+                                                onEditTripClick = { load ->
+                                                    tripToEdit = load
+                                                    currentScreen = "entry"
+                                                },
+                                                onDeleteTripClick = { load ->
+                                                    if (load.tripState != "COMPLETED") {
+                                                        stopService(Intent(this@MainActivity, TrackingService::class.java))
+                                                        TrackingService.totalBounceMilesTracked.value = 0.0
+                                                        TrackingService.totalLoadedMilesTracked.value = 0.0
+                                                    }
+                                                    viewModel.deleteLoad(load)
+                                                },
                                                 liveBounceMiles = liveBounce,
                                                 liveLoadedMiles = liveLoaded,
                                                 isTrainingActive = isTrainingActive,
@@ -353,7 +405,9 @@ class MainActivity : ComponentActivity() {
                                                         isPreTarped = updatedTripEntity.isPreTarped,
                                                         pickupTimestamp = updatedTripEntity.pickupTimestamp,
                                                         isGoingHome = updatedTripEntity.isGoingHome,
-                                                        tripState = updatedTripEntity.tripState
+                                                        tripState = updatedTripEntity.tripState,
+                                                        tripNotes = updatedTripEntity.tripNotes,
+                                                        deliveryTimestamp = updatedTripEntity.deliveryTimestamp
                                                     )
                                                 }
                                             )
@@ -362,6 +416,7 @@ class MainActivity : ComponentActivity() {
                                         "entry" -> {
                                             LoadEntryScreen(
                                                 initialPercentage = defPercent,
+                                                editingLoad = tripToEdit,
                                                 onSaveClick = { finalizedLoadEntity ->
                                                     viewModel.saveLoad(
                                                         proNumber = finalizedLoadEntity.proNumber,
@@ -377,11 +432,17 @@ class MainActivity : ComponentActivity() {
                                                         isPreTarped = finalizedLoadEntity.isPreTarped,
                                                         pickupTimestamp = finalizedLoadEntity.pickupTimestamp,
                                                         isGoingHome = finalizedLoadEntity.isGoingHome,
-                                                        tripState = finalizedLoadEntity.tripState
+                                                        tripState = finalizedLoadEntity.tripState,
+                                                        tripNotes = finalizedLoadEntity.tripNotes,
+                                                        deliveryTimestamp = finalizedLoadEntity.deliveryTimestamp
                                                     )
+                                                    tripToEdit = null
                                                     currentScreen = "dashboard"
                                                 },
-                                                onCancelClick = { currentScreen = "dashboard" }
+                                                onCancelClick = { 
+                                                    tripToEdit = null
+                                                    currentScreen = "dashboard" 
+                                                }
                                             )
                                         }
                                     }
@@ -393,24 +454,35 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
-    // 📍 CHUNK A: COLOR SCHEME SCHEMATICS DEFINITIONS FOR LIGHT/DARK MODES
-    private val LightColors = androidx.compose.material3.lightColorScheme(
-        primary = androidx.compose.ui.graphics.Color(0xFF005FAF), // TMC Royal Blue Accent
-        secondary = androidx.compose.ui.graphics.Color(0xFF535F70),
-        tertiary = androidx.compose.ui.graphics.Color(0xFF006A60),
-        background = androidx.compose.ui.graphics.Color(0xFFFDFDFD),
-        surface = androidx.compose.ui.graphics.Color(0xFFFDFDFD)
-    )
 
-    private val DarkColors = androidx.compose.material3.darkColorScheme(
-        primary = androidx.compose.ui.graphics.Color(0xFFA4C8FF), // Softer Blue for Night Vision Preservation
-        secondary = androidx.compose.ui.graphics.Color(0xFFBBC7DB),
-        tertiary = androidx.compose.ui.graphics.Color(0xFF82D3C4),
-        background = androidx.compose.ui.graphics.Color(0xFF1A1C1E), // Deep Charcoal background
-        surface = androidx.compose.ui.graphics.Color(0xFF1A1C1E)
-    )
+    private fun exportToCsv() {
+        val csvContent = viewModel.generateCsvContent()
+        val file = File(cacheDir, "TMC_Payload_Export.csv")
+        try {
+            FileOutputStream(file).use {
+                it.write(csvContent.toByteArray())
+            }
 
+            val contentUri = FileProvider.getUriForFile(
+                this,
+                "$packageName.provider",
+                file
+            )
 
+            val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                type = "text/csv"
+                putExtra(Intent.EXTRA_SUBJECT, "TMC Payload Export")
+                putExtra(Intent.EXTRA_STREAM, contentUri)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            startActivity(Intent.createChooser(shareIntent, "Share CSV via..."))
+
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    // Permissions checking logic
     private fun checkAndRequestPermissions() {
         val fineLocation = ContextCompat.checkSelfPermission(
             this, Manifest.permission.ACCESS_FINE_LOCATION
@@ -421,12 +493,21 @@ class MainActivity : ComponentActivity() {
         ) == PackageManager.PERMISSION_GRANTED
 
         if (!fineLocation || !coarseLocation) {
-            permLauncher.launch(
-                arrayOf(
-                    Manifest.permission.ACCESS_FINE_LOCATION,
-                    Manifest.permission.ACCESS_COARSE_LOCATION
-                )
+            val permissions = mutableListOf(
+                Manifest.permission.ACCESS_FINE_LOCATION,
+                Manifest.permission.ACCESS_COARSE_LOCATION
             )
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                permissions.add(Manifest.permission.POST_NOTIFICATIONS)
+            }
+            permLauncher.launch(permissions.toTypedArray())
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            val notificationPermission = ContextCompat.checkSelfPermission(
+                this, Manifest.permission.POST_NOTIFICATIONS
+            ) == PackageManager.PERMISSION_GRANTED
+            if (!notificationPermission) {
+                permLauncher.launch(arrayOf(Manifest.permission.POST_NOTIFICATIONS))
+            }
         }
     }
 }
