@@ -28,6 +28,9 @@ interface LoadDao {
     @Query("SELECT * FROM trip_breadcrumbs WHERE proNumber = :pro ORDER BY timestamp ASC")
     fun getBreadcrumbsForLoad(pro: String): Flow<List<TripBreadcrumb>>
 
+    @Query("SELECT * FROM trip_breadcrumbs ORDER BY timestamp ASC")
+    fun getAllBreadcrumbs(): Flow<List<TripBreadcrumb>>
+
     @Query("SELECT DISTINCT shipperName FROM trucking_loads WHERE shipperName IS NOT NULL UNION SELECT DISTINCT consigneeName FROM trucking_loads WHERE consigneeName IS NOT NULL")
     fun getAllFacilityNames(): Flow<List<String>>
 

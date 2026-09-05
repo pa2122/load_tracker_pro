@@ -45,6 +45,12 @@ class LoadViewModel(application: Application) :
         _selectedFacility.value = name
     }
 
+    fun getBreadcrumbs(pro: String): Flow<List<TripBreadcrumb>> {
+        return loadDao.getBreadcrumbsForLoad(pro)
+    }
+
+    val allBreadcrumbs: Flow<List<TripBreadcrumb>> = loadDao.getAllBreadcrumbs()
+
     init {
         viewModelScope.launch {
             loadDao.getAllLoads().collect { list ->

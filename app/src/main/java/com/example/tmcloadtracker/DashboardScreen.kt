@@ -49,6 +49,7 @@ fun DashboardScreen(
     onUpdateTripClick: (CurrentLoad) -> Unit,
     onEditTripClick: (CurrentLoad) -> Unit,
     onDeleteTripClick: (CurrentLoad) -> Unit,
+    onViewMapClick: (CurrentLoad) -> Unit,
     liveBounceMiles: Double,
     liveLoadedMiles: Double,
     isTrainingActive: Boolean,
@@ -501,6 +502,16 @@ fun DashboardScreen(
                                     style = MaterialTheme.typography.bodyLarge,
                                     color = MaterialTheme.colorScheme.primary
                                 )
+                            }
+
+                            Button(
+                                onClick = { 
+                                    showHistoryDetailsDialog = false
+                                    onViewMapClick(trip) 
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text("View Route Heatmap")
                             }
 
                             HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))

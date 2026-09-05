@@ -15,13 +15,15 @@ The app uses high-accuracy GPS to measure your actual route and mileage.
 
 ---
 
-## 🗺️ Advanced Mapping & Geofencing
+## 🗺️ Advanced Mapping & Route Heatmaps
 
-Built-in automation to keep your hands on the wheel and your mind on the road.
+Visual data to review your lanes and improve your routing efficiency.
 
 * **Smart Address Parsing:** Paste names and addresses directly from your dispatch. The app extracts the facility name and resolves the exact GPS coordinates for you.
 * **Hands-Free Arrival:** The app sets a 1,000-foot "virtual fence" around your shipper and consignee. The moment you cross the property line, the app vibrates and automatically switches to "Arrived" mode.
-* **Route Breadcrumbs:** Every 5 minutes while you drive, the app saves a GPS "breadcrumb." This builds a secure historical record of the exact path you took for every load.
+* **Individual Trip Maps:** View the exact path you took for any past load, including markers for your pickup and delivery points.
+* **Global Route Heatmap:** Open the sidebar to see every mile you've tracked on a single national map. This helps you visualize your lane coverage over time.
+* **Route Breadcrumbs:** GPS coordinates are saved every 5 minutes while driving to build this historical record.
 
 ---
 
@@ -66,10 +68,11 @@ Protect your performance stats with intelligent monitoring.
 
 ## 📤 Data & Privacy
 
-* **Midnight Amber Theme:** A **Pure Black (#000000)** base with golden amber accents. Designed to preserve your night vision and save battery during long night hauls.
+* **Steel & Cobalt Theme:** A high-contrast **Slate Navy** base with cobalt blue and amber accents. Designed for superior legibility during the day and reduced glare at night.
+* **Home Base Pinning:** Save your home coordinates by pasting your address or pinning your current GPS location. This data is used solely for visual reference on your maps and is never used for automated tracking or reporting.
 * **CSV Export:** Generate a professional spreadsheet of your entire history to email to yourself or payroll.
 * **Data Safety:** Your records are stored in a hardened local database.
-* **Cross-Machine Development:** Built-in support for a shared debug key, allowing you to switch between different computers (Windows/Linux) without ever having to uninstall the app or lose data.
+* **Cross-Machine Development:** Shared debug key support allows you to switch between Windows and Linux laptops without losing data.
 
 ---
 
@@ -80,7 +83,7 @@ Protect your performance stats with intelligent monitoring.
 
 # 🚀 Roadmap: Future Features
 
-* **Route Heatmaps:** View a visual map of your breadcrumb history.
 * **Fuel & Expense Log:** Track diesel and DEF purchases alongside your loads.
+* **IFTA Calculator:** Automatic mileage summaries by state for quarterly filings.
 * **Receipt Scanner:** Use your camera to snap photos of BOLs or fuel receipts.
-* **Cloud Sync:** Automated backups to Google Drive or Firebase for total data peace of mind.
+* **Cloud Sync:** Automated backups to Google Drive for total data peace of mind.

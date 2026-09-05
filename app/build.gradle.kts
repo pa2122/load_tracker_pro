@@ -79,4 +79,8 @@ dependencies {
     implementation("com.google.android.gms:play-services-location:21.2.0")
     implementation("com.github.jeziellago:compose-markdown:0.3.1")
     implementation("io.coil-kt:coil-compose:2.7.0")
+    
+    // 🗺️ Google Maps for Route Visualization
+    implementation("com.google.maps.android:maps-compose:6.1.2")
+    implementation("com.google.android.gms:play-services-maps:19.0.0")
 }
