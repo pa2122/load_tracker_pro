@@ -19,7 +19,22 @@ data class CurrentLoad(
     val pickupTimestamp: Long,
     val isGoingHome: Boolean,
     val tripState: String,
-    // 📍 New fields added in Version 4
     val tripNotes: String? = null,
-    val deliveryTimestamp: Long? = null
+    val deliveryTimestamp: Long? = null,
+    // 📍 New fields added in Version 5 for Geofencing
+    val shipperName: String? = null,
+    val shipperLat: Double? = null,
+    val shipperLong: Double? = null,
+    val consigneeName: String? = null,
+    val consigneeLat: Double? = null,
+    val consigneeLong: Double? = null
+)
+
+@Entity(tableName = "trip_breadcrumbs")
+data class TripBreadcrumb(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val proNumber: String,
+    val latitude: Double,
+    val longitude: Double,
+    val timestamp: Long
 )

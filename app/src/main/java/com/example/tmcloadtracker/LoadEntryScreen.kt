@@ -1,6 +1,7 @@
 package com.example.tmcloadtracker
 
 import android.content.Intent
+import android.location.Geocoder
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -15,10 +16,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
@@ -26,15 +25,12 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -45,6 +41,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import java.time.DayOfWeek
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -68,13 +65,13 @@ fun LoadEntryScreen(
     var loadPay by remember { mutableStateOf(editingLoad?.loadPay?.toString() ?: "") }
 
     var expanded by remember { mutableStateOf(false) }
-    val tarpOpts = listOf("N (None)", "S (Steel)", "L (Lumber)")
+    val tarpOpts = listOf("None", "4' Drop", "8' Drop")
     var selectedTarp by remember {
         val type = editingLoad?.tarpType ?: "N"
         mutableStateOf(when(type) {
-            "S" -> "S (Steel)"
-            "L" -> "L (Lumber)"
-            else -> "N (None)"
+            "S" -> "4' Drop"
+            "L" -> "8' Drop"
+            else -> "None"
         })
     }
 
@@ -96,10 +93,59 @@ fun LoadEntryScreen(
         instant.atZone(zone).toLocalDate().format(formatter)
     }
 
-    var tripStatus by remember { mutableStateOf(editingLoad?.tripState ?: "NOT_STARTED") }
+    var sRawPaste by remember { mutableStateOf("") }
+    var sName by remember { mutableStateOf(editingLoad?.shipperName ?: "") }
+    var sLat by remember { mutableStateOf(editingLoad?.shipperLat) }
+    var sLong by remember { mutableStateOf(editingLoad?.shipperLong) }
 
-    val liveBounce by TrackingService.totalBounceMilesTracked.collectAsState()
-    val liveLoaded by TrackingService.totalLoadedMilesTracked.collectAsState()
+    var cRawPaste by remember { mutableStateOf("") }
+    var cName by remember { mutableStateOf(editingLoad?.consigneeName ?: "") }
+    var cLat by remember { mutableStateOf(editingLoad?.consigneeLat) }
+    var cLong by remember { mutableStateOf(editingLoad?.consigneeLong) }
+
+    fun resolveAddress(input: String, isShipper: Boolean) {
+        val lines = input.lines().filter { it.isNotBlank() }
+        if (lines.isEmpty()) return
+
+        val name = lines[0].trim()
+        val addressPart = if (lines.size > 1) lines.drop(1).joinToString(", ").trim() else name
+
+        if (isShipper) sName = name else cName = name
+
+        try {
+            val geocoder = Geocoder(ctx, Locale.US)
+            @Suppress("DEPRECATION")
+            val results = geocoder.getFromLocationName(addressPart, 1)
+            if (!results.isNullOrEmpty()) {
+                val loc = results[0]
+                if (isShipper) {
+                    sLat = loc.latitude
+                    sLong = loc.longitude
+                } else {
+                    cLat = loc.latitude
+                    cLong = loc.longitude
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    var showFridayReminder by remember { mutableStateOf(false) }
+    var pendingLoadSave by remember { mutableStateOf<CurrentLoad?>(null) }
+
+    fun processSave(load: CurrentLoad) {
+        val dateToCheck = Instant.ofEpochMilli(load.pickupTimestamp)
+            .atZone(ZoneId.systemDefault()).toLocalDate()
+
+        if (!isManualEntry && dateToCheck.dayOfWeek == DayOfWeek.FRIDAY && !load.isGoingHome) {
+            pendingLoadSave = load
+            showFridayReminder = true
+        } else {
+            onSaveClick(load)
+        }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -107,71 +153,77 @@ fun LoadEntryScreen(
             .verticalScroll(scroll),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        Text(if (editingLoad == null) "Initialize New Freight Load" else "Edit Active Freight Load", style = MaterialTheme.typography.headlineMedium)
+        Text(if (editingLoad == null) "New Freight Load" else "Edit Freight Load", style = MaterialTheme.typography.headlineMedium)
 
-        // PRO # Field: Strips everything except digits
         OutlinedTextField(
             value = proNum,
             onValueChange = { input -> proNum = input.filter { it.isDigit() } },
-            label = { Text("PRO # (Required - Numbers Only)") },
+            label = { Text("PRO # (Required)") },
             singleLine = true,
-            enabled = editingLoad == null, // Disable PRO # editing for existing loads
-            keyboardOptions = KeyboardOptions(
-                keyboardType = KeyboardType.Number,
-                imeAction = ImeAction.Next
-            ),
+            enabled = editingLoad == null,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Next),
             modifier = Modifier.fillMaxWidth()
         )
 
         HorizontalDivider()
 
+        Text("Shipper Details (Required)", style = MaterialTheme.typography.titleMedium)
+        OutlinedTextField(
+            value = sRawPaste,
+            onValueChange = { sRawPaste = it },
+            label = { Text("Paste Shipper Name & Address") },
+            modifier = Modifier.fillMaxWidth(),
+            minLines = 3
+        )
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(text = if (sName.isNotEmpty()) "Name: $sName" else "Name: Not Parsed", style = MaterialTheme.typography.bodySmall)
+                Text(text = if (sLat != null) "Location: Fixed 📍" else "Location: Pending", style = MaterialTheme.typography.bodySmall, color = if (sLat != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error)
+            }
+            Button(onClick = { resolveAddress(sRawPaste, true) }, enabled = sRawPaste.isNotBlank()) { Text("Verify") }
+        }
+
+        HorizontalDivider()
+
+        Text("Consignee Details (Required)", style = MaterialTheme.typography.titleMedium)
+        OutlinedTextField(
+            value = cRawPaste,
+            onValueChange = { cRawPaste = it },
+            label = { Text("Paste Consignee Name & Address") },
+            modifier = Modifier.fillMaxWidth(),
+            minLines = 3
+        )
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(text = if (cName.isNotEmpty()) "Name: $cName" else "Name: Not Parsed", style = MaterialTheme.typography.bodySmall)
+                Text(text = if (cLat != null) "Location: Fixed 📍" else "Location: Pending", style = MaterialTheme.typography.bodySmall, color = if (cLat != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error)
+            }
+            Button(onClick = { resolveAddress(cRawPaste, false) }, enabled = cRawPaste.isNotBlank()) { Text("Verify") }
+        }
+
+        HorizontalDivider()
+
         Text("Dispatched Miles", style = MaterialTheme.typography.titleMedium)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            // Dispatched Bounce: Numbers and single decimal filter
             OutlinedTextField(
                 value = dBounce,
                 onValueChange = { input ->
                     val filtered = input.filter { it.isDigit() || it == '.' }
-                    if (filtered.count { it == '.' } <= 1) {
-                        dBounce =
-                            if (filtered.startsWith("0") && filtered.length > 1 && !filtered.startsWith(
-                                    "0."
-                                )
-                            ) {
-                                filtered.dropWhile { it == '0' }
-                            } else filtered
-                    }
+                    if (filtered.count { it == '.' } <= 1) dBounce = filtered
                 },
                 label = { Text("Disp. Bounce *") },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(
-                    keyboardType = KeyboardType.Number,
-                    imeAction = ImeAction.Next
-                ),
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Next)
             )
-            // Dispatched Loaded: Numbers and single decimal filter
             OutlinedTextField(
                 value = dLoaded,
                 onValueChange = { input ->
                     val filtered = input.filter { it.isDigit() || it == '.' }
-                    if (filtered.count { it == '.' } <= 1) {
-                        dLoaded =
-                            if (filtered.startsWith("0") && filtered.length > 1 && !filtered.startsWith(
-                                    "0."
-                                )
-                            ) {
-                                filtered.dropWhile { it == '0' }
-                            } else filtered
-                    }
+                    if (filtered.count { it == '.' } <= 1) dLoaded = filtered
                 },
                 label = { Text("Disp. Loaded *") },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(
-                    keyboardType = KeyboardType.Number,
-                    imeAction = ImeAction.Next
-                ),
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Next)
             )
         }
 
@@ -183,52 +235,27 @@ fun LoadEntryScreen(
         if (editingLoad == null) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Checkbox(checked = isManualEntry, onCheckedChange = { isManualEntry = it })
-                Text("Manual Historical Entry (Already Completed)")
+                Text("Manual Historical Entry")
             }
         }
 
         if (isManualEntry) {
-            Text("Historical Data Points", style = MaterialTheme.typography.titleMedium)
-            
+            Text("Historical Data", style = MaterialTheme.typography.titleMedium)
             OutlinedTextField(
                 value = dateLabel,
                 onValueChange = {},
                 readOnly = true,
-                label = { Text("Trip Pickup Date") },
-                trailingIcon = {
-                    IconButton(onClick = { showDatePicker = true }) {
-                        Icon(Icons.Default.ArrowDropDown, contentDescription = "Pick Date")
-                    }
-                },
+                label = { Text("Pickup Date") },
                 modifier = Modifier.fillMaxWidth().clickable { showDatePicker = true }
             )
-
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Checkbox(checked = matchDispatched, onCheckedChange = { matchDispatched = it })
-                Text("Ignore Out-of-Route (Match Dispatched Miles)")
+                Text("Match Dispatched Miles")
             }
-
             if (!matchDispatched) {
-                Text("Actual Miles Driven", style = MaterialTheme.typography.titleMedium)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
-                        value = manualActBounce,
-                        onValueChange = { input ->
-                            manualActBounce = input.filter { it.isDigit() || it == '.' }
-                        },
-                        label = { Text("Actual Bounce mi") },
-                        modifier = Modifier.weight(1f),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
-                    )
-                    OutlinedTextField(
-                        value = manualActLoaded,
-                        onValueChange = { input ->
-                            manualActLoaded = input.filter { it.isDigit() || it == '.' }
-                        },
-                        label = { Text("Actual Loaded mi") },
-                        modifier = Modifier.weight(1f),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
-                    )
+                    OutlinedTextField(value = manualActBounce, onValueChange = { manualActBounce = it.filter { it.isDigit() || it == '.' } }, label = { Text("Actual Bounce") }, modifier = Modifier.weight(1f))
+                    OutlinedTextField(value = manualActLoaded, onValueChange = { manualActLoaded = it.filter { it.isDigit() || it == '.' } }, label = { Text("Actual Loaded") }, modifier = Modifier.weight(1f))
                 }
             }
         }
@@ -242,314 +269,132 @@ fun LoadEntryScreen(
                         selectedDateMillis = datePickerState.selectedDateMillis ?: selectedDateMillis
                         showDatePicker = false
                     }) { Text("OK") }
-                },
-                dismissButton = {
-                    TextButton(onClick = { showDatePicker = false }) { Text("Cancel") }
                 }
-            ) {
-                DatePicker(state = datePickerState)
-            }
+            ) { DatePicker(state = datePickerState) }
         }
 
         HorizontalDivider()
 
-        Text("Revenue & Accessories Details", style = MaterialTheme.typography.titleMedium)
+        Text("Revenue Details", style = MaterialTheme.typography.titleMedium)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedTextField(
-                value = ratePct,
-                onValueChange = { input ->
-                    val filtered = input.filter { it.isDigit() || it == '.' }
-                    if (filtered.isEmpty() || filtered == ".") ratePct = filtered
-                    else if (filtered.count { it == '.' } <= 1) {
-                        val num = filtered.toDoubleOrNull()
-                        if (num != null && num >= 0.0 && num <= 100.0) ratePct = filtered
-                    }
-                },
-                label = { Text("Pay Split (%)") },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(
-                    keyboardType = KeyboardType.Number,
-                    imeAction = ImeAction.Next
-                ),
-                modifier = Modifier.weight(1f)
-            )
-            // Gross Pay: Supports dollars and cents formatting, drops leading zeros
-            OutlinedTextField(
-                value = loadPay,
-                onValueChange = { input ->
-                    val filtered = input.filter { it.isDigit() || it == '.' }
-                    if (filtered.count { it == '.' } <= 1) {
-                        loadPay =
-                            if (filtered.startsWith("0") && filtered.length > 1 && !filtered.startsWith(
-                                    "0."
-                                )
-                            ) {
-                                filtered.dropWhile { it == '0' }
-                            } else filtered
-                    }
-                },
-                label = { Text("Gross Pay ($) *") },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(
-                    keyboardType = KeyboardType.Number,
-                    imeAction = ImeAction.Done
-                ),
-                modifier = Modifier.weight(1f)
-            )
+            OutlinedTextField(value = ratePct, onValueChange = { ratePct = it.filter { it.isDigit() || it == '.' } }, label = { Text("Pay Split (%)") }, modifier = Modifier.weight(1f))
+            OutlinedTextField(value = loadPay, onValueChange = { loadPay = it.filter { it.isDigit() || it == '.' } }, label = { Text("Gross Pay ($)") }, modifier = Modifier.weight(1f))
         }
 
         ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = !expanded }) {
-            OutlinedTextField(
-                value = selectedTarp,
-                onValueChange = {},
-                readOnly = true,
-                label = { Text("Tarp Type") },
-                trailingIcon = {
-                    IconButton(onClick = { expanded = true }) {
-                        Icon(
-                            imageVector = if (expanded) {
-                                Icons.Default.KeyboardArrowUp
-                            } else {
-                                Icons.Default.ArrowDropDown
-                            },
-                            contentDescription = "Toggle Tarp Menu"
-                        )
-                    }
-                },
-                modifier = Modifier.fillMaxWidth()
-            )
+            OutlinedTextField(value = selectedTarp, onValueChange = {}, readOnly = true, label = { Text("Tarp Type") }, modifier = Modifier.fillMaxWidth())
             ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
                 tarpOpts.forEach { option ->
-                    DropdownMenuItem(
-                        text = { Text(option) },
-                        onClick = { selectedTarp = option; expanded = false }
-                    )
+                    DropdownMenuItem(text = { Text(option) }, onClick = { selectedTarp = option; expanded = false })
                 }
             }
         }
 
         Row(verticalAlignment = Alignment.CenterVertically) {
             Checkbox(checked = isPreTarped, onCheckedChange = { isPreTarped = it })
-            Text("Load Pre-Tarped at Shipper (Halves tarp bonus)")
+            Text("Load Pre-Tarped")
         }
 
-        OutlinedTextField(
-            value = tripNotes,
-            onValueChange = { tripNotes = it },
-            label = { Text("Trip Notes (Optional)") },
-            modifier = Modifier.fillMaxWidth(),
-            minLines = 3
-        )
+        OutlinedTextField(value = tripNotes, onValueChange = { tripNotes = it }, label = { Text("Trip Notes (Optional)") }, modifier = Modifier.fillMaxWidth(), minLines = 2)
 
         HorizontalDivider()
-        Text("Trip Operations Panel", style = MaterialTheme.typography.titleMedium)
 
-        when {
-            isManualEntry -> {
-                val isFormValid = proNum.trim().isNotEmpty() &&
-                        (matchDispatched || (manualActBounce.trim().isNotEmpty() && manualActLoaded.trim().isNotEmpty())) &&
-                        loadPay.trim().isNotEmpty()
+        val isFormValid = proNum.trim().isNotEmpty() && loadPay.trim().isNotEmpty() && sLat != null && cLat != null && dBounce.trim().isNotEmpty() && dLoaded.trim().isNotEmpty()
 
-                Button(
-                    onClick = {
-                        val tChar = when {
-                            selectedTarp.contains("Lumber") || selectedTarp.contains("L") -> "L"
-                            selectedTarp.contains("Steel") || selectedTarp.contains("S") -> "S"
-                            else -> "N"
-                        }
-                        
-                        val dispB = dBounce.toDoubleOrNull() ?: 0.0
-                        val dispL = dLoaded.toDoubleOrNull() ?: 0.0
-                        
-                        val manualData = CurrentLoad(
-                            proNumber = proNum.trim(),
-                            dispatchedBounceMiles = dispB,
-                            dispatchedLoadedMiles = dispL,
-                            bounceMilesStart = 0.0,
-                            bounceMilesEnd = if (matchDispatched) dispB else manualActBounce.toDoubleOrNull() ?: 0.0,
-                            loadedMilesStart = 0.0,
-                            loadedMilesEnd = if (matchDispatched) dispL else manualActLoaded.toDoubleOrNull() ?: 0.0,
-                            percentageRate = ratePct.toDoubleOrNull() ?: 80.0,
-                            loadPay = loadPay.toDoubleOrNull() ?: 0.0,
-                            tarpType = tChar,
-                            isPreTarped = isPreTarped,
-                            isGoingHome = isGoingHome,
-                            pickupTimestamp = selectedDateMillis,
-                            tripState = "COMPLETED",
-                            tripNotes = if (tripNotes.isBlank()) null else tripNotes,
-                            deliveryTimestamp = selectedDateMillis + 3600000 // Placeholder +1 hour
-                        )
-                        onSaveClick(manualData)
-                    },
-                    enabled = isFormValid,
-                    modifier = Modifier.fillMaxWidth().height(48.dp)
-                ) {
-                    Text("Save Completed Record")
-                }
-            }
-            tripStatus == "NOT_STARTED" || tripStatus == "ACTIVE_BOUNCE" || tripStatus == "ACTIVE_SHIPPER" || tripStatus == "ACTIVE_LOADED" -> {
-                // 📍 THE SECURITY GATE: Verifies required fields are not blank
-                val isFormValid = proNum.trim().isNotEmpty() &&
-                        dBounce.trim().isNotEmpty() &&
-                        dLoaded.trim().isNotEmpty() &&
-                        loadPay.trim().isNotEmpty()
-
-                Button(
-                    onClick = {
-                        if (editingLoad == null) {
-                            TrackingService.totalBounceMilesTracked.value = 0.0
-                            TrackingService.totalLoadedMilesTracked.value = 0.0
-                            TrackingService.activeSegment = "Bounce"
-                            ctx.startService(Intent(ctx, TrackingService::class.java))
-                        }
-
-                        val tChar = when {
-                            selectedTarp.contains("Lumber") || selectedTarp.contains("L") -> "L"
-                            selectedTarp.contains("Steel") || selectedTarp.contains("S") -> "S"
-                            else -> "N"
-                        }
-
-                        val draftData = CurrentLoad(
-                            proNumber = proNum.trim(),
-                            dispatchedBounceMiles = dBounce.toDoubleOrNull() ?: 0.0,
-                            dispatchedLoadedMiles = dLoaded.toDoubleOrNull() ?: 0.0,
-                            bounceMilesStart = editingLoad?.bounceMilesStart ?: 0.0,
-                            bounceMilesEnd = editingLoad?.bounceMilesEnd ?: 0.0,
-                            loadedMilesStart = editingLoad?.loadedMilesStart ?: 0.0,
-                            loadedMilesEnd = editingLoad?.loadedMilesEnd ?: 0.0,
-                            percentageRate = ratePct.toDoubleOrNull() ?: 80.0,
-                            loadPay = loadPay.toDoubleOrNull() ?: 0.0,
-                            tarpType = tChar,
-                            isPreTarped = isPreTarped,
-                            isGoingHome = isGoingHome,
-                            pickupTimestamp = editingLoad?.pickupTimestamp ?: System.currentTimeMillis(),
-                            tripState = if (editingLoad == null) "ACTIVE_BOUNCE" else tripStatus,
-                            tripNotes = if (tripNotes.isBlank()) null else tripNotes,
-                            deliveryTimestamp = editingLoad?.deliveryTimestamp
-                        )
-                        onSaveClick(draftData)
-                    },
-                    // 📍 LOCKS DOWN THE BUTTON IF INPUT CONDITIONS ARE NOT MET
-                    enabled = isFormValid,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(48.dp)
-                ) {
-                    Text(if (editingLoad == null) "Start Load (Dispatch En Route)" else "Update Trip Details")
-                }
-            }
-
-            else -> {
-                Card(modifier = Modifier.fillMaxWidth()) {
-                    Column(
-                        modifier = Modifier.padding(16.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        val lbl = when (tripStatus) {
-                            "EN_ROUTE_SHIPPER" -> "STATUS: EN ROUTE TO SHIPPER"
-                            "AT_SHIPPER" -> "STATUS: LOADING AT SHIPPER"
-                            "EN_ROUTE_CONSIGNEE" -> "STATUS: EN ROUTE TO CONSIGNEE"
-                            else -> ""
-                        }
-                        Text(
-                            text = lbl,
-                            style = MaterialTheme.typography.titleSmall,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceAround
-                        ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text("Live Bounce")
-                                Text(
-                                    "${String.format(Locale.US, "%.1f", liveBounce)} mi",
-                                    style = MaterialTheme.typography.titleMedium
-                                )
-                            }
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text("Live Loaded")
-                                Text(
-                                    "${String.format(Locale.US, "%.1f", liveLoaded)} mi",
-                                    style = MaterialTheme.typography.titleMedium
-                                )
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(16.dp))
-
-                        when (tripStatus) {
-                            "EN_ROUTE_SHIPPER" -> {
-                                Button(
-                                    onClick = {
-                                        TrackingService.activeSegment = "Paused"
-                                        tripStatus = "AT_SHIPPER"
-                                    },
-                                    modifier = Modifier.fillMaxWidth()
-                                ) { Text("Arrive at Shipper") }
-                            }
-
-                            "AT_SHIPPER" -> {
-                                Button(
-                                    onClick = {
-                                        TrackingService.activeSegment = "Loaded"
-                                        tripStatus = "EN_ROUTE_CONSIGNEE"
-                                    },
-                                    modifier = Modifier.fillMaxWidth()
-                                ) { Text("Depart Shipper (Loaded)") }
-                            }
-
-                            "EN_ROUTE_CONSIGNEE" -> {
-                                Button(
-                                    onClick = {
-                                        ctx.stopService(Intent(ctx, TrackingService::class.java))
-                                        val tChar = when {
-                                            selectedTarp.contains("Lumber") -> "L"
-                                            selectedTarp.contains("Steel") -> "S"
-                                            else -> "N"
-                                        }
-                                        val finalData = CurrentLoad(
-                                            proNumber = proNum.trim(),
-                                            dispatchedBounceMiles = dBounce.toDoubleOrNull() ?: 0.0,
-                                            dispatchedLoadedMiles = dLoaded.toDoubleOrNull() ?: 0.0,
-                                            bounceMilesStart = 0.0,
-                                            bounceMilesEnd = liveBounce,
-                                            loadedMilesStart = 0.0,
-                                            loadedMilesEnd = liveLoaded,
-                                            percentageRate = ratePct.toDoubleOrNull() ?: 80.0,
-                                            loadPay = loadPay.toDoubleOrNull() ?: 0.0,
-                                            tarpType = tChar,
-                                            isPreTarped = isPreTarped,
-                                            isGoingHome = isGoingHome,
-                                            pickupTimestamp = System.currentTimeMillis(),
-                                            tripState = "COMPLETED",
-                                            tripNotes = if (tripNotes.isBlank()) null else tripNotes,
-                                            deliveryTimestamp = System.currentTimeMillis()
-                                        )
-                                        onSaveClick(finalData)
-                                    },
-                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
-                                    modifier = Modifier.fillMaxWidth()
-                                ) { Text("Arrive at Consignee (Complete)") }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        TextButton(
+        Button(
             onClick = {
-                if (tripStatus != "NOT_STARTED" && editingLoad == null) {
-                    ctx.stopService(Intent(ctx, TrackingService::class.java))
+                val tChar = when(selectedTarp) {
+                    "8' Drop" -> "L"
+                    "4' Drop" -> "S"
+                    else -> "N"
                 }
-                onCancelClick()
+                val dispB = dBounce.toDoubleOrNull() ?: 0.0
+                val dispL = dLoaded.toDoubleOrNull() ?: 0.0
+
+                if (isManualEntry) {
+                    val manualData = CurrentLoad(
+                        proNumber = proNum.trim(),
+                        dispatchedBounceMiles = dispB,
+                        dispatchedLoadedMiles = dispL,
+                        bounceMilesStart = 0.0,
+                        bounceMilesEnd = if (matchDispatched) dispB else manualActBounce.toDoubleOrNull() ?: 0.0,
+                        loadedMilesStart = 0.0,
+                        loadedMilesEnd = if (matchDispatched) dispL else manualActLoaded.toDoubleOrNull() ?: 0.0,
+                        percentageRate = ratePct.toDoubleOrNull() ?: 31.0,
+                        loadPay = loadPay.toDoubleOrNull() ?: 0.0,
+                        tarpType = tChar,
+                        isPreTarped = isPreTarped,
+                        isGoingHome = isGoingHome,
+                        pickupTimestamp = selectedDateMillis,
+                        tripState = "COMPLETED",
+                        tripNotes = tripNotes.ifBlank { null },
+                        deliveryTimestamp = selectedDateMillis + 3600000,
+                        shipperName = sName,
+                        shipperLat = sLat,
+                        shipperLong = sLong,
+                        consigneeName = cName,
+                        consigneeLat = cLat,
+                        consigneeLong = cLong
+                    )
+                    processSave(manualData)
+                } else {
+                    val draftData = CurrentLoad(
+                        proNumber = proNum.trim(),
+                        dispatchedBounceMiles = dispB,
+                        dispatchedLoadedMiles = dispL,
+                        bounceMilesStart = 0.0,
+                        bounceMilesEnd = 0.0,
+                        loadedMilesStart = 0.0,
+                        loadedMilesEnd = 0.0,
+                        percentageRate = ratePct.toDoubleOrNull() ?: 31.0,
+                        loadPay = loadPay.toDoubleOrNull() ?: 0.0,
+                        tarpType = tChar,
+                        isPreTarped = isPreTarped,
+                        isGoingHome = isGoingHome,
+                        pickupTimestamp = System.currentTimeMillis(),
+                        tripState = "ACTIVE_BOUNCE",
+                        tripNotes = tripNotes.ifBlank { null },
+                        shipperName = sName,
+                        shipperLat = sLat,
+                        shipperLong = sLong,
+                        consigneeName = cName,
+                        consigneeLat = cLat,
+                        consigneeLong = cLong
+                    )
+                    TrackingService.targetLat = sLat
+                    TrackingService.targetLong = sLong
+                    TrackingService.targetName = sName
+                    TrackingService.isGeofenceActive = true
+                    ctx.startService(Intent(ctx, TrackingService::class.java))
+                    processSave(draftData)
+                }
             },
-            modifier = Modifier.fillMaxWidth()
+            enabled = isFormValid,
+            modifier = Modifier.fillMaxWidth().height(50.dp)
         ) {
-            Text("Cancel Load Entry")
+            Text(if (isManualEntry) "Save Record" else "Start Journey")
         }
+
+        TextButton(onClick = onCancelClick, modifier = Modifier.fillMaxWidth()) { Text("Cancel") }
+    }
+
+    if (showFridayReminder && pendingLoadSave != null) {
+        AlertDialog(
+            onDismissRequest = { showFridayReminder = false },
+            title = { Text("Friday Home Run?") },
+            text = { Text("It's Friday! Is this a 'Going Home' load? Marking it as such will protect your OOR percentage.") },
+            confirmButton = {
+                Button(onClick = {
+                    onSaveClick(pendingLoadSave!!.copy(isGoingHome = true))
+                    showFridayReminder = false
+                }) { Text("Yes, Home Run") }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    onSaveClick(pendingLoadSave!!)
+                    showFridayReminder = false
+                }) { Text("No, Work Only") }
+            }
+        )
     }
 }

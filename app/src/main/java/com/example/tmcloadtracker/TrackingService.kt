@@ -17,24 +17,39 @@ import com.google.android.gms.location.LocationRequest
 import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
 import java.util.Locale
-import com.example.tmcloadtracker.R
 
 class TrackingService : Service() {
 
     private lateinit var fusedLocationClient: FusedLocationProviderClient
     private lateinit var locationCallback: LocationCallback
     private var lastLocation: Location? = null
+    
+    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private var lastBreadcrumbTime = 0L
 
     companion object {
         const val CHANNEL_ID = "tracking_channel"
         const val NOTIFICATION_ID = 101
 
-        // Static streams allowing your UI screens to display live odometer miles as you drive
         val totalBounceMilesTracked = MutableStateFlow(0.0)
         val totalLoadedMilesTracked = MutableStateFlow(0.0)
-        var activeSegment = "Bounce" // "Bounce" or "Loaded"
+        var activeSegment = "Bounce" // "Bounce", "Loaded", "Paused"
+        
+        var activeProNumber: String? = null
+
+        var targetLat: Double? = null
+        var targetLong: Double? = null
+        var targetName: String? = null
+        var isGeofenceActive = false
+
+        var currentLatitude: Double? = null
+        var currentLongitude: Double? = null
     }
 
     override fun onCreate() {
@@ -42,57 +57,101 @@ class TrackingService : Service() {
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
         createNotificationChannel()
 
-        // 1. CONFIGURE GPS LOCATION FREQUENCY REFRESH RULES
         val locationRequest =
-            LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 5000) // Check every 5 seconds
-                .setMinUpdateDistanceMeters(10f) // Only log if truck moved 10 meters (approx 32 feet)
+            LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 5000)
+                .setMinUpdateDistanceMeters(10f)
                 .build()
 
-        // 2. DEFINE THE DISTANCE MATHEMATIC LOGIC CALLBACK ENGINE
         locationCallback = object : LocationCallback() {
             override fun onLocationResult(locationResult: LocationResult) {
                 for (location in locationResult.locations) {
+                    currentLatitude = location.latitude
+                    currentLongitude = location.longitude
+
                     if (lastLocation != null) {
-                        // Calculate distance in meters between last point and current point
                         val distanceMeters = lastLocation!!.distanceTo(location)
-                        // Convert meters to miles (1 meter = 0.000621371 miles)
                         val milesDriven = distanceMeters * 0.000621371
 
-                        // Route the calculated mileage accumulation based on current trip status
                         if (activeSegment == "Bounce") {
                             totalBounceMilesTracked.value += milesDriven
                         } else if (activeSegment == "Loaded") {
                             totalLoadedMilesTracked.value += milesDriven
                         }
                         updateNotification()
+                        checkGeofence(location)
+
+                        // 📍 NEW: Record Breadcrumb every 5 minutes OR every 5 miles
+                        val now = System.currentTimeMillis()
+                        if (activeProNumber != null && activeSegment != "Paused" && (now - lastBreadcrumbTime > 300000)) {
+                            saveBreadcrumb(location)
+                            lastBreadcrumbTime = now
+                        }
                     }
                     lastLocation = location
                 }
             }
         }
 
-        // 3. START PULLING LIVE DATA STREAM
         try {
             fusedLocationClient.requestLocationUpdates(
                 locationRequest,
                 locationCallback,
                 Looper.getMainLooper()
             )
-        } catch (unlikely: SecurityException) {
-            // Permissions missing
+        } catch (_: SecurityException) {}
+    }
+
+    private fun saveBreadcrumb(loc: Location) {
+        val pro = activeProNumber ?: return
+        serviceScope.launch {
+            try {
+                val db = AppDatabase.getDatabase(applicationContext)
+                db.loadDao().insertBreadcrumb(
+                    TripBreadcrumb(
+                        proNumber = pro,
+                        latitude = loc.latitude,
+                        longitude = loc.longitude,
+                        timestamp = System.currentTimeMillis()
+                    )
+                )
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    private fun checkGeofence(currentLocation: Location) {
+        if (!isGeofenceActive || targetLat == null || targetLong == null) return
+
+        val targetLoc = Location("").apply {
+            latitude = targetLat!!
+            longitude = targetLong!!
+        }
+
+        val distanceToTarget = currentLocation.distanceTo(targetLoc)
+        
+        if (distanceToTarget < 305.0) { // 1,000 feet
+            activeSegment = "Paused"
+            isGeofenceActive = false 
+            updateNotification()
         }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         updateNotification()
-        return START_STICKY // Forces background engine to automatically revive if crashed by system
+        return START_STICKY
     }
 
     private fun updateNotification() {
         val miles = if (activeSegment == "Bounce") totalBounceMilesTracked.value else totalLoadedMilesTracked.value
-        val contentText = "$activeSegment: ${String.format(Locale.US, "%.1f", miles)} mi"
+        
+        val hudTitle = if (activeSegment == "Paused") {
+            "📍 ARRIVED AT ${targetName?.uppercase(Locale.US) ?: "DESTINATION"}"
+        } else {
+            "Load Tracker Pro - Active"
+        }
+        val contentText = if (activeSegment == "Paused") "Status: Arrived / Loading Mode" else "$activeSegment: ${String.format(Locale.US, "%.1f", miles)} mi"
 
-        // 4. LAUNCH PERSISTENT NOTIFICATION TO KEEP SERVICE ALIVE FOREVER IN BACKGROUND
         val notificationIntent = Intent(this, MainActivity::class.java)
         val pendingIntent = PendingIntent.getActivity(
             this, 0, notificationIntent,
@@ -100,12 +159,12 @@ class TrackingService : Service() {
         )
 
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("TMC Load Tracker - Active")
+            .setContentTitle(hudTitle)
             .setContentText(contentText)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setContentIntent(pendingIntent)
             .setOngoing(true)
-            .setOnlyAlertOnce(true) // Don't buzz the phone every 5 seconds
+            .setOnlyAlertOnce(true)
             .build()
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -119,6 +178,7 @@ class TrackingService : Service() {
         super.onDestroy()
         fusedLocationClient.removeLocationUpdates(locationCallback)
         lastLocation = null
+        isGeofenceActive = false
     }
 
     override fun onBind(intent: Intent?): IBinder? = null

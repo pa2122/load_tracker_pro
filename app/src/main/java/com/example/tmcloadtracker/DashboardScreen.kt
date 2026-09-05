@@ -59,7 +59,6 @@ fun DashboardScreen(
     val activeTrip = pastLoads.find { it.tripState != "COMPLETED" }
     val completedLoads = pastLoads.filter { it.tripState == "COMPLETED" }
 
-    // Dialog control states
     var showCompletionDialog by remember { mutableStateOf(false) }
     var showHistoryDetailsDialog by remember { mutableStateOf(false) }
     var showWeeklyBreakdownDialog by remember { mutableStateOf(false) } 
@@ -81,7 +80,7 @@ fun DashboardScreen(
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 item {
-                    Text("TMC Load Tracker", style = MaterialTheme.typography.headlineMedium)
+                    Text("Load Tracker Pro", style = MaterialTheme.typography.headlineMedium)
                     Text(
                         "Current Payroll Week Running Totals",
                         style = MaterialTheme.typography.bodyMedium,
@@ -89,7 +88,6 @@ fun DashboardScreen(
                     )
                 }
 
-                // 1. RUNNING WEEKLY PERFORMANCE card
                 item {
                     Card(
                         modifier = Modifier
@@ -105,10 +103,11 @@ fun DashboardScreen(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
-                                Text("Current Week's Pay:")
+                                Text("Current Week's Pay:", color = MaterialTheme.colorScheme.onPrimaryContainer)
                                 Text(
                                     "$${String.format(Locale.US, "%.2f", summary.weeklyPay)}",
-                                    style = MaterialTheme.typography.titleLarge
+                                    style = MaterialTheme.typography.titleLarge,
+                                    color = MaterialTheme.colorScheme.primary
                                 )
                             }
                             HorizontalDivider(
@@ -120,14 +119,14 @@ fun DashboardScreen(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
-                                Text("Miles Driven This Week:")
-                                Text("${summary.weeklyMilesDriven.toInt()} mi")
+                                Text("Miles Driven This Week:", color = MaterialTheme.colorScheme.onPrimaryContainer)
+                                Text("${summary.weeklyMilesDriven.toInt()} mi", color = MaterialTheme.colorScheme.onPrimaryContainer)
                             }
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
-                                Text("Current Out-of-Route:")
+                                Text("Current Out-of-Route:", color = MaterialTheme.colorScheme.onPrimaryContainer)
                                 Text(
                                     "${summary.weeklyOutOfRoute.toInt()} mi (${
                                         String.format(
@@ -135,14 +134,14 @@ fun DashboardScreen(
                                             "%.1f",
                                             summary.weeklyOorPercentage
                                         )
-                                    }%)"
+                                    }%)",
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer
                                 )
                             }
                         }
                     }
                 }
 
-                // 2. ACTIVE RUN MILESTONE STEPPERS
                 if (activeTrip != null) {
                     item {
                         Card(
@@ -157,38 +156,41 @@ fun DashboardScreen(
                             ) {
                                 Text(
                                     "⚠️ ACTIVE TRIP: PRO #${activeTrip.proNumber}",
-                                    style = MaterialTheme.typography.titleSmall
+                                    style = MaterialTheme.typography.titleSmall,
+                                    color = MaterialTheme.colorScheme.onTertiaryContainer
                                 )
                                 Spacer(modifier = Modifier.height(4.dp))
                                 val label = when (activeTrip.tripState) {
-                                    "ACTIVE_BOUNCE" -> "En Route to Shipper (Deadhead)"
-                                    "ACTIVE_SHIPPER" -> "Loading / Tarping at Shipper Site"
-                                    "ACTIVE_LOADED" -> "En Route to Consignee (Paid Transit)"
+                                    "ACTIVE_BOUNCE" -> "En Route to: ${activeTrip.shipperName ?: "Shipper"}"
+                                    "ACTIVE_SHIPPER" -> "Arrived at: ${activeTrip.shipperName ?: "Shipper"}"
+                                    "ACTIVE_LOADED" -> "En Route to: ${activeTrip.consigneeName ?: "Consignee"}"
                                     else -> "Active Journey"
                                 }
-                                Text(label, style = MaterialTheme.typography.bodyMedium)
+                                Text(label, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onTertiaryContainer)
                                 Spacer(modifier = Modifier.height(12.dp))
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.SpaceAround
                                 ) {
                                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                        Text("Tracked Bounce")
+                                        Text("Tracked Bounce", color = MaterialTheme.colorScheme.onTertiaryContainer)
                                         Text(
                                             "${String.format(Locale.US, "%.1f", liveBounceMiles)} mi",
-                                            style = MaterialTheme.typography.titleMedium
+                                            style = MaterialTheme.typography.titleMedium,
+                                            color = MaterialTheme.colorScheme.primary
                                         )
                                     }
                                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                        Text("Tracked Loaded")
+                                        Text("Tracked Loaded", color = MaterialTheme.colorScheme.onTertiaryContainer)
                                         Text(
                                             "${String.format(Locale.US, "%.1f", liveLoadedMiles)} mi",
-                                            style = MaterialTheme.typography.titleMedium
+                                            style = MaterialTheme.typography.titleMedium,
+                                            color = MaterialTheme.colorScheme.primary
                                         )
                                     }
                                 }
                                 Spacer(modifier = Modifier.height(16.dp))
-                                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.2f))
 
                                 when (activeTrip.tripState) {
                                     "ACTIVE_BOUNCE" -> {
@@ -210,6 +212,10 @@ fun DashboardScreen(
                                         Button(
                                             onClick = {
                                                 TrackingService.activeSegment = "Loaded"
+                                                TrackingService.targetLat = activeTrip.consigneeLat
+                                                TrackingService.targetLong = activeTrip.consigneeLong
+                                                TrackingService.targetName = activeTrip.consigneeName ?: "Consignee"
+                                                TrackingService.isGeofenceActive = activeTrip.consigneeLat != null
                                                 onUpdateTripClick(activeTrip.copy(tripState = "ACTIVE_LOADED"))
                                             },
                                             modifier = Modifier.fillMaxWidth()
@@ -219,6 +225,7 @@ fun DashboardScreen(
                                     "ACTIVE_LOADED" -> {
                                         Button(
                                             onClick = {
+                                                TrackingService.isGeofenceActive = false
                                                 selectedTripData = activeTrip.copy(
                                                     tripState = "COMPLETED",
                                                     loadedMilesEnd = liveLoadedMiles,
@@ -228,7 +235,7 @@ fun DashboardScreen(
                                             },
                                             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
                                             modifier = Modifier.fillMaxWidth()
-                                        ) { Text("Arrive at Consignee (Complete Load)") }
+                                        ) { Text("Arrive at Consignee") }
                                     }
                                 }
                             }
@@ -278,7 +285,6 @@ fun DashboardScreen(
                     }
                 } else {
                     items(items = completedLoads) { load ->
-                        // 📍 THE UPGRADE: Formats the raw database timestamp into a crisp calendar date
                         val dateLabel = remember(load.pickupTimestamp) {
                             val instant = Instant.ofEpochMilli(load.pickupTimestamp)
                             val zone = ZoneId.systemDefault()
@@ -307,11 +313,17 @@ fun DashboardScreen(
                                         "PRO #: ${load.proNumber}",
                                         style = MaterialTheme.typography.titleMedium
                                     )
-                                    // 📍 VISUAL LAYOUT ROW INJECTION: Displays the structured pickup date
                                     Text(
                                         text = dateLabel,
                                         style = MaterialTheme.typography.bodyMedium,
                                         color = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                                if (load.shipperName != null || load.consigneeName != null) {
+                                    Text(
+                                        text = "${load.shipperName ?: "?"} -> ${load.consigneeName ?: "?"}",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.secondary
                                     )
                                 }
                                 Spacer(modifier = Modifier.height(4.dp))
@@ -325,8 +337,8 @@ fun DashboardScreen(
                                         color = MaterialTheme.colorScheme.secondary
                                     )
                                     val tarpLabel = when (load.tarpType) {
-                                        "L" -> "Lumber"
-                                        "S" -> "Steel"
+                                        "L" -> "8' Drop"
+                                        "S" -> "4' Drop"
                                         else -> "None"
                                     }
                                     Text(
@@ -341,7 +353,6 @@ fun DashboardScreen(
                 }
             }
 
-            // MODAL INTERFACE A: THE ORIGINAL ARRIVAL SETTLEMENT FORM BINDING
             if (showCompletionDialog && selectedTripData != null) {
                 val trip = selectedTripData!!
                 val baseGross = trip.loadPay
@@ -367,30 +378,14 @@ fun DashboardScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
                                 Text("Gross Truck Revenue:")
-                                Text(
-                                    "$${
-                                        String.format(
-                                            Locale.US,
-                                            "%.2f",
-                                            baseGross
-                                        )
-                                    }"
-                                )
+                                Text("$${String.format(Locale.US, "%.2f", baseGross)}")
                             }
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
                                 Text("Your Pay Split (${splitVal.toInt()}%):")
-                                Text(
-                                    "$${
-                                        String.format(
-                                            Locale.US,
-                                            "%.2f",
-                                            baseCut
-                                        )
-                                    }"
-                                )
+                                Text("$${String.format(Locale.US, "%.2f", baseCut)}")
                             }
                             if (tarp > 0.0) {
                                 Row(
@@ -398,15 +393,7 @@ fun DashboardScreen(
                                     horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
                                     Text("Tarp Pay Addon:")
-                                    Text(
-                                        "+$${
-                                            String.format(
-                                                Locale.US,
-                                                "%.2f",
-                                                tarp
-                                            )
-                                        }"
-                                    )
+                                    Text("+$${String.format(Locale.US, "%.2f", tarp)}")
                                 }
                             }
                             if (dhBonus > 0.0) {
@@ -415,15 +402,7 @@ fun DashboardScreen(
                                     horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
                                     Text("Long Deadhead Bonus:")
-                                    Text(
-                                        "+$${
-                                            String.format(
-                                                Locale.US,
-                                                "%.2f",
-                                                dhBonus
-                                            )
-                                        }"
-                                    )
+                                    Text("+$${String.format(Locale.US, "%.2f", dhBonus)}")
                                 }
                             }
                             HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
@@ -431,18 +410,9 @@ fun DashboardScreen(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
+                                Text("Total Net Take-Home Pay:", style = MaterialTheme.typography.titleMedium)
                                 Text(
-                                    "Total Net Take-Home Pay:",
-                                    style = MaterialTheme.typography.titleMedium
-                                )
-                                Text(
-                                    "$${
-                                        String.format(
-                                            Locale.US,
-                                            "%.2f",
-                                            finalNet
-                                        )
-                                    }",
+                                    "$${String.format(Locale.US, "%.2f", finalNet)}",
                                     style = MaterialTheme.typography.titleMedium,
                                     color = MaterialTheme.colorScheme.primary
                                 )
@@ -451,14 +421,14 @@ fun DashboardScreen(
                     },
                     confirmButton = {
                         Button(onClick = {
-                            onUpdateTripClick(trip); showCompletionDialog =
-                            false; selectedTripData = null
+                            onUpdateTripClick(trip)
+                            showCompletionDialog = false
+                            selectedTripData = null
                         }) { Text("Confirm & File Log") }
                     }
                 )
             }
 
-            // 📍 MODAL INTERFACE B: THE BRAND NEW PAST LOAD LOG DETAILED BREAKDOWN ACCOUNTING STATEMENT
             if (showHistoryDetailsDialog && selectedTripData != null) {
                 val trip = selectedTripData!!
                 val baseGross = trip.loadPay
@@ -474,7 +444,6 @@ fun DashboardScreen(
                     if (trip.dispatchedBounceMiles >= 150.0) trip.dispatchedBounceMiles * 0.20 else 0.0
                 val finalNet = baseCut + tarp + dhBonus
 
-                // Mileage performance variance math
                 val actualBounceRun = trip.bounceMilesEnd - trip.bounceMilesStart
                 val actualLoadedRun = trip.loadedMilesEnd - trip.loadedMilesStart
                 val totalActualTripDriven = actualBounceRun + actualLoadedRun
@@ -499,30 +468,14 @@ fun DashboardScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
                                 Text("Gross Truck Revenue:")
-                                Text(
-                                    "$${
-                                        String.format(
-                                            Locale.US,
-                                            "%.2f",
-                                            baseGross
-                                        )
-                                    }"
-                                )
+                                Text("$${String.format(Locale.US, "%.2f", baseGross)}")
                             }
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
                                 Text("Your Percentage Share (${splitVal.toInt()}%):")
-                                Text(
-                                    "$${
-                                        String.format(
-                                            Locale.US,
-                                            "%.2f",
-                                            baseCut
-                                        )
-                                    }"
-                                )
+                                Text("$${String.format(Locale.US, "%.2f", baseCut)}")
                             }
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
@@ -536,32 +489,15 @@ fun DashboardScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
                                 Text("Deadhead Bonus Pay:")
-                                Text(
-                                    "$${
-                                        String.format(
-                                            Locale.US,
-                                            "%.2f",
-                                            dhBonus
-                                        )
-                                    }"
-                                )
+                                Text("$${String.format(Locale.US, "%.2f", dhBonus)}")
                             }
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
+                                Text("Net Statement Earnings:", style = MaterialTheme.typography.bodyLarge)
                                 Text(
-                                    "Net Statement Earnings:",
-                                    style = MaterialTheme.typography.bodyLarge
-                                )
-                                Text(
-                                    "$${
-                                        String.format(
-                                            Locale.US,
-                                            "%.2f",
-                                            finalNet
-                                        )
-                                    }",
+                                    "$${String.format(Locale.US, "%.2f", finalNet)}",
                                     style = MaterialTheme.typography.bodyLarge,
                                     color = MaterialTheme.colorScheme.primary
                                 )
@@ -606,10 +542,7 @@ fun DashboardScreen(
                                     style = MaterialTheme.typography.labelLarge,
                                     color = MaterialTheme.colorScheme.primary
                                 )
-                                Text(
-                                    trip.tripNotes,
-                                    style = MaterialTheme.typography.bodyMedium
-                                )
+                                Text(trip.tripNotes, style = MaterialTheme.typography.bodyMedium)
                             }
                         }
                     },
@@ -622,7 +555,7 @@ fun DashboardScreen(
             }
         }
     }
-    // 📍 NEW MODAL INTERFACE C: DETAILED WEEKLY PAYROLL STATEMENT BREAKDOWN POPUP
+
     if (showWeeklyBreakdownDialog) {
         AlertDialog(
             onDismissRequest = { showWeeklyBreakdownDialog = false },
@@ -635,7 +568,6 @@ fun DashboardScreen(
                             DayOfWeek.FRIDAY, DayOfWeek.SATURDAY, DayOfWeek.SUNDAY -> d.with(
                                 TemporalAdjusters.next(DayOfWeek.FRIDAY)
                             )
-
                             else -> d.with(TemporalAdjusters.nextOrSame(DayOfWeek.FRIDAY))
                         }
                     }
@@ -648,7 +580,6 @@ fun DashboardScreen(
                                 DayOfWeek.FRIDAY, DayOfWeek.SATURDAY, DayOfWeek.SUNDAY -> d.with(
                                     TemporalAdjusters.next(DayOfWeek.FRIDAY)
                                 )
-
                                 else -> d.with(TemporalAdjusters.nextOrSame(DayOfWeek.FRIDAY))
                             }
                         }
@@ -703,71 +634,35 @@ fun DashboardScreen(
                                         "PRO #: ${trip.proNumber}",
                                         style = MaterialTheme.typography.titleSmall
                                     )
-
-                                    // 📍 FIX A: Separated into clean standalone stacked lines
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
                                         horizontalArrangement = Arrangement.SpaceBetween
                                     ) {
-                                        Text(
-                                            "Truck Gross Pay:",
-                                            style = MaterialTheme.typography.bodySmall
-                                        )
-                                        Text(
-                                            "$${String.format(Locale.US, "%.2f", trip.loadPay)}",
-                                            style = MaterialTheme.typography.bodySmall
-                                        )
+                                        Text("Truck Gross Pay:", style = MaterialTheme.typography.bodySmall)
+                                        Text("$${String.format(Locale.US, "%.2f", trip.loadPay)}", style = MaterialTheme.typography.bodySmall)
                                     }
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
                                         horizontalArrangement = Arrangement.SpaceBetween
                                     ) {
-                                        Text(
-                                            "Your Split (${trip.percentageRate.toInt()}%):",
-                                            style = MaterialTheme.typography.bodySmall
-                                        )
-                                        Text(
-                                            "$${String.format(Locale.US, "%.2f", baseDriverCut)}",
-                                            style = MaterialTheme.typography.bodySmall
-                                        )
+                                        Text("Your Split (${trip.percentageRate.toInt()}%):", style = MaterialTheme.typography.bodySmall)
+                                        Text("$${String.format(Locale.US, "%.2f", baseDriverCut)}", style = MaterialTheme.typography.bodySmall)
                                     }
-
                                     if (tarpAddon > 0.0 || bounceBonus > 0.0) {
                                         Row(
                                             modifier = Modifier.fillMaxWidth(),
                                             horizontalArrangement = Arrangement.SpaceBetween
                                         ) {
-                                            Text(
-                                                "Extras (Tarp/Bounce):",
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.secondary
-                                            )
-                                            Text(
-                                                "+$${
-                                                    String.format(
-                                                        Locale.US,
-                                                        "%.2f",
-                                                        tarpAddon + bounceBonus
-                                                    )
-                                                }",
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.secondary
-                                            )
+                                            Text("Extras (Tarp/Bounce):", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
+                                            Text("+$${String.format(Locale.US, "%.2f", tarpAddon + bounceBonus)}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
                                         }
                                     }
-                                    HorizontalDivider(
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(
-                                            alpha = 0.1f
-                                        )
-                                    )
+                                    HorizontalDivider(color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.1f))
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
                                         horizontalArrangement = Arrangement.SpaceBetween
                                     ) {
-                                        Text(
-                                            "Total Load Net:",
-                                            style = MaterialTheme.typography.bodyMedium
-                                        )
+                                        Text("Total Load Net:", style = MaterialTheme.typography.bodyMedium)
                                         Text(
                                             "$${String.format(Locale.US, "%.2f", totalTripPay)}",
                                             style = MaterialTheme.typography.bodyMedium,
@@ -788,30 +683,12 @@ fun DashboardScreen(
                         )
                         Spacer(modifier = Modifier.height(4.dp))
 
-                        var calculatedLoadAccumulations = 0.0
-                        weeklyTrips.forEach { t ->
-                            val cut = t.loadPay * (t.percentageRate / 100.0)
-                            var tarp = when (t.tarpType) {
-                                "L" -> 50.0
-                                "S" -> 30.0
-                                else -> 0.0
-                            }
-                            if (t.isPreTarped) tarp /= 2.0
-                            val dh =
-                                if (t.dispatchedBounceMiles >= 150.0) t.dispatchedBounceMiles * 0.20 else 0.0
-                            calculatedLoadAccumulations += (cut + tarp + dh)
-                        }
-
-                        // 📍 FIX B: Clean line displaying your Training status explicitly
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Text("Training:")
-                            Text(
-                                if (isTrainingActive) "Yes" else "No",
-                                style = MaterialTheme.typography.bodyMedium
-                            )
+                            Text(if (isTrainingActive) "Yes" else "No", style = MaterialTheme.typography.bodyMedium)
                         }
                         if (isTrainingActive) {
                             Row(
@@ -819,10 +696,7 @@ fun DashboardScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
                                 Text("Flat Trainer Premium Addon:")
-                                Text(
-                                    "+$${String.format(Locale.US, "%.2f", flatTrainerPayRate)}",
-                                    color = MaterialTheme.colorScheme.primary
-                                )
+                                Text("+$${String.format(Locale.US, "%.2f", flatTrainerPayRate)}", color = MaterialTheme.colorScheme.primary)
                             }
                         }
                         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
@@ -830,10 +704,7 @@ fun DashboardScreen(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Text(
-                                "Combined Statement Total:",
-                                style = MaterialTheme.typography.titleSmall
-                            )
+                            Text("Combined Statement Total:", style = MaterialTheme.typography.titleSmall)
                             Text(
                                 "$${String.format(Locale.US, "%.2f", summary.weeklyPay)}",
                                 style = MaterialTheme.typography.titleSmall,
@@ -858,7 +729,6 @@ fun DashboardScreen(
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text("Select an action for your currently active load.")
-                    
                     Button(
                         onClick = {
                             showActiveOptionsDialog = false
@@ -913,7 +783,6 @@ fun DashboardScreen(
                                     val totalWeekPay = loads.sumOf { load ->
                                         val base = load.loadPay * (load.percentageRate / 100.0)
                                         val bonus = if (load.dispatchedBounceMiles >= 150.0) load.dispatchedBounceMiles * 0.20 else 0.0
-                                        // Simplified pay (doesn't account for trainer/manual rates here, just a summary)
                                         base + bonus
                                     }
                                     Card(
@@ -992,28 +861,23 @@ fun DashboardScreen(
         )
     }
 
-// 📍 POPUP DIALOG THAT READS YOUR RAW ASSETS FILE AT RUNTIME
     if (showHelpOnLaunch) {
         val context = LocalContext.current
-
-        // Safely reads the text lines from your assets directory folder
         val helpTextString = remember {
             try {
-                // Updated file path target to look for your new .md package file
                 context.assets.open("help_guide.md").bufferedReader().use { it.readText() }
             } catch (_: Exception) {
-                "# Error\nCould not locate your `help_guide.md` asset file. Please check folder placement."
+                "# Error\nCould not locate your `help_guide.md` asset file."
             }
         }
 
         AlertDialog(
             onDismissRequest = onDismissHelpDialog,
-            title = { Text("App Reference Manual & Todo") },
+            title = { Text("App Reference Manual") },
             text = {
                 Box(modifier = Modifier.heightIn(max = 400.dp)) {
                     LazyColumn {
                         item {
-                            // 📍 THE UPGRADE: Swaps plain Text for dynamic stylized Markdown Rendering
                             MarkdownText(
                                 markdown = helpTextString,
                                 color = MaterialTheme.colorScheme.onSurface,
@@ -1030,5 +894,4 @@ fun DashboardScreen(
             }
         )
     }
-
 } 

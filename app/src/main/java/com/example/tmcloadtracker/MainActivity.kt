@@ -57,7 +57,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
-import com.example.tmcloadtracker.ui.theme.TMCLoadTrackerTheme
+import com.example.tmcloadtracker.ui.theme.LoadTrackerProTheme
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.File
@@ -78,26 +78,26 @@ class MainActivity : ComponentActivity() {
         checkAndRequestPermissions()
 
         setContent {
-            TMCLoadTrackerTheme {
+            LoadTrackerProTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
                     var isAppStartingUp by remember { mutableStateOf(true) }
-                    var loadingStatusText by remember { mutableStateOf("Initializing Odometer Engines...") }
+                    var loadingStatusText by remember { mutableStateOf("Initializing Engines...") }
 
                     LaunchedEffect(Unit) {
-                        delay(1200) // Show spinner for 1.2 seconds
-                        loadingStatusText = "Loading Saved Trip Database Logs..."
-                        delay(1000) // Hold state for another 1 second
-                        isAppStartingUp = false // Shuts down splash view, boots your home screen
+                        delay(1200) 
+                        loadingStatusText = "Loading Databases..."
+                        delay(1000) 
+                        isAppStartingUp = false 
                     }
                     var currentScreen by remember { mutableStateOf("dashboard") }
                     var tripToEdit by remember { mutableStateOf<CurrentLoad?>(null) }
 
                     var defPercent by remember { mutableStateOf("31.0") }
-                    var lTarpPay by remember { mutableStateOf("50.0") }
-                    var sTarpPay by remember { mutableStateOf("30.0") }
+                    var tarp8Pay by remember { mutableStateOf("50.0") }
+                    var tarp4Pay by remember { mutableStateOf("30.0") }
                     var homeBase by remember { mutableStateOf("") }
 
                     var isTrainingActive by remember { mutableStateOf(false) }
@@ -110,7 +110,6 @@ class MainActivity : ComponentActivity() {
 
                     val savedLoads by viewModel.allLoads.collectAsState(initial = emptyList())
 
-                    // 📍 AUTO-START TRACKING SERVICE IF AN ACTIVE TRIP EXISTS
                     LaunchedEffect(savedLoads) {
                         val active = savedLoads.find { it.tripState != "COMPLETED" && it.tripState != "NOT_STARTED" }
                         if (active != null) {
@@ -119,30 +118,42 @@ class MainActivity : ComponentActivity() {
                             ) == PackageManager.PERMISSION_GRANTED
                             
                             if (fineLocation) {
-                                // Sync the service state with the database state
                                 TrackingService.activeSegment = when (active.tripState) {
                                     "ACTIVE_BOUNCE" -> "Bounce"
                                     "ACTIVE_LOADED" -> "Loaded"
                                     else -> "Paused"
                                 }
+                                TrackingService.activeProNumber = active.proNumber
+                                
+                                if (active.tripState == "ACTIVE_BOUNCE") {
+                                    TrackingService.targetLat = active.shipperLat
+                                    TrackingService.targetLong = active.shipperLong
+                                    TrackingService.targetName = active.shipperName ?: "Shipper"
+                                    TrackingService.isGeofenceActive = active.shipperLat != null
+                                } else if (active.tripState == "ACTIVE_LOADED") {
+                                    TrackingService.targetLat = active.consigneeLat
+                                    TrackingService.targetLong = active.consigneeLong
+                                    TrackingService.targetName = active.consigneeName ?: "Consignee"
+                                    TrackingService.isGeofenceActive = active.consigneeLat != null
+                                }
+
                                 startService(Intent(this@MainActivity, TrackingService::class.java))
                             }
                         }
                     }
 
-                    // 📍 THE ADAPTIVE STATE ENGINE BLOCK CALCULATION CONTEXT LINK
                     val weeklySummary by remember(
                         savedLoads,
                         defPercent,
-                        lTarpPay,
-                        sTarpPay,
+                        tarp8Pay,
+                        tarp4Pay,
                         isTrainingActive,
                         flatTrainerPayRate
                     ) {
                         derivedStateOf {
                             viewModel.getCurrentWeekSummary(
-                                lumberRate = lTarpPay.toDoubleOrNull() ?: 0.0,
-                                steelRate = sTarpPay.toDoubleOrNull() ?: 0.0,
+                                lumberRate = tarp8Pay.toDoubleOrNull() ?: 0.0,
+                                steelRate = tarp4Pay.toDoubleOrNull() ?: 0.0,
                                 isTraining = isTrainingActive,
                                 trainerRate = flatTrainerPayRate.toDoubleOrNull() ?: 0.0
                             )
@@ -188,11 +199,11 @@ class MainActivity : ComponentActivity() {
                                     )
 
                                     OutlinedTextField(
-                                        value = lTarpPay,
+                                        value = tarp8Pay,
                                         onValueChange = { input ->
-                                            lTarpPay = input.filter { it.isDigit() || it == '.' }
+                                            tarp8Pay = input.filter { it.isDigit() || it == '.' }
                                         },
-                                        label = { Text("Lumber Tarp Pay ($)") },
+                                        label = { Text("8' Drop Tarp Pay ($)") },
                                         singleLine = true,
                                         keyboardOptions = KeyboardOptions(
                                             keyboardType = KeyboardType.Number,
@@ -202,11 +213,11 @@ class MainActivity : ComponentActivity() {
                                     )
 
                                     OutlinedTextField(
-                                        value = sTarpPay,
+                                        value = tarp4Pay,
                                         onValueChange = { input ->
-                                            sTarpPay = input.filter { it.isDigit() || it == '.' }
+                                            tarp4Pay = input.filter { it.isDigit() || it == '.' }
                                         },
-                                        label = { Text("Steel Tarp Pay ($)") },
+                                        label = { Text("4' Drop Tarp Pay ($)") },
                                         singleLine = true,
                                         keyboardOptions = KeyboardOptions(
                                             keyboardType = KeyboardType.Number,
@@ -261,6 +272,21 @@ class MainActivity : ComponentActivity() {
                                     Button(
                                         onClick = {
                                             scope.launch { drawerState.close() }
+                                            currentScreen = "facility_search"
+                                        },
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                                        ),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text("Review Facility Insights")
+                                    }
+
+                                    HorizontalDivider()
+                                    Button(
+                                        onClick = {
+                                            scope.launch { drawerState.close() }
                                             exportToCsv()
                                         },
                                         colors = ButtonDefaults.buttonColors(
@@ -274,18 +300,30 @@ class MainActivity : ComponentActivity() {
                                     HorizontalDivider()
                                     Button(
                                         onClick = {
-                                            // We temporarily close the slide menu and notify the screen state engine
+                                            scope.launch { drawerState.close() }
+                                            currentScreen = "facility_search"
+                                        },
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                                        ),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text("Review Facility Insights")
+                                    }
+
+                                    HorizontalDivider()
+                                    Button(
+                                        onClick = {
                                             scope.launch { drawerState.close() }
                                             triggerHelpView.value = true
-                                            // To make it easy, we can toggle our state or pass a signal
-
                                         },
                                         colors = ButtonDefaults.buttonColors(
                                             containerColor = MaterialTheme.colorScheme.secondary
                                         ),
                                         modifier = Modifier.fillMaxWidth()
                                     ) {
-                                        Text("Open Built-In Reference Notes")
+                                        Text("Open Driver's Guide")
                                     }
 
                                     Spacer(modifier = Modifier.weight(1f))
@@ -302,7 +340,7 @@ class MainActivity : ComponentActivity() {
                         Scaffold(
                             topBar = {
                                 TopAppBar(
-                                    title = { Text("TMC Load Tracker") },
+                                    title = { Text("Load Tracker Pro") },
                                     navigationIcon = {
                                         IconButton(onClick = { scope.launch { drawerState.open() } }) {
                                             Icon(
@@ -327,19 +365,17 @@ class MainActivity : ComponentActivity() {
                                             verticalArrangement = Arrangement.spacedBy(20.dp)
                                         ) {
                                             Text(
-                                                text = "TMC Load Tracker",
+                                                text = "Load Tracker Pro",
                                                 style = MaterialTheme.typography.headlineLarge,
                                                 color = MaterialTheme.colorScheme.primary
                                             )
 
-                                            // Native Material Design 3 spinning loading icon wheel
                                             CircularProgressIndicator(
                                                 color = MaterialTheme.colorScheme.primary,
                                                 strokeWidth = 4.dp,
                                                 modifier = Modifier.size(48.dp)
                                             )
 
-                                            // 📍 Live status text row that changes dynamically as background steps load
                                             Text(
                                                 text = loadingStatusText,
                                                 style = MaterialTheme.typography.bodyMedium,
@@ -390,6 +426,7 @@ class MainActivity : ComponentActivity() {
                                                                 TrackingService::class.java
                                                             )
                                                         )
+                                                        TrackingService.activeProNumber = null
                                                     }
                                                     viewModel.saveLoad(
                                                         proNumber = updatedTripEntity.proNumber,
@@ -407,7 +444,13 @@ class MainActivity : ComponentActivity() {
                                                         isGoingHome = updatedTripEntity.isGoingHome,
                                                         tripState = updatedTripEntity.tripState,
                                                         tripNotes = updatedTripEntity.tripNotes,
-                                                        deliveryTimestamp = updatedTripEntity.deliveryTimestamp
+                                                        deliveryTimestamp = updatedTripEntity.deliveryTimestamp,
+                                                        shipperName = updatedTripEntity.shipperName,
+                                                        shipperLat = updatedTripEntity.shipperLat,
+                                                        shipperLong = updatedTripEntity.shipperLong,
+                                                        consigneeName = updatedTripEntity.consigneeName,
+                                                        consigneeLat = updatedTripEntity.consigneeLat,
+                                                        consigneeLong = updatedTripEntity.consigneeLong
                                                     )
                                                 }
                                             )
@@ -418,6 +461,9 @@ class MainActivity : ComponentActivity() {
                                                 initialPercentage = defPercent,
                                                 editingLoad = tripToEdit,
                                                 onSaveClick = { finalizedLoadEntity ->
+                                                    if (finalizedLoadEntity.tripState.startsWith("ACTIVE")) {
+                                                        TrackingService.activeProNumber = finalizedLoadEntity.proNumber
+                                                    }
                                                     viewModel.saveLoad(
                                                         proNumber = finalizedLoadEntity.proNumber,
                                                         dispBounce = finalizedLoadEntity.dispatchedBounceMiles,
@@ -434,7 +480,13 @@ class MainActivity : ComponentActivity() {
                                                         isGoingHome = finalizedLoadEntity.isGoingHome,
                                                         tripState = finalizedLoadEntity.tripState,
                                                         tripNotes = finalizedLoadEntity.tripNotes,
-                                                        deliveryTimestamp = finalizedLoadEntity.deliveryTimestamp
+                                                        deliveryTimestamp = finalizedLoadEntity.deliveryTimestamp,
+                                                        shipperName = finalizedLoadEntity.shipperName,
+                                                        shipperLat = finalizedLoadEntity.shipperLat,
+                                                        shipperLong = finalizedLoadEntity.shipperLong,
+                                                        consigneeName = finalizedLoadEntity.consigneeName,
+                                                        consigneeLat = finalizedLoadEntity.consigneeLat,
+                                                        consigneeLong = finalizedLoadEntity.consigneeLong
                                                     )
                                                     tripToEdit = null
                                                     currentScreen = "dashboard"
@@ -443,6 +495,13 @@ class MainActivity : ComponentActivity() {
                                                     tripToEdit = null
                                                     currentScreen = "dashboard" 
                                                 }
+                                            )
+                                        }
+
+                                        "facility_search" -> {
+                                            FacilitySearchScreen(
+                                                viewModel = viewModel,
+                                                onBack = { currentScreen = "dashboard" }
                                             )
                                         }
                                     }
@@ -457,7 +516,7 @@ class MainActivity : ComponentActivity() {
 
     private fun exportToCsv() {
         val csvContent = viewModel.generateCsvContent()
-        val file = File(cacheDir, "TMC_Payload_Export.csv")
+        val file = File(cacheDir, "Load_Tracker_Export.csv")
         try {
             FileOutputStream(file).use {
                 it.write(csvContent.toByteArray())
@@ -471,7 +530,7 @@ class MainActivity : ComponentActivity() {
 
             val shareIntent = Intent(Intent.ACTION_SEND).apply {
                 type = "text/csv"
-                putExtra(Intent.EXTRA_SUBJECT, "TMC Payload Export")
+                putExtra(Intent.EXTRA_SUBJECT, "Load Tracker Pro Export")
                 putExtra(Intent.EXTRA_STREAM, contentUri)
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
@@ -482,7 +541,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    // Permissions checking logic
     private fun checkAndRequestPermissions() {
         val fineLocation = ContextCompat.checkSelfPermission(
             this, Manifest.permission.ACCESS_FINE_LOCATION

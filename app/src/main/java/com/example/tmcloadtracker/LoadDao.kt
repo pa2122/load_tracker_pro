@@ -21,4 +21,22 @@ interface LoadDao {
     // Deletes an entry permanently from your phone's local storage file.
     @Delete
     suspend fun deleteLoad(load: CurrentLoad)
+
+    @Insert
+    suspend fun insertBreadcrumb(breadcrumb: TripBreadcrumb)
+
+    @Query("SELECT * FROM trip_breadcrumbs WHERE proNumber = :pro ORDER BY timestamp ASC")
+    fun getBreadcrumbsForLoad(pro: String): Flow<List<TripBreadcrumb>>
+
+    @Query("SELECT DISTINCT shipperName FROM trucking_loads WHERE shipperName IS NOT NULL UNION SELECT DISTINCT consigneeName FROM trucking_loads WHERE consigneeName IS NOT NULL")
+    fun getAllFacilityNames(): Flow<List<String>>
+
+    @Query("SELECT tripNotes, pickupTimestamp, proNumber FROM trucking_loads WHERE (shipperName = :name OR consigneeName = :name) AND tripNotes IS NOT NULL")
+    fun getNotesForFacility(name: String): Flow<List<FacilityNote>>
 }
+
+data class FacilityNote(
+    val tripNotes: String,
+    val pickupTimestamp: Long,
+    val proNumber: String
+)

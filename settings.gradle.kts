@@ -20,6 +20,6 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "TMCLoadTracker"
+rootProject.name = "LoadTrackerPro"
 include(":app")
  

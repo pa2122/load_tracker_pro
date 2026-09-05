@@ -3,9 +3,13 @@ package com.example.tmcloadtracker
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import java.time.DayOfWeek
 import java.time.Instant
@@ -25,6 +29,21 @@ class LoadViewModel(application: Application) :
     )
     val allLoads: StateFlow<List<CurrentLoad>> =
         _allLoads.asStateFlow()
+
+    val allFacilities: Flow<List<String>> = loadDao.getAllFacilityNames()
+    
+    private val _selectedFacility = MutableStateFlow("")
+    val selectedFacility = _selectedFacility.asStateFlow()
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val facilityNotes: Flow<List<FacilityNote>> = _selectedFacility.flatMapLatest { name ->
+        if (name.isBlank()) flowOf(emptyList())
+        else loadDao.getNotesForFacility(name)
+    }
+
+    fun selectFacility(name: String) {
+        _selectedFacility.value = name
+    }
 
     init {
         viewModelScope.launch {
@@ -50,7 +69,13 @@ class LoadViewModel(application: Application) :
         isGoingHome: Boolean,
         tripState: String,
         tripNotes: String? = null,
-        deliveryTimestamp: Long? = null
+        deliveryTimestamp: Long? = null,
+        shipperName: String? = null,
+        shipperLat: Double? = null,
+        shipperLong: Double? = null,
+        consigneeName: String? = null,
+        consigneeLat: Double? = null,
+        consigneeLong: Double? = null
     ) {
         viewModelScope.launch {
             val newLoad = CurrentLoad(
@@ -69,7 +94,13 @@ class LoadViewModel(application: Application) :
                 isGoingHome = isGoingHome,
                 tripState = tripState,
                 tripNotes = tripNotes,
-                deliveryTimestamp = deliveryTimestamp
+                deliveryTimestamp = deliveryTimestamp,
+                shipperName = shipperName,
+                shipperLat = shipperLat,
+                shipperLong = shipperLong,
+                consigneeName = consigneeName,
+                consigneeLat = consigneeLat,
+                consigneeLong = consigneeLong
             )
             loadDao.insertLoad(newLoad)
         }
