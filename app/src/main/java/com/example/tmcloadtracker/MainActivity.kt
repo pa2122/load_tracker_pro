@@ -62,13 +62,14 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.File
 import java.io.FileOutputStream
+import kotlin.time.Duration.Companion.milliseconds
 
 class MainActivity : ComponentActivity() {
 
     private val viewModel: LoadViewModel by viewModels()
 
     private val permLauncher = registerForActivityResult(
-        ActivityResultContracts.RequestMultiplePermissions()
+        ActivityResultContracts.RequestMultiplePermissions(),
     ) { _ -> }
 
     @OptIn(ExperimentalMaterial3Api::class)
@@ -81,40 +82,40 @@ class MainActivity : ComponentActivity() {
             LoadTrackerProTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background
+                    color = MaterialTheme.colorScheme.background,
                 ) {
-                    var isAppStartingUp by remember { mutableStateOf(true) }
-                    var loadingStatusText by remember { mutableStateOf("Initializing Engines...") }
+                    var isAppStartingUp by remember { mutableStateOf(value = true) }
+                    var loadingStatusText by remember { mutableStateOf(value = "Initializing Engines...") }
 
-                    LaunchedEffect(Unit) {
-                        delay(1200) 
+                    LaunchedEffect(key1 = Unit) {
+                        delay(1200.milliseconds) 
                         loadingStatusText = "Loading Databases..."
-                        delay(1000) 
+                        delay(1000.milliseconds) 
                         isAppStartingUp = false 
                     }
-                    var currentScreen by remember { mutableStateOf("dashboard") }
-                    var tripToEdit by remember { mutableStateOf<CurrentLoad?>(null) }
+                    var currentScreen by remember { mutableStateOf(value = "dashboard") }
+                    var tripToEdit by remember { mutableStateOf<CurrentLoad?>(value = null) }
 
-                    var defPercent by remember { mutableStateOf("31.0") }
-                    var tarp8Pay by remember { mutableStateOf("50.0") }
-                    var tarp4Pay by remember { mutableStateOf("30.0") }
-                    var homeBase by remember { mutableStateOf("") }
+                    var defPercent by remember { mutableStateOf(value = "31.0") }
+                    var tarp8Pay by remember { mutableStateOf(value = "50.0") }
+                    var tarp4Pay by remember { mutableStateOf(value = "30.0") }
+                    var homeBase by remember { mutableStateOf(value = "") }
 
-                    var isTrainingActive by remember { mutableStateOf(false) }
-                    var flatTrainerPayRate by remember { mutableStateOf("200.0") }
+                    var isTrainingActive by remember { mutableStateOf(value = false) }
+                    var flatTrainerPayRate by remember { mutableStateOf(value = "200.0") }
 
-                    var triggerHelpView = remember { mutableStateOf(false) }
+                    val triggerHelpView = remember { mutableStateOf(value = false) }
 
-                    val drawerState = rememberDrawerState(DrawerValue.Closed)
+                    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
                     val scope = rememberCoroutineScope()
 
                     val savedLoads by viewModel.allLoads.collectAsState(initial = emptyList())
 
-                    LaunchedEffect(savedLoads) {
-                        val active = savedLoads.find { it.tripState != "COMPLETED" && it.tripState != "NOT_STARTED" }
+                    LaunchedEffect(key1 = savedLoads) {
+                        val active = savedLoads.find { (it.tripState != "COMPLETED") && (it.tripState != "NOT_STARTED") }
                         if (active != null) {
                             val fineLocation = ContextCompat.checkSelfPermission(
-                                this@MainActivity, Manifest.permission.ACCESS_FINE_LOCATION
+                                this@MainActivity, Manifest.permission.ACCESS_FINE_LOCATION,
                             ) == PackageManager.PERMISSION_GRANTED
                             
                             if (fineLocation) {
@@ -148,14 +149,14 @@ class MainActivity : ComponentActivity() {
                         tarp8Pay,
                         tarp4Pay,
                         isTrainingActive,
-                        flatTrainerPayRate
+                        flatTrainerPayRate,
                     ) {
                         derivedStateOf {
                             viewModel.getCurrentWeekSummary(
                                 lumberRate = tarp8Pay.toDoubleOrNull() ?: 0.0,
                                 steelRate = tarp4Pay.toDoubleOrNull() ?: 0.0,
                                 isTraining = isTrainingActive,
-                                trainerRate = flatTrainerPayRate.toDoubleOrNull() ?: 0.0
+                                trainerRate = flatTrainerPayRate.toDoubleOrNull() ?: 0.0,
                             )
                         }
                     }
@@ -163,12 +164,11 @@ class MainActivity : ComponentActivity() {
                     ModalNavigationDrawer(
                         drawerState = drawerState,
                         drawerContent = {
-                            ModalDrawerSheet(modifier = Modifier.width(300.dp)) {
+                            ModalDrawerSheet(modifier = Modifier.width(width = 300.dp)) {
                                 Column(
-                                    modifier = Modifier
-                                        .padding(24.dp)
+                                    modifier = Modifier.padding(all = 24.dp)
                                         .fillMaxHeight(),
-                                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                                    verticalArrangement = Arrangement.spacedBy(space = 16.dp)
                                 ) {
                                     Text(
                                         "Configurations",
@@ -181,12 +181,13 @@ class MainActivity : ComponentActivity() {
                                         onValueChange = { input ->
                                             val filtered =
                                                 input.filter { it.isDigit() || it == '.' }
-                                            if (filtered.isEmpty() || filtered == ".") defPercent =
-                                                filtered
-                                            else if (filtered.count { it == '.' } <= 1) {
+                                            if ((filtered.isEmpty()) || (filtered == ".")) {
+                                                defPercent = filtered
+                                            } else if (filtered.count { it == '.' } <= 1) {
                                                 val value = filtered.toDoubleOrNull()
-                                                if (value != null && value >= 0.0 && value <= 100.0) defPercent =
-                                                    filtered
+                                                if ((value != null) && (value >= 0.0) && (value <= 100.0)) {
+                                                    defPercent = filtered
+                                                }
                                             }
                                         },
                                         label = { Text("Default Pay Rate (%)") },
@@ -242,12 +243,13 @@ class MainActivity : ComponentActivity() {
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
                                         modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween
+                                        horizontalArrangement = Arrangement.SpaceBetween,
                                     ) {
                                         Text("Active Training Week")
                                         Switch(
                                             checked = isTrainingActive,
-                                            onCheckedChange = { isTrainingActive = it })
+                                            onCheckedChange = { isTrainingActive = it },
+                                        )
                                     }
 
                                     OutlinedTextField(
@@ -264,7 +266,10 @@ class MainActivity : ComponentActivity() {
                                             imeAction = ImeAction.Done
                                         ),
                                         keyboardActions = KeyboardActions(
-                                            onDone = { scope.launch { drawerState.close() } }),
+                                            onDone = {
+                                                scope.launch { drawerState.close() }
+                                            }
+                                        ),
                                         modifier = Modifier.fillMaxWidth()
                                     )
 
@@ -294,22 +299,7 @@ class MainActivity : ComponentActivity() {
                                         ),
                                         modifier = Modifier.fillMaxWidth()
                                     ) {
-                                        Text("Export Payroll to CSV (Email)")
-                                    }
-
-                                    HorizontalDivider()
-                                    Button(
-                                        onClick = {
-                                            scope.launch { drawerState.close() }
-                                            currentScreen = "facility_search"
-                                        },
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                                        ),
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
-                                        Text("Review Facility Insights")
+                                        Text("Export Payload History (CSV)")
                                     }
 
                                     HorizontalDivider()
@@ -326,7 +316,7 @@ class MainActivity : ComponentActivity() {
                                         Text("Open Driver's Guide")
                                     }
 
-                                    Spacer(modifier = Modifier.weight(1f))
+                                    Spacer(modifier = Modifier.weight(weight = 1f))
                                     Button(
                                         onClick = { scope.launch { drawerState.close() } },
                                         modifier = Modifier.fillMaxWidth()
@@ -352,17 +342,17 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
                         ) { innerPadding ->
-                            Surface(modifier = Modifier.padding(innerPadding)) {
+                            Surface(modifier = Modifier.padding(paddingValues = innerPadding)) {
                                 if (isAppStartingUp) {
                                     Box(
                                         modifier = Modifier
                                             .fillMaxSize()
-                                            .padding(32.dp),
+                                            .padding(all = 32.dp),
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Column(
                                             horizontalAlignment = Alignment.CenterHorizontally,
-                                            verticalArrangement = Arrangement.spacedBy(20.dp)
+                                            verticalArrangement = Arrangement.spacedBy(space = 20.dp)
                                         ) {
                                             Text(
                                                 text = "Load Tracker Pro",
@@ -373,7 +363,7 @@ class MainActivity : ComponentActivity() {
                                             CircularProgressIndicator(
                                                 color = MaterialTheme.colorScheme.primary,
                                                 strokeWidth = 4.dp,
-                                                modifier = Modifier.size(48.dp)
+                                                modifier = Modifier.size(size = 48.dp)
                                             )
 
                                             Text(
@@ -461,7 +451,7 @@ class MainActivity : ComponentActivity() {
                                                 initialPercentage = defPercent,
                                                 editingLoad = tripToEdit,
                                                 onSaveClick = { finalizedLoadEntity ->
-                                                    if (finalizedLoadEntity.tripState.startsWith("ACTIVE")) {
+                                                    if (finalizedLoadEntity.tripState.startsWith(prefix = "ACTIVE")) {
                                                         TrackingService.activeProNumber = finalizedLoadEntity.proNumber
                                                     }
                                                     viewModel.saveLoad(
@@ -491,10 +481,10 @@ class MainActivity : ComponentActivity() {
                                                     tripToEdit = null
                                                     currentScreen = "dashboard"
                                                 },
-                                                onCancelClick = { 
+                                                onCancelClick = {
                                                     tripToEdit = null
-                                                    currentScreen = "dashboard" 
-                                                }
+                                                    currentScreen = "dashboard"
+                                                },
                                             )
                                         }
 

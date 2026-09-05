@@ -54,12 +54,12 @@ fun DashboardScreen(
     isTrainingActive: Boolean,
     flatTrainerPayRate: Double,
     showHelpOnLaunch: Boolean,
-    onDismissHelpDialog: () -> Unit
+    onDismissHelpDialog: () -> Unit,
 ) {
     val activeTrip = pastLoads.find { it.tripState != "COMPLETED" }
     val completedLoads = pastLoads.filter { it.tripState == "COMPLETED" }
 
-    var showCompletionDialog by remember { mutableStateOf(false) }
+    var showCompletionDialog by remember { mutableStateOf(value = false) }
     var showHistoryDetailsDialog by remember { mutableStateOf(false) }
     var showWeeklyBreakdownDialog by remember { mutableStateOf(false) } 
     var selectedTripData by remember { mutableStateOf<CurrentLoad?>(null) }
@@ -319,13 +319,13 @@ fun DashboardScreen(
                                         color = MaterialTheme.colorScheme.primary
                                     )
                                 }
-                                if (load.shipperName != null || load.consigneeName != null) {
-                                    Text(
-                                        text = "${load.shipperName ?: "?"} -> ${load.consigneeName ?: "?"}",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.secondary
-                                    )
-                                }
+                                    if ((load.shipperName != null) || (load.consigneeName != null)) {
+                                        Text(
+                                            text = "${load.shipperName ?: "?"} -> ${load.consigneeName ?: "?"}",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.secondary,
+                                        )
+                                    }
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
@@ -419,13 +419,13 @@ fun DashboardScreen(
                             }
                         }
                     },
-                    confirmButton = {
-                        Button(onClick = {
-                            onUpdateTripClick(trip)
-                            showCompletionDialog = false
-                            selectedTripData = null
-                        }) { Text("Confirm & File Log") }
-                    }
+            confirmButton = {
+                Button(onClick = {
+                    onUpdateTripClick(trip)
+                    showCompletionDialog = false
+                    selectedTripData = null
+                }) { Text("Confirm & File Log") }
+            },
                 )
             }
 
@@ -755,8 +755,8 @@ fun DashboardScreen(
     }
 
     if (showStatementHistoryDialog) {
-        val grouped = remember(pastLoads) {
-            pastLoads.filter { it.tripState == "COMPLETED" }
+        val grouped = remember(key1 = pastLoads) {
+            pastLoads.asSequence().filter { it.tripState == "COMPLETED" }
                 .groupBy { load ->
                     Instant.ofEpochMilli(load.pickupTimestamp)
                         .atZone(ZoneId.systemDefault()).toLocalDate()

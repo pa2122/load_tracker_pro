@@ -82,7 +82,7 @@ class TrackingService : Service() {
 
                         // 📍 NEW: Record Breadcrumb every 5 minutes OR every 5 miles
                         val now = System.currentTimeMillis()
-                        if (activeProNumber != null && activeSegment != "Paused" && (now - lastBreadcrumbTime > 300000)) {
+                        if ((activeProNumber != null) && (activeSegment != "Paused") && (now - lastBreadcrumbTime > 300000)) {
                             saveBreadcrumb(location)
                             lastBreadcrumbTime = now
                         }
@@ -96,28 +96,28 @@ class TrackingService : Service() {
             fusedLocationClient.requestLocationUpdates(
                 locationRequest,
                 locationCallback,
-                Looper.getMainLooper()
+                Looper.getMainLooper(),
             )
         } catch (_: SecurityException) {}
     }
 
     private fun saveBreadcrumb(loc: Location) {
         val pro = activeProNumber ?: return
-        serviceScope.launch {
-            try {
-                val db = AppDatabase.getDatabase(applicationContext)
-                db.loadDao().insertBreadcrumb(
-                    TripBreadcrumb(
-                        proNumber = pro,
-                        latitude = loc.latitude,
-                        longitude = loc.longitude,
-                        timestamp = System.currentTimeMillis()
-                    )
-                )
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-        }
+                        serviceScope.launch {
+                            try {
+                                val db = AppDatabase.getDatabase(applicationContext)
+                                db.loadDao().insertBreadcrumb(
+                                    TripBreadcrumb(
+                                        proNumber = pro,
+                                        latitude = loc.latitude,
+                                        longitude = loc.longitude,
+                                        timestamp = System.currentTimeMillis(),
+                                    ),
+                                )
+                            } catch (e: Exception) {
+                                e.printStackTrace()
+                            }
+                        }
     }
 
     private fun checkGeofence(currentLocation: Location) {
@@ -184,11 +184,9 @@ class TrackingService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     private fun createNotificationChannel() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel =
-                NotificationChannel(CHANNEL_ID, "GPS Tracking", NotificationManager.IMPORTANCE_LOW)
-            val manager = getSystemService(NotificationManager::class.java)
-            manager?.createNotificationChannel(channel)
-        }
+        val channel =
+            NotificationChannel(CHANNEL_ID, "GPS Tracking", NotificationManager.IMPORTANCE_LOW)
+        val manager = getSystemService(NotificationManager::class.java)
+        manager?.createNotificationChannel(channel)
     }
 }
