@@ -41,6 +41,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -404,14 +405,14 @@ fun LoadEntryScreen(
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Text("Live Bounce")
                                 Text(
-                                    "${String.format("%.1f", liveBounce)} mi",
+                                    "${String.format(Locale.US, "%.1f", liveBounce)} mi",
                                     style = MaterialTheme.typography.titleMedium
                                 )
                             }
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Text("Live Loaded")
                                 Text(
-                                    "${String.format("%.1f", liveLoaded)} mi",
+                                    "${String.format(Locale.US, "%.1f", liveLoaded)} mi",
                                     style = MaterialTheme.typography.titleMedium
                                 )
                             }
