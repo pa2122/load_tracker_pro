@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import dev.jeziellago.compose.markdowntext.MarkdownText
 import java.time.DayOfWeek
 import java.time.Instant
+import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.temporal.TemporalAdjusters
@@ -64,6 +65,8 @@ fun DashboardScreen(
     var showWeeklyBreakdownDialog by remember { mutableStateOf(false) } 
     var selectedTripData by remember { mutableStateOf<CurrentLoad?>(null) }
     var showActiveOptionsDialog by remember { mutableStateOf(false) }
+    var showStatementHistoryDialog by remember { mutableStateOf(false) }
+    var selectedWeekFriday by remember { mutableStateOf<LocalDate?>(null) }
 
     Scaffold { innerPadding ->
         Box(
@@ -244,10 +247,21 @@ fun DashboardScreen(
 
                 item {
                     Text(
-                        "Past Load Logs (${completedLoads.size}) - Tap to View Details",
+                        "Past Load Logs (${completedLoads.size})",
                         style = MaterialTheme.typography.titleMedium
                     )
                 }
+
+                item {
+                    Button(
+                        onClick = { showStatementHistoryDialog = true },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
+                    ) {
+                        Text("View Statements by Week")
+                    }
+                }
+
                 if (completedLoads.isEmpty()) {
                     item {
                         Box(
@@ -866,6 +880,114 @@ fun DashboardScreen(
             },
             confirmButton = {
                 TextButton(onClick = { showActiveOptionsDialog = false }) { Text("Close") }
+            }
+        )
+    }
+
+    if (showStatementHistoryDialog) {
+        val grouped = remember(pastLoads) {
+            pastLoads.filter { it.tripState == "COMPLETED" }
+                .groupBy { load ->
+                    Instant.ofEpochMilli(load.pickupTimestamp)
+                        .atZone(ZoneId.systemDefault()).toLocalDate()
+                        .let { d ->
+                            when (d.dayOfWeek) {
+                                DayOfWeek.FRIDAY, DayOfWeek.SATURDAY, DayOfWeek.SUNDAY -> d.with(TemporalAdjusters.next(DayOfWeek.FRIDAY))
+                                else -> d.with(TemporalAdjusters.nextOrSame(DayOfWeek.FRIDAY))
+                            }
+                        }
+                }.toSortedMap(reverseOrder())
+        }
+
+        AlertDialog(
+            onDismissRequest = { showStatementHistoryDialog = false },
+            title = { Text("Historical Payroll Statements") },
+            text = {
+                Box(modifier = Modifier.heightIn(max = 500.dp)) {
+                    LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        if (grouped.isEmpty()) {
+                            item { Text("No historical records found.") }
+                        } else {
+                            grouped.forEach { (friday, loads) ->
+                                item {
+                                    val totalWeekPay = loads.sumOf { load ->
+                                        val base = load.loadPay * (load.percentageRate / 100.0)
+                                        val bonus = if (load.dispatchedBounceMiles >= 150.0) load.dispatchedBounceMiles * 0.20 else 0.0
+                                        // Simplified pay (doesn't account for trainer/manual rates here, just a summary)
+                                        base + bonus
+                                    }
+                                    Card(
+                                        modifier = Modifier.fillMaxWidth().clickable {
+                                            selectedWeekFriday = friday
+                                        },
+                                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(16.dp).fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Column {
+                                                Text("Week Ending:", style = MaterialTheme.typography.labelSmall)
+                                                Text(friday.format(DateTimeFormatter.ofPattern("MM/dd/yyyy")), style = MaterialTheme.typography.titleMedium)
+                                            }
+                                            Column(horizontalAlignment = Alignment.End) {
+                                                Text("Total Pay (Est):", style = MaterialTheme.typography.labelSmall)
+                                                Text("$${String.format(Locale.US, "%.2f", totalWeekPay)}", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showStatementHistoryDialog = false }) { Text("Close") }
+            }
+        )
+    }
+
+    if (selectedWeekFriday != null) {
+        val weekFriday = selectedWeekFriday!!
+        val weeklyTrips = pastLoads.filter { load ->
+            val loadFriday = Instant.ofEpochMilli(load.pickupTimestamp)
+                .atZone(ZoneId.systemDefault()).toLocalDate()
+                .let { d ->
+                    when (d.dayOfWeek) {
+                        DayOfWeek.FRIDAY, DayOfWeek.SATURDAY, DayOfWeek.SUNDAY -> d.with(TemporalAdjusters.next(DayOfWeek.FRIDAY))
+                        else -> d.with(TemporalAdjusters.nextOrSame(DayOfWeek.FRIDAY))
+                    }
+                }
+            loadFriday == weekFriday && load.tripState == "COMPLETED"
+        }
+
+        AlertDialog(
+            onDismissRequest = { selectedWeekFriday = null },
+            title = { Text("Statement: ${weekFriday.format(DateTimeFormatter.ofPattern("MM/dd/yyyy"))}") },
+            text = {
+                Box(modifier = Modifier.heightIn(max = 500.dp)) {
+                    LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        items(weeklyTrips) { trip ->
+                            val net = (trip.loadPay * (trip.percentageRate / 100.0)) + (if (trip.dispatchedBounceMiles >= 150.0) trip.dispatchedBounceMiles * 0.20 else 0.0)
+                            Card(modifier = Modifier.fillMaxWidth().clickable { 
+                                selectedTripData = trip
+                                showHistoryDetailsDialog = true
+                            }) {
+                                Column(modifier = Modifier.padding(12.dp)) {
+                                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                        Text("PRO #${trip.proNumber}", style = MaterialTheme.typography.titleSmall)
+                                        Text("$${String.format(Locale.US, "%.2f", net)}", color = MaterialTheme.colorScheme.primary)
+                                    }
+                                    Text("${trip.dispatchedLoadedMiles.toInt()} mi Loaded", style = MaterialTheme.typography.bodySmall)
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { selectedWeekFriday = null }) { Text("Back to List") }
             }
         )
     }

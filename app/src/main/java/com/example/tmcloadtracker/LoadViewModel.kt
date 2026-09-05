@@ -220,6 +220,13 @@ class LoadViewModel(application: Application) :
         }
         return sb.toString()
     }
+
+    fun getLoadsGroupedByWeek(): Map<LocalDate, List<CurrentLoad>> {
+        return _allLoads.value
+            .filter { it.tripState == "COMPLETED" }
+            .groupBy { getPayPeriodDate(it.pickupTimestamp) }
+            .toSortedMap(reverseOrder())
+    }
 }
 
 data class WeekSummary(

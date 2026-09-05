@@ -73,6 +73,10 @@ fun LoadEntryScreen(
     var isPreTarped by remember { mutableStateOf(editingLoad?.isPreTarped ?: false) }
     var isGoingHome by remember { mutableStateOf(editingLoad?.isGoingHome ?: false) }
     var tripNotes by remember { mutableStateOf(editingLoad?.tripNotes ?: "") }
+    var isManualEntry by remember { mutableStateOf(false) }
+
+    var manualActBounce by remember { mutableStateOf("") }
+    var manualActLoaded by remember { mutableStateOf("") }
 
     var tripStatus by remember { mutableStateOf(editingLoad?.tripState ?: "NOT_STARTED") }
 
@@ -156,6 +160,37 @@ fun LoadEntryScreen(
         Row(verticalAlignment = Alignment.CenterVertically) {
             Checkbox(checked = isGoingHome, onCheckedChange = { isGoingHome = it })
             Text("Going Home Load")
+        }
+
+        if (editingLoad == null) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Checkbox(checked = isManualEntry, onCheckedChange = { isManualEntry = it })
+                Text("Manual Historical Entry (Already Completed)")
+            }
+        }
+
+        if (isManualEntry) {
+            Text("Actual Miles Driven", style = MaterialTheme.typography.titleMedium)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = manualActBounce,
+                    onValueChange = { input ->
+                        manualActBounce = input.filter { it.isDigit() || it == '.' }
+                    },
+                    label = { Text("Actual Bounce mi") },
+                    modifier = Modifier.weight(1f),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                )
+                OutlinedTextField(
+                    value = manualActLoaded,
+                    onValueChange = { input ->
+                        manualActLoaded = input.filter { it.isDigit() || it == '.' }
+                    },
+                    label = { Text("Actual Loaded mi") },
+                    modifier = Modifier.weight(1f),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                )
+            }
         }
 
         HorizontalDivider()
@@ -251,8 +286,47 @@ fun LoadEntryScreen(
         HorizontalDivider()
         Text("Trip Operations Panel", style = MaterialTheme.typography.titleMedium)
 
-        when (tripStatus) {
-            "NOT_STARTED", "ACTIVE_BOUNCE", "ACTIVE_SHIPPER", "ACTIVE_LOADED" -> {
+        when {
+            isManualEntry -> {
+                val isFormValid = proNum.trim().isNotEmpty() &&
+                        manualActBounce.trim().isNotEmpty() &&
+                        manualActLoaded.trim().isNotEmpty() &&
+                        loadPay.trim().isNotEmpty()
+
+                Button(
+                    onClick = {
+                        val tChar = when {
+                            selectedTarp.contains("Lumber") || selectedTarp.contains("L") -> "L"
+                            selectedTarp.contains("Steel") || selectedTarp.contains("S") -> "S"
+                            else -> "N"
+                        }
+                        val manualData = CurrentLoad(
+                            proNumber = proNum.trim(),
+                            dispatchedBounceMiles = dBounce.toDoubleOrNull() ?: 0.0,
+                            dispatchedLoadedMiles = dLoaded.toDoubleOrNull() ?: 0.0,
+                            bounceMilesStart = 0.0,
+                            bounceMilesEnd = manualActBounce.toDoubleOrNull() ?: 0.0,
+                            loadedMilesStart = 0.0,
+                            loadedMilesEnd = manualActLoaded.toDoubleOrNull() ?: 0.0,
+                            percentageRate = ratePct.toDoubleOrNull() ?: 80.0,
+                            loadPay = loadPay.toDoubleOrNull() ?: 0.0,
+                            tarpType = tChar,
+                            isPreTarped = isPreTarped,
+                            isGoingHome = isGoingHome,
+                            pickupTimestamp = System.currentTimeMillis(),
+                            tripState = "COMPLETED",
+                            tripNotes = if (tripNotes.isBlank()) null else tripNotes,
+                            deliveryTimestamp = System.currentTimeMillis()
+                        )
+                        onSaveClick(manualData)
+                    },
+                    enabled = isFormValid,
+                    modifier = Modifier.fillMaxWidth().height(48.dp)
+                ) {
+                    Text("Save Completed Record")
+                }
+            }
+            tripStatus == "NOT_STARTED" || tripStatus == "ACTIVE_BOUNCE" || tripStatus == "ACTIVE_SHIPPER" || tripStatus == "ACTIVE_LOADED" -> {
                 // 📍 THE SECURITY GATE: Verifies required fields are not blank
                 val isFormValid = proNum.trim().isNotEmpty() &&
                         dBounce.trim().isNotEmpty() &&
