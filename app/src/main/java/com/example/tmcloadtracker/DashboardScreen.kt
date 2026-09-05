@@ -1,6 +1,8 @@
 package com.example.tmcloadtracker
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -41,10 +43,12 @@ import java.time.format.DateTimeFormatter
 import java.time.temporal.TemporalAdjusters
 import java.util.Locale
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun DashboardScreen(
     summary: WeekSummary,
     pastLoads: List<CurrentLoad>,
+    isProUser: Boolean,
     onAddNewLoadClick: () -> Unit,
     onUpdateTripClick: (CurrentLoad) -> Unit,
     onEditTripClick: (CurrentLoad) -> Unit,
@@ -66,7 +70,9 @@ fun DashboardScreen(
     var selectedTripData by remember { mutableStateOf<CurrentLoad?>(null) }
     var showActiveOptionsDialog by remember { mutableStateOf(false) }
     var showStatementHistoryDialog by remember { mutableStateOf(false) }
-    var selectedWeekFriday by remember { mutableStateOf<LocalDate?>(null) }
+    var selectedWeekFriday by remember { mutableStateOf(value = null as LocalDate?) }
+    var showDeleteConfirmation by remember { mutableStateOf(value = false) }
+    var tripToDelete by remember { mutableStateOf(value = null as CurrentLoad?) }
 
     Scaffold { innerPadding ->
         Box(
@@ -297,12 +303,18 @@ fun DashboardScreen(
                         Card(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable {
-                                    selectedTripData = load
-                                    showCompletionDialog = false
-                                    showWeeklyBreakdownDialog = false
-                                    showHistoryDetailsDialog = true
-                                }
+                                .combinedClickable(
+                                    onClick = {
+                                        selectedTripData = load
+                                        showCompletionDialog = false
+                                        showWeeklyBreakdownDialog = false
+                                        showHistoryDetailsDialog = true
+                                    },
+                                    onLongClick = {
+                                        tripToDelete = load
+                                        showDeleteConfirmation = true
+                                    }
+                                )
                         ) {
                             Column(modifier = Modifier.padding(16.dp)) {
                                 Row(
@@ -504,14 +516,26 @@ fun DashboardScreen(
                                 )
                             }
 
-                            Button(
-                                onClick = { 
-                                    showHistoryDetailsDialog = false
-                                    onViewMapClick(trip) 
-                                },
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text("View Route Heatmap")
+                            if (isProUser) {
+                                Button(
+                                    onClick = { 
+                                        showHistoryDetailsDialog = false
+                                        onViewMapClick(trip) 
+                                    },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text("View Route Heatmap")
+                                }
+                            } else {
+                                Button(
+                                    onClick = { /* Could trigger upgrade prompt here */ },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = MaterialTheme.colorScheme.secondary.copy(alpha = 0.5f)
+                                    )
+                                ) {
+                                    Text("View Route Heatmap (Pro)")
+                                }
                             }
 
                             HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
@@ -868,6 +892,27 @@ fun DashboardScreen(
             },
             confirmButton = {
                 TextButton(onClick = { selectedWeekFriday = null }) { Text("Back to List") }
+            }
+        )
+    }
+
+    if (showDeleteConfirmation && tripToDelete != null) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirmation = false },
+            title = { Text("Delete Record?") },
+            text = { Text("Are you sure you want to permanently delete PRO #${tripToDelete!!.proNumber}? This cannot be undone.") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        onDeleteTripClick(tripToDelete!!)
+                        showDeleteConfirmation = false
+                        tripToDelete = null
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) { Text("Delete Forever") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirmation = false }) { Text("Cancel") }
             }
         )
     }

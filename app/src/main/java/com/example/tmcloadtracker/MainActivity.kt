@@ -103,6 +103,8 @@ class MainActivity : ComponentActivity() {
                     var tripToEdit by remember { mutableStateOf<CurrentLoad?>(value = null) }
                     var tripForMap by remember { mutableStateOf<CurrentLoad?>(value = null) }
 
+                    var isProUser by remember { mutableStateOf(value = false) }
+
                     var defPercent by remember { mutableStateOf(value = "31.0") }
                     var tarp8Pay by remember { mutableStateOf(value = "50.0") }
                     var tarp4Pay by remember { mutableStateOf(value = "30.0") }
@@ -320,6 +322,18 @@ class MainActivity : ComponentActivity() {
                                         )
                                     }
 
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                    ) {
+                                        Text("Unlock Pro Features (Secret)")
+                                        Switch(
+                                            checked = isProUser,
+                                            onCheckedChange = { isProUser = it },
+                                        )
+                                    }
+
                                     OutlinedTextField(
                                         value = flatTrainerPayRate,
                                         onValueChange = { input ->
@@ -347,13 +361,14 @@ class MainActivity : ComponentActivity() {
                                             scope.launch { drawerState.close() }
                                             currentScreen = "facility_search"
                                         },
+                                        enabled = isProUser,
                                         colors = ButtonDefaults.buttonColors(
                                             containerColor = MaterialTheme.colorScheme.secondaryContainer,
                                             contentColor = MaterialTheme.colorScheme.onSecondaryContainer
                                         ),
                                         modifier = Modifier.fillMaxWidth()
                                     ) {
-                                        Text("Review Facility Insights")
+                                        Text(if (isProUser) "Review Facility Insights" else "Review Facility Insights (Pro)")
                                     }
 
                                     HorizontalDivider()
@@ -363,13 +378,14 @@ class MainActivity : ComponentActivity() {
                                             tripForMap = null
                                             currentScreen = "route_map"
                                         },
+                                        enabled = isProUser,
                                         colors = ButtonDefaults.buttonColors(
                                             containerColor = MaterialTheme.colorScheme.secondaryContainer,
                                             contentColor = MaterialTheme.colorScheme.onSecondaryContainer
                                         ),
                                         modifier = Modifier.fillMaxWidth()
                                     ) {
-                                        Text("View Global Route Heatmap")
+                                        Text(if (isProUser) "View Global Route Heatmap" else "Global Route Heatmap (Pro)")
                                     }
 
                                     HorizontalDivider()
@@ -467,6 +483,7 @@ class MainActivity : ComponentActivity() {
                                             DashboardScreen(
                                                 summary = weeklySummary,
                                                 pastLoads = savedLoads,
+                                                isProUser = isProUser,
                                                 onAddNewLoadClick = { 
                                                     tripToEdit = null
                                                     currentScreen = "entry" 

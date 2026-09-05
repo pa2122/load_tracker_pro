@@ -15,7 +15,7 @@ The app uses high-accuracy GPS to measure your actual route and mileage.
 
 ---
 
-## 🗺️ Advanced Mapping & Route Heatmaps
+## 🗺️ Advanced Mapping & Route Heatmaps (Pro)
 
 Visual data to review your lanes and improve your routing efficiency.
 
@@ -27,7 +27,7 @@ Visual data to review your lanes and improve your routing efficiency.
 
 ---
 
-## 🏢 Facility Insights
+## 🏢 Facility Insights (Pro)
 
 Your personal database of every shipper and receiver you've ever visited.
 
@@ -62,6 +62,7 @@ Protect your performance stats with intelligent monitoring.
 
 * **Manual Historical Entry:** Need to catch up on paperwork? Add completed loads by selecting a past date and choosing to "Match Dispatched Miles" to bypass GPS tracking.
 * **Active Editing:** Tap any active trip to edit details if orders change mid-journey.
+* **Deleting Records:** To permanently remove a mistake or test load, **Long-Press** on any card in your "Past Load Logs" history. A confirmation popup will appear before deletion.
 * **Timestamps:** The app records the exact second of pickup and delivery for your audit records.
 
 ---
