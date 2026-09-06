@@ -4,6 +4,21 @@ Welcome to **Load Tracker Pro**, your professional flatbed hauling companion. Th
 
 ---
 
+## 📷 OCR Dispatch Screenshot Auto-Fill (Pro)
+
+Skip manual typing by scanning your dispatch confirmations directly.
+
+* **1-Tap Scan:** Tap **Scan Dispatch Screenshot (Pro)** when entering a load to select a screenshot of your rate confirmation, dispatch email, or load board app.
+* **Instant Auto-Fill:** On-device machine learning (Google ML Kit) scans your image offline and automatically extracts:
+  * **PRO Number**
+  * **Truck Gross Pay / Revenue**
+  * **Dispatched Bounce (Deadhead) & Loaded Miles**
+  * **Shipper Name & Address**
+  * **Consignee Name & Address**
+* **Address Resolution:** Shipper and consignee addresses are automatically geocoded into exact GPS coordinates for routing and arrival detection.
+
+---
+
 ## 🛰️ Real-Time GPS Tracking & HUD
 
 The app uses high-accuracy GPS to measure your actual route and mileage.
@@ -19,10 +34,11 @@ The app uses high-accuracy GPS to measure your actual route and mileage.
 
 Visual data to review your lanes and improve your routing efficiency.
 
-* **Smart Address Parsing:** Paste names and addresses directly from your dispatch. The app extracts the facility name and resolves the exact GPS coordinates for you.
-* **Hands-Free Arrival:** The app sets a 1,000-foot "virtual fence" around your shipper and consignee. The moment you cross the property line, the app vibrates and automatically switches to "Arrived" mode.
-* **Individual Trip Maps:** View the exact path you took for any past load, including markers for your pickup and delivery points.
-* **Global Route Heatmap:** Open the sidebar to see every mile you've tracked on a single national map. This helps you visualize your lane coverage over time.
+* **Smart Address Parsing:** Paste names and addresses directly from your dispatch, or use OCR scanning. The app extracts facility names and resolves exact GPS coordinates for you.
+* **Hands-Free Arrival:** Sets a 1,000-foot virtual fence around your shipper and consignee. The moment you cross the property line, the app vibrates and automatically switches to "Arrived" mode.
+* **Individual Trip Maps:** Tap **View Map** on any load to see the exact path you took, including pickup, delivery, and home base markers.
+* **Global Route Heatmap:** Open the sidebar to view every mile you've ever tracked on a single national map.
+* **Gesture Lock:** Swiping and dragging on map screens interacts 100% with map navigation without accidental sidebar pulls.
 * **Route Breadcrumbs:** GPS coordinates are saved every 5 minutes while driving to build this historical record.
 
 ---
@@ -32,19 +48,27 @@ Visual data to review your lanes and improve your routing efficiency.
 Your personal database of every shipper and receiver you've ever visited.
 
 * **Searchable History:** Look up any facility by name (e.g., "Gerdau Steel") to see your past experiences there.
-* **Aggregated Notes:** Instantly view every note you've ever written for that specific location, helping you remember gate codes, tight turns, or loading procedures from months ago.
+* **Aggregated Notes:** Instantly view every note you've ever written for that specific location to remember gate codes, tight turns, or loading procedures from months ago.
+* **Easy Navigation:** Tap **← All Facilities** or the back button at any time to return directly to your facility directory.
 
 ---
 
-## 💰 Flatbed Payroll Engine
+## 💰 Flatbed Payroll Engine & Statements
 
 Tailored specifically for the needs of flatbed drivers with standard industry logic.
 
-* **Payroll Cycle:** All totals are automatically grouped and calculated based on a **Friday-to-Friday** pay cycle.
+* **Friday-to-Thursday Payroll Cycle:** Loads picked up from Friday through Thursday are automatically grouped into the statement week ending on that Friday.
+* **Itemized Statement Summary:** Tap **View Statements by Week** to review complete payroll statements broken down by:
+  * **Total Truck Gross**
+  * **Driver Load Cut** (%)
+  * **Tarp Pay**
+  * **Deadhead Pay** ($0.20/mi for 150+ miles)
+  * **Trainer Pay** ($200.00 flat weekly rate)
+  * **Total Net Pay (Est)**
 * **Tarping Pay:** Fully configurable rates for **8' Drop** and **4' Drop** tarps.
-* **Pre-Tarped Logic:** Use the toggle to automatically halve the tarp bonus per standard company policies.
+* **Pre-Tarped Logic:** Automatically halves the tarp bonus per standard company policies.
 * **Deadhead Bonus:** Automatically calculates the **$0.20/mile** bonus for dispatched deadhead of **150 miles or more**.
-* **Training Mode:** Enable "Active Training Week" in the sidebar to add your flat-rate trainer premium to the weekly total.
+* **Training Mode:** Enable "Active Training Week" on any load to apply your flat-rate trainer premium to the week's total.
 
 ---
 
@@ -60,20 +84,21 @@ Protect your performance stats with intelligent monitoring.
 
 ## 📝 Managing Your Trips
 
-* **Manual Historical Entry:** Need to catch up on paperwork? Add completed loads by selecting a past date and choosing to "Match Dispatched Miles" to bypass GPS tracking.
+* **Current Week Dashboard:** The main screen displays completed loads for the **current active payroll week** (ordered newest first by date).
+* **Statements Archive:** Access all past loads across previous weeks anytime under **View Statements by Week**.
+* **Manual Historical Entry:** Catching up on paperwork? Add completed loads by selecting a past date and choosing "Match Dispatched Miles" to bypass GPS tracking.
 * **Active Editing:** Tap any active trip to edit details if orders change mid-journey.
-* **Deleting Records:** To permanently remove a mistake or test load, **Long-Press** on any card in your "Past Load Logs" history. A confirmation popup will appear before deletion.
+* **Deleting Records:** To permanently remove a mistake, **Long-Press** on any card in your load logs or history.
 * **Timestamps:** The app records the exact second of pickup and delivery for your audit records.
 
 ---
 
 ## 📤 Data & Privacy
 
-* **Steel & Cobalt Theme:** A high-contrast **Slate Navy** base with cobalt blue and amber accents. Designed for superior legibility during the day and reduced glare at night.
-* **Home Base Pinning:** Save your home coordinates by pasting your address or pinning your current GPS location. This data is used solely for visual reference on your maps and is never used for automated tracking or reporting.
+* **Steel & Cobalt Theme:** A high-contrast **Slate Navy** base with cobalt blue and amber accents for superior legibility.
+* **Home Base Pinning:** Save your home coordinates by pasting your address or pinning your current GPS location (`15381 TX-198, Mabank, TX 75147` default). This data is used solely for visual reference on your maps.
 * **CSV Export:** Generate a professional spreadsheet of your entire history to email to yourself or payroll.
-* **Data Safety:** Your records are stored in a hardened local database.
-* **Cross-Machine Development:** Shared debug key support allows you to switch between Windows and Linux laptops without losing data.
+* **Data Safety:** Your records are stored in a hardened local database on your device.
 
 ---
 

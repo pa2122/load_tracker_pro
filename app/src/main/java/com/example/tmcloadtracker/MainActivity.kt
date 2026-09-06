@@ -10,6 +10,8 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,17 +21,25 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.res.painterResource
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.Done
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -44,6 +54,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.collectAsState
@@ -93,6 +104,15 @@ class MainActivity : ComponentActivity() {
                     var isAppStartingUp by remember { mutableStateOf(value = true) }
                     var loadingStatusText by remember { mutableStateOf(value = "Initializing Engines...") }
 
+                    val appVersionName = remember {
+                        try {
+                            @Suppress("DEPRECATION")
+                            packageManager.getPackageInfo(packageName, 0).versionName ?: "1.0.0"
+                        } catch (_: Exception) {
+                            "1.0.0"
+                        }
+                    }
+
                     LaunchedEffect(key1 = Unit) {
                         delay(1200.milliseconds) 
                         loadingStatusText = "Loading Databases..."
@@ -112,6 +132,15 @@ class MainActivity : ComponentActivity() {
                     var homeRawPaste by remember { mutableStateOf(value = "15381 TX-198, Mabank, TX 75147") }
                     var homeLat by remember { mutableStateOf<Double?>(value = 32.3021) }
                     var homeLong by remember { mutableStateOf<Double?>(value = -96.1116) }
+
+                    var savedDefPercent by remember { mutableStateOf(value = "31.0") }
+                    var savedTarp8Pay by remember { mutableStateOf(value = "50.0") }
+                    var savedTarp4Pay by remember { mutableStateOf(value = "30.0") }
+                    var savedHomeRawPaste by remember { mutableStateOf(value = "15381 TX-198, Mabank, TX 75147") }
+                    var savedIsTrainingActive by remember { mutableStateOf(value = false) }
+                    var savedFlatTrainerPayRate by remember { mutableStateOf(value = "200.0") }
+
+                    var showDevOptionsDialog by remember { mutableStateOf(value = false) }
 
                     fun resolveHomeAddress(input: String) {
                         val lines = input.lines().filter { it.isNotBlank() }
@@ -207,6 +236,13 @@ class MainActivity : ComponentActivity() {
                         }
                     }
 
+                    val hasDrawerSettingsChanged = (defPercent != savedDefPercent) ||
+                            (tarp8Pay != savedTarp8Pay) ||
+                            (tarp4Pay != savedTarp4Pay) ||
+                            (homeRawPaste != savedHomeRawPaste) ||
+                            (isTrainingActive != savedIsTrainingActive) ||
+                            (flatTrainerPayRate != savedFlatTrainerPayRate)
+
                     ModalNavigationDrawer(
                         drawerState = drawerState,
                         gesturesEnabled = currentScreen != "route_map",
@@ -219,11 +255,37 @@ class MainActivity : ComponentActivity() {
                                         .verticalScroll(state = drawerScrollState),
                                     verticalArrangement = Arrangement.spacedBy(space = 16.dp)
                                 ) {
-                                    Text(
-                                        "Configurations",
-                                        style = MaterialTheme.typography.titleLarge,
-                                        color = MaterialTheme.colorScheme.primary
-                                    )
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            "Configurations",
+                                            style = MaterialTheme.typography.titleLarge,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+
+                                        if (hasDrawerSettingsChanged) {
+                                            IconButton(
+                                                onClick = {
+                                                    savedDefPercent = defPercent
+                                                    savedTarp8Pay = tarp8Pay
+                                                    savedTarp4Pay = tarp4Pay
+                                                    savedHomeRawPaste = homeRawPaste
+                                                    savedIsTrainingActive = isTrainingActive
+                                                    savedFlatTrainerPayRate = flatTrainerPayRate
+                                                    scope.launch { drawerState.close() }
+                                                }
+                                            ) {
+                                                Icon(
+                                                    Icons.Default.Done,
+                                                    contentDescription = "Save and Close Menu",
+                                                    tint = MaterialTheme.colorScheme.primary
+                                                )
+                                            }
+                                        }
+                                    }
 
                                     OutlinedTextField(
                                         value = defPercent,
@@ -336,18 +398,6 @@ class MainActivity : ComponentActivity() {
                                         )
                                     }
 
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                    ) {
-                                        Text("Unlock Pro Features (Secret)")
-                                        Switch(
-                                            checked = isProUser,
-                                            onCheckedChange = { isProUser = it },
-                                        )
-                                    }
-
                                     OutlinedTextField(
                                         value = flatTrainerPayRate,
                                         onValueChange = { input ->
@@ -432,10 +482,16 @@ class MainActivity : ComponentActivity() {
 
                                     Spacer(modifier = Modifier.weight(weight = 1f))
                                     Button(
-                                        onClick = { scope.launch { drawerState.close() } },
+                                        onClick = { showDevOptionsDialog = true },
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                            contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                                        ),
                                         modifier = Modifier.fillMaxWidth()
                                     ) {
-                                        Text("Save & Close Menu")
+                                        Icon(Icons.Default.Build, contentDescription = null)
+                                        Spacer(modifier = Modifier.width(width = 6.dp))
+                                        Text("🛠️ Developer Options")
                                     }
                                 }
                             }
@@ -466,18 +522,38 @@ class MainActivity : ComponentActivity() {
                                     ) {
                                         Column(
                                             horizontalAlignment = Alignment.CenterHorizontally,
-                                            verticalArrangement = Arrangement.spacedBy(space = 20.dp)
+                                            verticalArrangement = Arrangement.spacedBy(space = 12.dp)
                                         ) {
+                                            Image(
+                                                painter = painterResource(id = R.drawable.ic_launcher_foreground),
+                                                contentDescription = "Load Tracker Pro Logo",
+                                                modifier = Modifier
+                                                    .size(110.dp)
+                                                    .background(
+                                                        color = MaterialTheme.colorScheme.surfaceVariant,
+                                                        shape = CircleShape
+                                                    )
+                                                    .padding(12.dp)
+                                            )
+
                                             Text(
                                                 text = "Load Tracker Pro",
                                                 style = MaterialTheme.typography.headlineLarge,
                                                 color = MaterialTheme.colorScheme.primary
                                             )
 
+                                            Text(
+                                                text = "Version $appVersionName",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.secondary
+                                            )
+
+                                            Spacer(modifier = Modifier.height(8.dp))
+
                                             CircularProgressIndicator(
                                                 color = MaterialTheme.colorScheme.primary,
-                                                strokeWidth = 4.dp,
-                                                modifier = Modifier.size(size = 48.dp)
+                                                strokeWidth = 3.dp,
+                                                modifier = Modifier.size(size = 36.dp)
                                             )
 
                                             Text(
@@ -618,6 +694,12 @@ class MainActivity : ComponentActivity() {
                                             )
                                         }
 
+                                        "dev_notes" -> {
+                                            DevNotesScreen(
+                                                onBack = { currentScreen = "dashboard" }
+                                            )
+                                        }
+
                                         "route_map" -> {
                                             val homeLatLng = if (homeLat != null && homeLong != null) {
                                                 LatLng(homeLat!!, homeLong!!)
@@ -643,6 +725,53 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
                         }
+                    }
+
+                    if (showDevOptionsDialog) {
+                        AlertDialog(
+                            onDismissRequest = { showDevOptionsDialog = false },
+                            title = { Text("🛠️ Developer Options") },
+                            text = {
+                                Column(
+                                    verticalArrangement = Arrangement.spacedBy(space = 12.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                    ) {
+                                        Text("Developer Mode (Pro Unlocked)", style = MaterialTheme.typography.bodyMedium)
+                                        Switch(
+                                            checked = isProUser,
+                                            onCheckedChange = { isProUser = it },
+                                        )
+                                    }
+
+                                    Button(
+                                        onClick = {
+                                            showDevOptionsDialog = false
+                                            scope.launch { drawerState.close() }
+                                            currentScreen = "dev_notes"
+                                        },
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                                        ),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Icon(Icons.Default.Edit, contentDescription = null)
+                                        Spacer(modifier = Modifier.width(width = 6.dp))
+                                        Text("Developer Notes & Bug Tracker")
+                                    }
+                                }
+                            },
+                            confirmButton = {
+                                TextButton(onClick = { showDevOptionsDialog = false }) {
+                                    Text("Close")
+                                }
+                            }
+                        )
                     }
                 }
             }

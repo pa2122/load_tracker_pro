@@ -1,30 +1,68 @@
+<?xml version="1.0" encoding="utf-8"?>
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:aapt="http://schemas.android.com/aapt"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <path android:pathData="M31,63.928c0,0 6.4,-11 12.1,-13.1c7.2,-2.6 26,-1.4 26,-1.4l38.1,38.1L107,108.928l-32,-1L31,63.928z">
-        <aapt:attr name="android:fillColor">
-            <gradient
-                android:endX="85.84757"
-                android:endY="92.4963"
-                android:startX="42.9492"
-                android:startY="49.59793"
-                android:type="linear">
-                <item
-                    android:color="#44000000"
-                    android:offset="0.0" />
-                <item
-                    android:color="#00000000"
-                    android:offset="1.0" />
-            </gradient>
-        </aapt:attr>
-    </path>
+
+    <!-- Highway Accent Line -->
     <path
-        android:fillColor="#FFFFFF"
-        android:fillType="nonZero"
-        android:pathData="M65.3,45.828l3.8,-6.6c0.2,-0.4 0.1,-0.9 -0.3,-1.1c-0.4,-0.2 -0.9,-0.1 -1.1,0.3l-3.9,6.7c-6.3,-2.8 -13.4,-2.8 -19.7,0l-3.9,-6.7c-0.2,-0.4 -0.7,-0.5 -1.1,-0.3C38.8,38.328 38.7,38.828 38.9,39.228l3.8,6.6C36.2,49.428 31.7,56.028 31,63.928h46C76.3,56.028 71.8,49.428 65.3,45.828zM43.4,57.328c-0.8,0 -1.5,-0.5 -1.8,-1.2c-0.3,-0.7 -0.1,-1.5 0.4,-2.1c0.5,-0.5 1.4,-0.7 2.1,-0.4c0.7,0.3 1.2,1 1.2,1.8C45.3,56.528 44.5,57.328 43.4,57.328L43.4,57.328zM64.6,57.328c-0.8,0 -1.5,-0.5 -1.8,-1.2s-0.1,-1.5 0.4,-2.1c0.5,-0.5 1.4,-0.7 2.1,-0.4c0.7,0.3 1.2,1 1.2,1.8C66.5,56.528 65.6,57.328 64.6,57.328L64.6,57.328z"
-        android:strokeWidth="1"
-        android:strokeColor="#00000000" />
+        android:fillColor="#3B82F6"
+        android:pathData="M16,72 L92,72 C93.1,72 94,72.9 94,74 L94,75 C94,76.1 93.1,77 92,77 L16,77 C14.9,77 14,76.1 14,75 L14,74 C14,72.9 14.9,72 16,72 Z" />
+
+    <!-- Road Dashed Accent -->
+    <path
+        android:fillColor="#F59E0B"
+        android:pathData="M20,78 L35,78 L35,80 L20,78 Z M45,78 L60,78 L60,80 L45,78 Z M70,78 L85,78 L85,80 L70,78 Z" />
+
+    <!-- Semi-Truck Cab -->
+    <path
+        android:fillColor="#F8FAFC"
+        android:pathData="M22,66 L22,54 C22,52.3 23.3,51 25,51 L40,51 C41.1,51 42.1,51.5 42.8,52.3 L50,60 L62,60 C63.7,60 65,61.3 65,63 L65,70 L22,70 Z" />
+
+    <!-- Windshield -->
+    <path
+        android:fillColor="#1E293B"
+        android:pathData="M39,53 L47,59 L35,59 L35,53 Z" />
+
+    <!-- Side Window -->
+    <path
+        android:fillColor="#3B82F6"
+        android:pathData="M26,53 L33,53 L33,59 L26,59 Z" />
+
+    <!-- Flatbed Trailer & Deck (Amber) -->
+    <path
+        android:fillColor="#F59E0B"
+        android:pathData="M65,62 L90,62 C91.1,62 92,62.9 92,64 L92,70 L65,70 Z" />
+
+    <!-- Cargo Load on Flatbed Deck (Steel Coils) -->
+    <path
+        android:fillColor="#3B82F6"
+        android:pathData="M68,54 C68,51.8 69.8,50 72,50 C74.2,50 76,51.8 76,54 L76,62 L68,62 Z" />
+    <path
+        android:fillColor="#60A5FA"
+        android:pathData="M78,54 C78,51.8 79.8,50 82,50 C84.2,50 86,51.8 86,54 L86,62 L78,62 Z" />
+
+    <!-- Wheels -->
+    <path
+        android:fillColor="#020617"
+        android:pathData="M30,73 C28.34,73 27,71.66 27,70 C27,68.34 28.34,67 30,67 C31.66,67 33,68.34 33,70 C33,71.66 31.66,73 30,73 Z" />
+    <path
+        android:fillColor="#F8FAFC"
+        android:pathData="M30,71.5 C29.17,71.5 28.5,70.83 28.5,70 C28.5,69.17 29.17,68.5 30,68.5 C30.83,68.5 31.5,69.17 31.5,70 C31.5,70.83 30.83,71.5 30,71.5 Z" />
+
+    <path
+        android:fillColor="#020617"
+        android:pathData="M56,73 C54.34,73 53,71.66 53,70 C53,68.34 54.34,67 56,67 C57.66,67 59,68.34 59,70 C59,71.66 57.66,73 56,73 Z" />
+    <path
+        android:fillColor="#F8FAFC"
+        android:pathData="M56,71.5 C55.17,71.5 54.5,70.83 54.5,70 C54.5,69.17 55.17,68.5 56,68.5 C56.83,68.5 57.5,69.17 57.5,70 C57.5,70.83 56.83,71.5 56,71.5 Z" />
+
+    <path
+        android:fillColor="#020617"
+        android:pathData="M80,73 C78.34,73 77,71.66 77,70 C77,68.34 78.34,67 80,67 C81.66,67 83,68.34 83,70 C83,71.66 81.66,73 80,73 Z" />
+    <path
+        android:fillColor="#F8FAFC"
+        android:pathData="M80,71.5 C79.17,71.5 78.5,70.83 78.5,70 C78.5,69.17 79.17,68.5 80,68.5 C80.83,68.5 81.5,69.17 81.5,70 C81.5,70.83 80.83,71.5 80,71.5 Z" />
+
 </vector>

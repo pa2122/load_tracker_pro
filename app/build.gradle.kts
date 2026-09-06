@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -9,12 +11,35 @@ android {
     namespace = "com.example.tmcloadtracker"
     compileSdk = 35
 
+    val versionPropsFile = rootProject.file("version.properties")
+    val versionProps = Properties()
+    if (versionPropsFile.exists()) {
+        versionProps.load(versionPropsFile.inputStream())
+    }
+
+    val localPropsFile = rootProject.file("local.properties")
+    val localProps = Properties()
+    if (localPropsFile.exists()) {
+        localProps.load(localPropsFile.inputStream())
+    }
+    val defaultGithubToken = localProps.getProperty("GITHUB_TOKEN", "")
+
+    val vMajor = versionProps.getProperty("VERSION_MAJOR", "1").toInt()
+    val vMinor = versionProps.getProperty("VERSION_MINOR", "1").toInt()
+    val vPatch = versionProps.getProperty("VERSION_PATCH", "0").toInt()
+    val vBuild = versionProps.getProperty("VERSION_BUILD", "4").toInt()
+
+    val vName = "$vMajor.$vMinor.$vPatch"
+    val vCode = vBuild
+
     defaultConfig {
         applicationId = "com.example.tmcloadtracker"
         minSdk = 27
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = vCode
+        versionName = vName
+
+        buildConfigField("String", "DEFAULT_GITHUB_TOKEN", "\"$defaultGithubToken\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -49,11 +74,11 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
 dependencies {
-
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)
@@ -69,19 +94,19 @@ dependencies {
     androidTestImplementation(libs.androidx.ui.test.junit4)
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
-    // Tiny Local Room Database Core Components
-    //val roomVersion = "androidx.room:room-ktx:2.8.4"
-    implementation("androidx.room:room-runtime:2.8.4")
-    implementation("androidx.room:room-ktx:2.8.4") // Provides Coroutine Support (Flow/Suspend)
 
-    // 2. Standard Java Annotation Processing compiler
-    kapt("androidx.room:room-compiler:2.8.4")
-    implementation("com.google.android.gms:play-services-location:21.2.0")
-    implementation("com.google.mlkit:text-recognition:16.0.1")
-    implementation("com.github.jeziellago:compose-markdown:0.3.1")
-    implementation("io.coil-kt:coil-compose:2.7.0")
-    
+    // Room Database Components
+    implementation(libs.androidx.room.runtime)
+    implementation(libs.androidx.room.ktx)
+    kapt(libs.androidx.room.compiler)
+
+    // Services & Utilities
+    implementation(libs.play.services.location)
+    implementation(libs.mlkit.text.recognition)
+    implementation(libs.compose.markdown)
+    implementation(libs.coil.compose)
+
     // 🗺️ Google Maps for Route Visualization
-    implementation("com.google.maps.android:maps-compose:6.1.2")
-    implementation("com.google.android.gms:play-services-maps:19.0.0")
+    implementation(libs.maps.compose)
+    implementation(libs.play.services.maps)
 }
