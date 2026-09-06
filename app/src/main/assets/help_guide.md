@@ -1,115 +1,140 @@
-# Load Tracker Pro - Driver's Guide
+# Load Tracker Pro - Driver's User Manual
 
-Welcome to **Load Tracker Pro**, your professional flatbed hauling companion. This app is designed to help you track every mile, every stop, and every dollar with industrial-grade precision.
-
----
-
-## 📷 OCR Dispatch Screenshot Auto-Fill (Pro)
-
-Skip manual typing by scanning your dispatch confirmations directly.
-
-* **1-Tap Scan:** Tap **Scan Dispatch Screenshot (Pro)** when entering a load to select a screenshot of your rate confirmation, dispatch email, or load board app.
-* **Instant Auto-Fill:** On-device machine learning (Google ML Kit) scans your image offline and automatically extracts:
-  * **PRO Number**
-  * **Truck Gross Pay / Revenue**
-  * **Dispatched Bounce (Deadhead) & Loaded Miles**
-  * **Shipper Name & Address**
-  * **Consignee Name & Address**
-* **Address Resolution:** Shipper and consignee addresses are automatically geocoded into exact GPS coordinates for routing and arrival detection.
+Welcome to **Load Tracker Pro**, your professional flatbed hauling companion. This manual provides step-by-step instructions on how to use every feature in the app to track your mileage, audit your payroll, and manage your freight loads with precision.
 
 ---
 
-## 🛰️ Real-Time GPS Tracking & HUD
+## 🚀 Quick Start: Logging Your First Trip
 
-The app uses high-accuracy GPS to measure your actual route and mileage.
+Follow these simple steps to log and track a new freight load:
 
-* **Automatic Odometer:** Once you start a journey, the app tracks your distance in the background.
-* **Segment Switching:** Tracks **Bounce** (Deadhead) and **Loaded** miles separately for accurate auditing.
-* **Notification HUD:** Monitor your live mileage and trip status by pulling down your phone's notification shade—no need to keep the app open.
-* **Auto-Resume:** If your phone restarts or the app is closed, tracking automatically resumes if a trip is still active.
-
----
-
-## 🗺️ Advanced Mapping & Route Heatmaps (Pro)
-
-Visual data to review your lanes and improve your routing efficiency.
-
-* **Smart Address Parsing:** Paste names and addresses directly from your dispatch, or use OCR scanning. The app extracts facility names and resolves exact GPS coordinates for you.
-* **Hands-Free Arrival:** Sets a 1,000-foot virtual fence around your shipper and consignee. The moment you cross the property line, the app vibrates and automatically switches to "Arrived" mode.
-* **Individual Trip Maps:** Tap **View Map** on any load to see the exact path you took, including pickup, delivery, and home base markers.
-* **Global Route Heatmap:** Open the sidebar to view every mile you've ever tracked on a single national map.
-* **Gesture Lock:** Swiping and dragging on map screens interacts 100% with map navigation without accidental sidebar pulls.
-* **Route Breadcrumbs:** GPS coordinates are saved every 5 minutes while driving to build this historical record.
+1. **Tap `Create New Load Entry`**:
+   - Open Load Tracker Pro and tap the **Create New Load Entry** button on the main dashboard.
+2. **Enter or Scan Load Details**:
+   - Enter your **PRO #**, **Dispatched Bounce (Deadhead) Miles**, **Dispatched Loaded Miles**, and **Truck Gross Pay**.
+   - Or tap **📷 Auto-Fill from Screenshot (Pro)** to instantly scan a rate confirmation photo!
+3. **Paste Shipper & Consignee Info**:
+   - Paste the Shipper name and address, then tap **Verify**.
+   - Paste the Consignee name and address, then tap **Verify**.
+   - When verified, the button changes to **Verified ✅**.
+4. **Choose How to Start**:
+   - **Start Active Journey**: Begins live GPS background mileage tracking and HUD notifications.
+   - **Save Manual Entry**: Saves a completed historical load directly to your records without turning on live GPS tracking.
 
 ---
 
-## 🏢 Facility Insights (Pro)
+## 📷 How to Auto-Fill Loads Using OCR Screenshots (Pro)
 
-Your personal database of every shipper and receiver you've ever visited.
+Skip manual typing by scanning your dispatch confirmations directly:
 
-* **Searchable History:** Look up any facility by name (e.g., "Gerdau Steel") to see your past experiences there.
-* **Aggregated Notes:** Instantly view every note you've ever written for that specific location to remember gate codes, tight turns, or loading procedures from months ago.
-* **Easy Navigation:** Tap **← All Facilities** or the back button at any time to return directly to your facility directory.
+1. **Take a Screenshot**:
+   - Snap a screenshot of your rate confirmation, dispatch email, or load board app on your phone.
+2. **Tap `📷 Auto-Fill from Screenshot (Pro)`**:
+   - On the **New Freight Load** screen, tap the scanner button.
+3. **Select Your Screenshot**:
+   - Choose the screenshot from your photo gallery.
+4. **Automatic Form Population**:
+   - Google ML Kit on-device machine learning scans the image offline in under half a second and automatically populates:
+     - **PRO Number**
+     - **Gross Load Pay**
+     - **Dispatched Bounce & Loaded Miles**
+     - **Shipper Name & Address**
+     - **Consignee Name & Address**
+5. **Review & Save**:
+   - Verify the pre-filled fields and tap **Start Journey** or **Save Manual Entry**.
+
+---
+
+## 🛰️ Real-Time GPS Mileage Tracking & Notification HUD
+
+Load Tracker Pro uses high-accuracy GPS to measure your actual driving distance and separate your mileage segments:
+
+* **Bounce vs. Loaded Miles**:
+  - **ACTIVE_BOUNCE** (Deadhead): Measures distance driven while empty to pick up the load.
+  - **ACTIVE_LOADED**: Measures distance driven with freight on your flatbed trailer.
+  - Switch segments anytime by tapping **Switch to Loaded Segment** or **Arrived at Shipper/Consignee**.
+* **Notification Shade HUD**:
+  - Pull down your phone's notification shade while driving to monitor your live odometer, active trip segment, and distance to destination in real time—no need to keep the app open on your screen.
+* **Hands-Free Arrival Geofencing**:
+  - The app sets a 1,000-foot virtual fence around your shipper and consignee. Upon crossing the property line, your phone vibrates and automatically alerts you of your arrival.
+* **Auto-Resume**:
+  - If your phone restarts or the app is closed mid-trip, GPS tracking automatically resumes seamlessly.
 
 ---
 
 ## 💰 Flatbed Payroll Engine & Statements
 
-Tailored specifically for the needs of flatbed drivers with standard industry logic.
+Load Tracker Pro automatically calculates your estimated driver earnings based on flatbed industry rules:
 
-* **Friday-to-Thursday Payroll Cycle:** Loads picked up from Friday through Thursday are automatically grouped into the statement week ending on that Friday.
-* **Itemized Statement Summary:** Tap **View Statements by Week** to review complete payroll statements broken down by:
-  * **Total Truck Gross**
-  * **Driver Load Cut** (%)
-  * **Tarp Pay**
-  * **Deadhead Pay** ($0.20/mi for 150+ miles)
-  * **Trainer Pay** ($200.00 flat weekly rate)
-  * **Total Net Pay (Est)**
-* **Tarping Pay:** Fully configurable rates for **8' Drop** and **4' Drop** tarps.
-* **Pre-Tarped Logic:** Automatically halves the tarp bonus per standard company policies.
-* **Deadhead Bonus:** Automatically calculates the **$0.20/mile** bonus for dispatched deadhead of **150 miles or more**.
-* **Training Mode:** Enable "Active Training Week" on any load to apply your flat-rate trainer premium to the week's total.
-
----
-
-## 🛣️ Mileage & OOR Protection
-
-Protect your performance stats with intelligent monitoring.
-
-* **Out-of-Route (OOR) Audit:** Compares your **Actual GPS Miles** against your **Dispatched Miles** to calculate routing efficiency.
-* **Going Home Protection:** Mark a load as "Going Home" to drive extra miles to your house without penalizing your weekly OOR percentage.
-* **Friday Reminder:** If you start a load on a Friday, the app will automatically ask if it's a "Home Run" trip to ensure your OOR stats stay protected.
+* **Friday-to-Thursday Payroll Cycle**:
+  - Loads picked up from **Friday through Thursday** are automatically grouped into the statement week ending on that Friday.
+  - Example: A load picked up on Friday 08/28 belongs to the pay week ending Friday 09/04.
+* **Itemized Statement Summary**:
+  - Tap **View Statements by Week** on the main dashboard to review complete payroll statements broken down by:
+    - **Total Truck Gross Revenue**: Sum of gross freight pay.
+    - **Driver Load Cut**: Your percentage split (e.g. 31%).
+    - **Tarp Pay**: Configurable rates for 8' Drop ($50.00) and 4' Drop ($30.00) tarps, automatically halved if marked pre-tarped.
+    - **Deadhead Pay**: Automatic $0.20/mile bonus for dispatched deadhead of 150 miles or more.
+    - **Trainer Pay**: Flat $200.00 weekly premium when training is active.
+    - **Total Net Pay (Est)**: Calculated total driver take-home pay.
+* **Main Dashboard View**:
+  - Displays completed loads for the **current active payroll week** (ordered newest first).
+  - All past weeks are archived under **View Statements by Week**.
 
 ---
 
-## 📝 Managing Your Trips
+## 🛣️ Out-Of-Route (OOR) & Going Home Protection
 
-* **Current Week Dashboard:** The main screen displays completed loads for the **current active payroll week** (ordered newest first by date).
-* **Statements Archive:** Access all past loads across previous weeks anytime under **View Statements by Week**.
-* **Manual Historical Entry:** Catching up on paperwork? Add completed loads by selecting a past date and choosing "Match Dispatched Miles" to bypass GPS tracking.
-* **Active Editing:** Tap any active trip to edit details if orders change mid-journey.
-* **Deleting Records:** To permanently remove a mistake, **Long-Press** on any card in your load logs or history.
-* **Timestamps:** The app records the exact second of pickup and delivery for your audit records.
+Protect your driver performance metrics with intelligent route auditing:
 
----
-
-## 📤 Data & Privacy
-
-* **Steel & Cobalt Theme:** A high-contrast **Slate Navy** base with cobalt blue and amber accents for superior legibility.
-* **Home Base Pinning:** Save your home coordinates by pasting your address or pinning your current GPS location (`15381 TX-198, Mabank, TX 75147` default). This data is used solely for visual reference on your maps.
-* **CSV Export:** Generate a professional spreadsheet of your entire history to email to yourself or payroll.
-* **Data Safety:** Your records are stored in a hardened local database on your device.
+* **OOR Audit Calculation**:
+  - Compares your **Actual GPS Miles** driven against your **Dispatched Miles** to calculate routing efficiency percentage.
+* **Going Home Protection**:
+  - When driving home on a load, check **Going Home / Home Run**.
+  - Extra miles driven to your house are excluded from your Out-Of-Route penalty calculation, keeping your performance stats protected.
+* **Friday Reminder**:
+  - If you start a load on a Friday, the app automatically prompts you to check if it's a "Going Home" run to ensure your OOR stats stay safe.
 
 ---
 
-## 🛠️ Quick Support
+## 🗺️ Route Maps, Heatmaps & Home Base Pinning
 
-* **PRO # Locked?** Once a trip starts, the PRO Number is locked to protect database integrity. To fix a mistake, cancel the trip and start a new one.
-* **Location Issues?** Ensure Location permission is set to "Allow all the time" and battery optimization is disabled for Load Tracker Pro.
+Visual lane coverage and route playback:
 
-# 🚀 Roadmap: Future Features
+* **Individual Route Playback**: Tap **View Map** on any load to see the exact path you drove, including pickup, delivery, and home base markers.
+* **Global Lane Heatmap**: Tap **View Global Route Heatmap** in the sidebar to see every mile you've ever tracked on a single national map.
+* **Gesture Lock**: Swiping and dragging on map screens interacts 100% with map navigation without accidental sidebar menu pulls.
+* **Home Base Pinning**:
+  - Open the sidebar to paste your home address (e.g. `123 Main St, Dallas, TX 75201`) or tap **Pin Current** to save your GPS coordinates.
+  - Your home base is displayed as a personal safe zone marker on all maps.
 
-* **Fuel & Expense Log:** Track diesel and DEF purchases alongside your loads.
-* **IFTA Calculator:** Automatic mileage summaries by state for quarterly filings.
-* **Receipt Scanner:** Use your camera to snap photos of BOLs or fuel receipts.
-* **Cloud Sync:** Automated backups to Google Drive for total data peace of mind.
+---
+
+## 🏢 Facility Insights (Pro)
+
+Your personal database of every shipper and receiver you've ever visited:
+
+* **Search Shippers & Receivers**: Open **Review Facility Insights** in the sidebar to look up any facility by name (e.g. "Gerdau Steel").
+* **Review Past Notes**: Instantly view past notes for gate codes, tight turns, loading procedures, or parking tips.
+* **Easy Back Navigation**: Tap **← All Facilities** or the back button at any time to return to the facility list.
+
+---
+
+## 🛠️ Developer Options & Bug Tracker
+
+* **Developer Mode**: Toggle Pro feature unlocks in **🛠️ Developer Options** at the bottom of the sidebar.
+* **Developer Notes Page**: Access a full-screen scratchpad to jot down bugs and ideas saved locally to `dev_notes.txt`.
+* **GitHub Issues Sync**: Push bug reports and feature requests directly to GitHub as official repository issues.
+
+---
+
+## ❓ Frequently Asked Questions & Troubleshooting
+
+* **How do I fix a mistake on a trip?**:
+  - If the trip is active, tap **Update / Options** to edit details. Once a trip is finished, PRO # is locked to protect database integrity.
+* **How do I delete a mistake or test load?**:
+  - **Long-Press** on any load card in your logs or statement view. A confirmation popup will appear to permanently delete the entry.
+* **How do I export my history for tax or accounting?**:
+  - Open the sidebar menu and tap **Export Payload History (CSV)** to generate a spreadsheet file you can email or save.
+* **Location Tracking Issues?**:
+  - Ensure Location permission is set to **"Allow all the time"** in your phone's Android Settings and battery optimization is turned off for Load Tracker Pro.
