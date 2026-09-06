@@ -6,6 +6,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -15,21 +16,28 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -44,6 +52,7 @@ import androidx.compose.ui.unit.dp
 import java.time.DayOfWeek
 import java.time.Instant
 import java.time.ZoneId
+import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
@@ -90,9 +99,9 @@ fun LoadEntryScreen(
     var selectedDateMillis by remember { mutableLongStateOf(value = System.currentTimeMillis()) }
     val dateLabel = remember(key1 = selectedDateMillis) {
         val instant = Instant.ofEpochMilli(selectedDateMillis)
-        val zone = ZoneId.systemDefault()
         val formatter = DateTimeFormatter.ofPattern("MM/dd/yyyy")
-        instant.atZone(zone).toLocalDate().format(formatter)
+        // 📍 FIX: DatePicker returns UTC. Use ZoneOffset.UTC to prevent day-shifting in local time zones.
+        instant.atZone(ZoneOffset.UTC).toLocalDate().format(formatter)
     }
 
     var sRawPaste by remember { mutableStateOf(value = "") }
@@ -142,7 +151,7 @@ fun LoadEntryScreen(
 
     fun processSave(load: CurrentLoad) {
         val dateToCheck = Instant.ofEpochMilli(load.pickupTimestamp)
-            .atZone(ZoneId.systemDefault()).toLocalDate()
+            .atZone(ZoneOffset.UTC).toLocalDate()
 
         if (!isManualEntry && (dateToCheck.dayOfWeek == DayOfWeek.FRIDAY) && !load.isGoingHome) {
             pendingLoadSave = load
@@ -270,7 +279,14 @@ fun LoadEntryScreen(
                 onValueChange = {},
                 readOnly = true,
                 label = { Text("Pickup Date") },
-                modifier = Modifier.fillMaxWidth().clickable { showDatePicker = true }
+                trailingIcon = {
+                    IconButton(onClick = { showDatePicker = true }) {
+                        Icon(Icons.Default.DateRange, contentDescription = "Select Date")
+                    }
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { showDatePicker = true }
             )
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Checkbox(checked = matchDispatched, onCheckedChange = { matchDispatched = it })
@@ -315,11 +331,34 @@ fun LoadEntryScreen(
             OutlinedTextField(value = loadPay, onValueChange = { input -> loadPay = input.filter { it.isDigit() || (it == '.') } }, label = { Text("Gross Pay ($)") }, modifier = Modifier.weight(weight = 1f))
         }
 
-        ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = !expanded }) {
-            OutlinedTextField(value = selectedTarp, onValueChange = {}, readOnly = true, label = { Text("Tarp Type") }, modifier = Modifier.fillMaxWidth())
-            ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+        ExposedDropdownMenuBox(
+            expanded = expanded,
+            onExpandedChange = { expanded = !expanded }
+        ) {
+            OutlinedTextField(
+                value = selectedTarp,
+                onValueChange = {},
+                readOnly = true,
+                label = { Text("Tarp Type") },
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+                colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .menuAnchor(type = MenuAnchorType.PrimaryNotEditable, enabled = true)
+            )
+            ExposedDropdownMenu(
+                expanded = expanded,
+                onDismissRequest = { expanded = false }
+            ) {
                 tarpOpts.forEach { option ->
-                    DropdownMenuItem(text = { Text(text = option) }, onClick = { selectedTarp = option; expanded = false })
+                    DropdownMenuItem(
+                        text = { Text(text = option) },
+                        onClick = {
+                            selectedTarp = option
+                            expanded = false
+                        },
+                        contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding
+                    )
                 }
             }
         }
@@ -412,9 +451,14 @@ fun LoadEntryScreen(
         TextButton(
             onClick = { onCancelClick() },
             modifier = Modifier.fillMaxWidth(),
+            colors = ButtonDefaults.textButtonColors(
+                contentColor = MaterialTheme.colorScheme.primary
+            )
         ) {
-            Text("Cancel")
+            Text("Cancel Load Entry")
         }
+        
+        Spacer(modifier = Modifier.height(32.dp))
     }
 
     if (showFridayReminder && pendingLoadSave != null) {
