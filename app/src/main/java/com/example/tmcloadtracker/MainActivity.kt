@@ -1,7 +1,6 @@
 package com.example.tmcloadtracker
 
 import android.Manifest
-import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.location.Geocoder
@@ -28,6 +27,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.painterResource
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -589,15 +589,11 @@ class MainActivity : ComponentActivity() {
                                             verticalArrangement = Arrangement.spacedBy(space = 12.dp)
                                         ) {
                                             Image(
-                                                painter = painterResource(id = R.drawable.ic_launcher_foreground),
+                                                painter = painterResource(id = R.drawable.app_logo),
                                                 contentDescription = "Load Tracker Pro Logo",
                                                 modifier = Modifier
                                                     .size(110.dp)
-                                                    .background(
-                                                        color = MaterialTheme.colorScheme.surfaceVariant,
-                                                        shape = CircleShape
-                                                    )
-                                                    .padding(12.dp)
+                                                    .clip(CircleShape)
                                             )
 
                                             Text(
