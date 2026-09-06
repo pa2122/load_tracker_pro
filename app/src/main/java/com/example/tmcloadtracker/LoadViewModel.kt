@@ -15,6 +15,7 @@ import java.time.DayOfWeek
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
+import java.time.ZoneOffset
 import java.time.temporal.TemporalAdjusters
 import java.util.Locale
 
@@ -81,7 +82,8 @@ class LoadViewModel(application: Application) :
         shipperLong: Double? = null,
         consigneeName: String? = null,
         consigneeLat: Double? = null,
-        consigneeLong: Double? = null
+        consigneeLong: Double? = null,
+        isTrainingWeek: Boolean = false
     ) {
         viewModelScope.launch {
             val newLoad = CurrentLoad(
@@ -106,7 +108,8 @@ class LoadViewModel(application: Application) :
                 shipperLong = shipperLong,
                 consigneeName = consigneeName,
                 consigneeLat = consigneeLat,
-                consigneeLong = consigneeLong
+                consigneeLong = consigneeLong,
+                isTrainingWeek = isTrainingWeek
             )
             loadDao.insertLoad(newLoad)
         }
@@ -121,7 +124,7 @@ class LoadViewModel(application: Application) :
     fun getCurrentWeekSummary(
         lumberRate: Double,
         steelRate: Double,
-        isTraining: Boolean,
+        isTrainingGlobal: Boolean,
         trainerRate: Double
     ): WeekSummary {
         val targetFriday = getPayPeriodDate(
@@ -132,6 +135,7 @@ class LoadViewModel(application: Application) :
         var totalActualMiles = 0.0
         var totalDispatchedMiles = 0.0
         var totalOutOfRouteMiles = 0.0
+        var weekContainsTrainingLoad = false
 
         _allLoads.value.forEach { load ->
             val loadFriday = getPayPeriodDate(
@@ -139,6 +143,8 @@ class LoadViewModel(application: Application) :
             )
 
             if (loadFriday == targetFriday) {
+                if (load.isTrainingWeek) weekContainsTrainingLoad = true
+                
                 val baseSplit = load.loadPay * (
                         load.percentageRate / 100.0
                         )
@@ -184,8 +190,8 @@ class LoadViewModel(application: Application) :
             }
         }
 
-        // 📍 MATH FIX: Trainer bonus gets added to totalPay pool BEFORE returning data
-        if (isTraining) {
+        // 📍 TRAINER LOGIC: Apply bonus if week is marked as training, OR if currently toggled on
+        if (weekContainsTrainingLoad || isTrainingGlobal) {
             totalPay += trainerRate
         }
 
@@ -201,24 +207,6 @@ class LoadViewModel(application: Application) :
             weeklyOutOfRoute = totalOutOfRouteMiles,
             weeklyOorPercentage = oorPct
         )
-    }
-
-    private fun getPayPeriodDate(timestamp: Long): LocalDate {
-        val pDate = Instant.ofEpochMilli(timestamp)
-            .atZone(ZoneId.systemDefault())
-            .toLocalDate()
-
-        return when (pDate.dayOfWeek) {
-            DayOfWeek.FRIDAY,
-            DayOfWeek.SATURDAY,
-            DayOfWeek.SUNDAY -> {
-                pDate.with(TemporalAdjusters.next(DayOfWeek.FRIDAY))
-            }
-
-            else -> {
-                pDate.with(TemporalAdjusters.nextOrSame(DayOfWeek.FRIDAY))
-            }
-        }
     }
 
     fun generateCsvContent(): String {
@@ -265,3 +253,12 @@ data class WeekSummary(
     val weeklyOutOfRoute: Double,
     val weeklyOorPercentage: Double
 )
+
+fun getPayPeriodDate(timestamp: Long): LocalDate {
+    val pDate = Instant.ofEpochMilli(timestamp)
+        .atZone(ZoneOffset.UTC)
+        .toLocalDate()
+
+    return pDate.with(TemporalAdjusters.next(DayOfWeek.FRIDAY))
+}
+

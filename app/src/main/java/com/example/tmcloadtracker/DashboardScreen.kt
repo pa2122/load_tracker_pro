@@ -36,12 +36,10 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import dev.jeziellago.compose.markdowntext.MarkdownText
-import java.time.DayOfWeek
 import java.time.Instant
 import java.time.LocalDate
-import java.time.ZoneId
+import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
-import java.time.temporal.TemporalAdjusters
 import java.util.Locale
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -318,10 +316,9 @@ fun DashboardScreen(
                     items(items = completedLoads) { load ->
                         val dateLabel = remember(key1 = load.pickupTimestamp) {
                             val instant = Instant.ofEpochMilli(load.pickupTimestamp)
-                            val zone = ZoneId.systemDefault()
                             val formatter =
                                 DateTimeFormatter.ofPattern("MM/dd/yyyy")
-                            instant.atZone(zone).toLocalDate().format(formatter)
+                            instant.atZone(ZoneOffset.UTC).toLocalDate().format(formatter)
                         }
 
                         Card(
@@ -409,7 +406,7 @@ fun DashboardScreen(
                     onDismissRequest = { },
                     title = { Text("Load Settlement Summary - PRO #${trip.proNumber}") },
                     text = {
-                        Column(verticalArrangement = Arrangement.spacedBy(space = 8.dp)) {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween
@@ -620,29 +617,10 @@ fun DashboardScreen(
             onDismissRequest = { showWeeklyBreakdownDialog = false },
             title = { Text("Weekly Earnings Breakdown") },
             text = {
-                val currentTargetFriday = Instant.ofEpochMilli(System.currentTimeMillis())
-                    .atZone(ZoneId.systemDefault()).toLocalDate()
-                    .let { d ->
-                        when (d.dayOfWeek) {
-                            DayOfWeek.FRIDAY, DayOfWeek.SATURDAY, DayOfWeek.SUNDAY -> d.with(
-                                TemporalAdjusters.next(DayOfWeek.FRIDAY)
-                            )
-                            else -> d.with(TemporalAdjusters.nextOrSame(DayOfWeek.FRIDAY))
-                        }
-                    }
+                val currentTargetFriday = getPayPeriodDate(System.currentTimeMillis())
 
                 val weeklyTrips = pastLoads.filter { load ->
-                    val loadFriday = Instant.ofEpochMilli(load.pickupTimestamp)
-                        .atZone(ZoneId.systemDefault()).toLocalDate()
-                        .let { d ->
-                            when (d.dayOfWeek) {
-                                DayOfWeek.FRIDAY, DayOfWeek.SATURDAY, DayOfWeek.SUNDAY -> d.with(
-                                    TemporalAdjusters.next(DayOfWeek.FRIDAY)
-                                )
-                                else -> d.with(TemporalAdjusters.nextOrSame(DayOfWeek.FRIDAY))
-                            }
-                        }
-                    loadFriday == currentTargetFriday && load.tripState == "COMPLETED"
+                    getPayPeriodDate(load.pickupTimestamp) == currentTargetFriday && load.tripState == "COMPLETED"
                 }
 
                 LazyColumn(
@@ -816,16 +794,8 @@ fun DashboardScreen(
     if (showStatementHistoryDialog) {
         val grouped = remember(key1 = pastLoads) {
             pastLoads.asSequence().filter { it.tripState == "COMPLETED" }
-                .groupBy { load ->
-                    Instant.ofEpochMilli(load.pickupTimestamp)
-                        .atZone(ZoneId.systemDefault()).toLocalDate()
-                        .let { d ->
-                            when (d.dayOfWeek) {
-                                DayOfWeek.FRIDAY, DayOfWeek.SATURDAY, DayOfWeek.SUNDAY -> d.with(TemporalAdjusters.next(DayOfWeek.FRIDAY))
-                                else -> d.with(TemporalAdjusters.nextOrSame(DayOfWeek.FRIDAY))
-                            }
-                        }
-                }.toSortedMap(reverseOrder())
+                .groupBy { load -> getPayPeriodDate(load.pickupTimestamp) }
+                .toSortedMap(reverseOrder())
         }
 
         AlertDialog(
@@ -839,11 +809,18 @@ fun DashboardScreen(
                         } else {
                             grouped.forEach { (friday, loads) ->
                                 item {
+                                    val totalWeekGross = loads.sumOf { it.loadPay }
                                     val totalWeekPay = loads.sumOf { load ->
                                         val base = load.loadPay * (load.percentageRate / 100.0)
+                                        var tarp = when (load.tarpType) {
+                                            "L" -> 50.0
+                                            "S" -> 30.0
+                                            else -> 0.0
+                                        }
+                                        if (load.isPreTarped) tarp /= 2.0
                                         val bonus = if (load.dispatchedBounceMiles >= 150.0) load.dispatchedBounceMiles * 0.20 else 0.0
-                                        base + bonus
-                                    }
+                                        base + tarp + bonus
+                                    } + (if (loads.any { it.isTrainingWeek }) 200.0 else 0.0)
                                     Card(
                                         modifier = Modifier.fillMaxWidth().clickable {
                                             selectedWeekFriday = friday
@@ -857,9 +834,10 @@ fun DashboardScreen(
                                             Column {
                                                 Text("Week Ending:", style = MaterialTheme.typography.labelSmall)
                                                 Text(friday.format(DateTimeFormatter.ofPattern("MM/dd/yyyy")), style = MaterialTheme.typography.titleMedium)
+                                                Text("${loads.size} load(s) • Gross: $${String.format(Locale.US, "%.2f", totalWeekGross)}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
                                             }
                                             Column(horizontalAlignment = Alignment.End) {
-                                                Text("Total Pay (Est):", style = MaterialTheme.typography.labelSmall)
+                                                Text("Est Net Pay:", style = MaterialTheme.typography.labelSmall)
                                                 Text("$${String.format(Locale.US, "%.2f", totalWeekPay)}", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
                                             }
                                         }
@@ -879,16 +857,25 @@ fun DashboardScreen(
     if (selectedWeekFriday != null) {
         val weekFriday = selectedWeekFriday!!
         val weeklyTrips = pastLoads.filter { load ->
-            val loadFriday = Instant.ofEpochMilli(load.pickupTimestamp)
-                .atZone(ZoneId.systemDefault()).toLocalDate()
-                .let { d ->
-                    when (d.dayOfWeek) {
-                        DayOfWeek.FRIDAY, DayOfWeek.SATURDAY, DayOfWeek.SUNDAY -> d.with(TemporalAdjusters.next(DayOfWeek.FRIDAY))
-                        else -> d.with(TemporalAdjusters.nextOrSame(DayOfWeek.FRIDAY))
-                    }
-                }
-            loadFriday == weekFriday && load.tripState == "COMPLETED"
+            getPayPeriodDate(load.pickupTimestamp) == weekFriday && load.tripState == "COMPLETED"
         }
+
+        val totalGross = weeklyTrips.sumOf { it.loadPay }
+        val totalDriverBase = weeklyTrips.sumOf { it.loadPay * (it.percentageRate / 100.0) }
+        val totalTarpPay = weeklyTrips.sumOf { load ->
+            var tarp = when (load.tarpType) {
+                "L" -> 50.0
+                "S" -> 30.0
+                else -> 0.0
+            }
+            if (load.isPreTarped) tarp /= 2.0
+            tarp
+        }
+        val totalBouncePay = weeklyTrips.sumOf { load ->
+            if (load.dispatchedBounceMiles >= 150.0) load.dispatchedBounceMiles * 0.20 else 0.0
+        }
+        val totalTrainerPay = if (weeklyTrips.any { it.isTrainingWeek }) 200.0 else 0.0
+        val totalNetPay = totalDriverBase + totalTarpPay + totalBouncePay + totalTrainerPay
 
         AlertDialog(
             onDismissRequest = { selectedWeekFriday = null },
@@ -896,18 +883,110 @@ fun DashboardScreen(
             text = {
                 Box(modifier = Modifier.heightIn(max = 500.dp)) {
                     LazyColumn(verticalArrangement = Arrangement.spacedBy(space = 10.dp)) {
+                        item {
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(all = 12.dp),
+                                    verticalArrangement = Arrangement.spacedBy(space = 6.dp)
+                                ) {
+                                    Text(
+                                        "Week Summary Breakdown",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                                    )
+                                    HorizontalDivider(color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.2f))
+
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text("Total Truck Gross:", style = MaterialTheme.typography.bodySmall)
+                                        Text("$${String.format(Locale.US, "%.2f", totalGross)}", style = MaterialTheme.typography.bodySmall)
+                                    }
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text("Driver Load Cut:", style = MaterialTheme.typography.bodySmall)
+                                        Text("$${String.format(Locale.US, "%.2f", totalDriverBase)}", style = MaterialTheme.typography.bodySmall)
+                                    }
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text("Tarp Pay:", style = MaterialTheme.typography.bodySmall)
+                                        Text("$${String.format(Locale.US, "%.2f", totalTarpPay)}", style = MaterialTheme.typography.bodySmall)
+                                    }
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text("Deadhead Pay:", style = MaterialTheme.typography.bodySmall)
+                                        Text("$${String.format(Locale.US, "%.2f", totalBouncePay)}", style = MaterialTheme.typography.bodySmall)
+                                    }
+                                    if (totalTrainerPay > 0.0) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Text("Trainer Pay:", style = MaterialTheme.typography.bodySmall)
+                                            Text("$${String.format(Locale.US, "%.2f", totalTrainerPay)}", style = MaterialTheme.typography.bodySmall)
+                                        }
+                                    }
+                                    HorizontalDivider(color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.2f))
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text("Total Net Pay (Est):", style = MaterialTheme.typography.titleSmall)
+                                        Text(
+                                            "$${String.format(Locale.US, "%.2f", totalNetPay)}",
+                                            style = MaterialTheme.typography.titleSmall,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        item {
+                            Text(
+                                "Individual Trip Logs (${weeklyTrips.size})",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.secondary,
+                                modifier = Modifier.padding(top = 4.dp)
+                            )
+                        }
+
                         items(weeklyTrips) { trip ->
-                            val net = (trip.loadPay * (trip.percentageRate / 100.0)) + (if (trip.dispatchedBounceMiles >= 150.0) trip.dispatchedBounceMiles * 0.20 else 0.0)
-                            Card(modifier = Modifier.fillMaxWidth().clickable { 
-                                selectedTripData = trip
-                                showHistoryDetailsDialog = true
-                            }) {
+                            var tarp = when (trip.tarpType) {
+                                "L" -> 50.0
+                                "S" -> 30.0
+                                else -> 0.0
+                            }
+                            if (trip.isPreTarped) tarp /= 2.0
+                            val bounce = if (trip.dispatchedBounceMiles >= 150.0) trip.dispatchedBounceMiles * 0.20 else 0.0
+                            val baseCut = trip.loadPay * (trip.percentageRate / 100.0)
+                            val tripNet = baseCut + tarp + bounce
+
+                            Card(
+                                modifier = Modifier.fillMaxWidth().clickable {
+                                    selectedTripData = trip
+                                    showHistoryDetailsDialog = true
+                                }
+                            ) {
                                 Column(modifier = Modifier.padding(all = 12.dp)) {
                                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                                         Text("PRO #${trip.proNumber}", style = MaterialTheme.typography.titleSmall)
-                                        Text("$${String.format(Locale.US, "%.2f", net)}", color = MaterialTheme.colorScheme.primary)
+                                        Text("$${String.format(Locale.US, "%.2f", tripNet)}", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
                                     }
-                                    Text("${trip.dispatchedLoadedMiles.toInt()} mi Loaded", style = MaterialTheme.typography.bodySmall)
+                                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                        Text("Gross: $${String.format(Locale.US, "%.2f", trip.loadPay)} (${trip.percentageRate.toInt()}%)", style = MaterialTheme.typography.bodySmall)
+                                        Text("${trip.dispatchedLoadedMiles.toInt()} mi Loaded", style = MaterialTheme.typography.bodySmall)
+                                    }
                                 }
                             }
                         }

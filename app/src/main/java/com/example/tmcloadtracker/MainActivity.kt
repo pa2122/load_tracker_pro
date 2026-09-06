@@ -198,7 +198,7 @@ class MainActivity : ComponentActivity() {
                             viewModel.getCurrentWeekSummary(
                                 lumberRate = tarp8Pay.toDoubleOrNull() ?: 0.0,
                                 steelRate = tarp4Pay.toDoubleOrNull() ?: 0.0,
-                                isTraining = isTrainingActive,
+                                isTrainingGlobal = isTrainingActive,
                                 trainerRate = flatTrainerPayRate.toDoubleOrNull() ?: 0.0
                             )
                         }
@@ -206,6 +206,7 @@ class MainActivity : ComponentActivity() {
 
                     ModalNavigationDrawer(
                         drawerState = drawerState,
+                        gesturesEnabled = currentScreen != "route_map",
                         drawerContent = {
                             ModalDrawerSheet(modifier = Modifier.width(width = 300.dp)) {
                                 Column(
@@ -555,7 +556,8 @@ class MainActivity : ComponentActivity() {
                                                         shipperLong = updatedTripEntity.shipperLong,
                                                         consigneeName = updatedTripEntity.consigneeName,
                                                         consigneeLat = updatedTripEntity.consigneeLat,
-                                                        consigneeLong = updatedTripEntity.consigneeLong
+                                                        consigneeLong = updatedTripEntity.consigneeLong,
+                                                        isTrainingWeek = updatedTripEntity.isTrainingWeek
                                                     )
                                                 }
                                             )
@@ -564,6 +566,7 @@ class MainActivity : ComponentActivity() {
                                         "entry" -> {
                                             LoadEntryScreen(
                                                 initialPercentage = defPercent,
+                                                initialIsTraining = isTrainingActive,
                                                 editingLoad = tripToEdit,
                                                 onSaveClick = { finalizedLoadEntity ->
                                                     if (finalizedLoadEntity.tripState.startsWith(prefix = "ACTIVE")) {
@@ -591,7 +594,8 @@ class MainActivity : ComponentActivity() {
                                                         shipperLong = finalizedLoadEntity.shipperLong,
                                                         consigneeName = finalizedLoadEntity.consigneeName,
                                                         consigneeLat = finalizedLoadEntity.consigneeLat,
-                                                        consigneeLong = finalizedLoadEntity.consigneeLong
+                                                        consigneeLong = finalizedLoadEntity.consigneeLong,
+                                                        isTrainingWeek = finalizedLoadEntity.isTrainingWeek
                                                     )
                                                     tripToEdit = null
                                                     currentScreen = "dashboard"

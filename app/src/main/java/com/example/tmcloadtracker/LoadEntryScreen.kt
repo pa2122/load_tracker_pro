@@ -60,6 +60,7 @@ import java.util.Locale
 @Composable
 fun LoadEntryScreen(
     initialPercentage: String,
+    initialIsTraining: Boolean = false,
     editingLoad: CurrentLoad? = null,
     onSaveClick: (CurrentLoad) -> Unit,
     onCancelClick: () -> Unit,
@@ -88,6 +89,7 @@ fun LoadEntryScreen(
 
     var isPreTarped by remember { mutableStateOf(value = editingLoad?.isPreTarped ?: false) }
     var isGoingHome by remember { mutableStateOf(value = editingLoad?.isGoingHome ?: false) }
+    var isTrainingWeek by remember { mutableStateOf(value = editingLoad?.isTrainingWeek ?: initialIsTraining) }
     var tripNotes by remember { mutableStateOf(value = editingLoad?.tripNotes ?: "") }
     var isManualEntry by remember { mutableStateOf(value = false) }
 
@@ -96,7 +98,7 @@ fun LoadEntryScreen(
     var matchDispatched by remember { mutableStateOf(value = true) }
 
     var showDatePicker by remember { mutableStateOf(value = false) }
-    var selectedDateMillis by remember { mutableLongStateOf(value = System.currentTimeMillis()) }
+    var selectedDateMillis by remember { mutableLongStateOf(value = editingLoad?.pickupTimestamp ?: System.currentTimeMillis()) }
     val dateLabel = remember(key1 = selectedDateMillis) {
         val instant = Instant.ofEpochMilli(selectedDateMillis)
         val formatter = DateTimeFormatter.ofPattern("MM/dd/yyyy")
@@ -246,7 +248,7 @@ fun LoadEntryScreen(
                 },
                 label = { Text("Disp. Bounce *") },
                 modifier = Modifier.weight(weight = 1f),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Next)
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Next)
             )
             OutlinedTextField(
                 value = dLoaded,
@@ -256,13 +258,18 @@ fun LoadEntryScreen(
                 },
                 label = { Text("Disp. Loaded *") },
                 modifier = Modifier.weight(weight = 1f),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Next)
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Next)
             )
         }
 
         Row(verticalAlignment = Alignment.CenterVertically) {
             Checkbox(checked = isGoingHome, onCheckedChange = { isGoingHome = it })
             Text("Going Home Load")
+        }
+
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Checkbox(checked = isTrainingWeek, onCheckedChange = { isTrainingWeek = it })
+            Text("Training Week Load (Adds Weekly Bonus)")
         }
 
         if (editingLoad == null) {
@@ -316,7 +323,10 @@ fun LoadEntryScreen(
                 onDismissRequest = { showDatePicker = false },
                 confirmButton = {
                     TextButton(onClick = {
-                        selectedDateMillis = datePickerState.selectedDateMillis ?: selectedDateMillis
+                        val picked = datePickerState.selectedDateMillis
+                        if (picked != null) {
+                            selectedDateMillis = picked + (12 * 3600 * 1000L)
+                        }
                         showDatePicker = false
                     }) { Text("OK") }
                 }
@@ -327,8 +337,20 @@ fun LoadEntryScreen(
 
         Text("Revenue Details", style = MaterialTheme.typography.titleMedium)
         Row(horizontalArrangement = Arrangement.spacedBy(space = 8.dp)) {
-            OutlinedTextField(value = ratePct, onValueChange = { input -> ratePct = input.filter { it.isDigit() || (it == '.') } }, label = { Text("Pay Split (%)") }, modifier = Modifier.weight(weight = 1f))
-            OutlinedTextField(value = loadPay, onValueChange = { input -> loadPay = input.filter { it.isDigit() || (it == '.') } }, label = { Text("Gross Pay ($)") }, modifier = Modifier.weight(weight = 1f))
+            OutlinedTextField(
+                value = ratePct,
+                onValueChange = { input -> ratePct = input.filter { it.isDigit() || (it == '.') } },
+                label = { Text("Pay Split (%)") },
+                modifier = Modifier.weight(weight = 1f),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Next)
+            )
+            OutlinedTextField(
+                value = loadPay,
+                onValueChange = { input -> loadPay = input.filter { it.isDigit() || (it == '.') } },
+                label = { Text("Gross Pay ($)") },
+                modifier = Modifier.weight(weight = 1f),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Done)
+            )
         }
 
         ExposedDropdownMenuBox(
@@ -385,30 +407,31 @@ fun LoadEntryScreen(
                 val dispL = dLoaded.toDoubleOrNull() ?: 0.0
 
                 if (isManualEntry) {
-                    val manualData = CurrentLoad(
-                        proNumber = proNum.trim(),
-                        dispatchedBounceMiles = dispB,
-                        dispatchedLoadedMiles = dispL,
-                        bounceMilesStart = 0.0,
-                        bounceMilesEnd = if (matchDispatched) dispB else manualActBounce.toDoubleOrNull() ?: 0.0,
-                        loadedMilesStart = 0.0,
-                        loadedMilesEnd = if (matchDispatched) dispL else manualActLoaded.toDoubleOrNull() ?: 0.0,
-                        percentageRate = ratePct.toDoubleOrNull() ?: 31.0,
-                        loadPay = loadPay.toDoubleOrNull() ?: 0.0,
-                        tarpType = tChar,
-                        isPreTarped = isPreTarped,
-                        isGoingHome = isGoingHome,
-                        pickupTimestamp = selectedDateMillis,
-                        tripState = "COMPLETED",
-                        tripNotes = tripNotes.ifBlank { null },
-                        deliveryTimestamp = selectedDateMillis + 3600000,
-                        shipperName = sName,
-                        shipperLat = sLat,
-                        shipperLong = sLong,
-                        consigneeName = cName,
-                        consigneeLat = cLat,
-                        consigneeLong = cLong
-                    )
+                        val manualData = CurrentLoad(
+                            proNumber = proNum.trim(),
+                            dispatchedBounceMiles = dispB,
+                            dispatchedLoadedMiles = dispL,
+                            bounceMilesStart = 0.0,
+                            bounceMilesEnd = if (matchDispatched) dispB else manualActBounce.toDoubleOrNull() ?: 0.0,
+                            loadedMilesStart = 0.0,
+                            loadedMilesEnd = if (matchDispatched) dispL else manualActLoaded.toDoubleOrNull() ?: 0.0,
+                            percentageRate = ratePct.toDoubleOrNull() ?: 31.0,
+                            loadPay = loadPay.toDoubleOrNull() ?: 0.0,
+                            tarpType = tChar,
+                            isPreTarped = isPreTarped,
+                            isGoingHome = isGoingHome,
+                            isTrainingWeek = isTrainingWeek,
+                            pickupTimestamp = selectedDateMillis,
+                            tripState = "COMPLETED",
+                            tripNotes = tripNotes.ifBlank { null },
+                            deliveryTimestamp = selectedDateMillis + 3600000,
+                            shipperName = sName,
+                            shipperLat = sLat,
+                            shipperLong = sLong,
+                            consigneeName = cName,
+                            consigneeLat = cLat,
+                            consigneeLong = cLong
+                        )
                     processSave(manualData)
                 } else {
                     val draftData = CurrentLoad(
@@ -424,6 +447,7 @@ fun LoadEntryScreen(
                         tarpType = tChar,
                         isPreTarped = isPreTarped,
                         isGoingHome = isGoingHome,
+                        isTrainingWeek = isTrainingWeek,
                         pickupTimestamp = System.currentTimeMillis(),
                         tripState = "ACTIVE_BOUNCE",
                         tripNotes = tripNotes.ifBlank { null },

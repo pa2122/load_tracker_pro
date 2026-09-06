@@ -4,10 +4,10 @@
     <selectionStates>
       <SelectionState runConfigName="app">
         <option name="selectionMode" value="DROPDOWN" />
-        <DropdownSelection timestamp="2026-09-05T18:01:45.790045Z">
+        <DropdownSelection timestamp="2026-09-05T19:57:10.972868100Z">
           <Target type="DEFAULT_BOOT">
             <handle>
-              <DeviceId pluginId="LocalEmulator" identifier="path=C:\Users\paul\.android\avd\samsungS25.avd" />
+              <DeviceId pluginId="Wireless" identifier="serviceName=adb-R5GYB3TNYSZ-dwAYmT" />
             </handle>
           </Target>
         </DropdownSelection>

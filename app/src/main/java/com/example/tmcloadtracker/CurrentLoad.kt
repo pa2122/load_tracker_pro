@@ -27,7 +27,9 @@ data class CurrentLoad(
     val shipperLong: Double? = null,
     val consigneeName: String? = null,
     val consigneeLat: Double? = null,
-    val consigneeLong: Double? = null
+    val consigneeLong: Double? = null,
+    // 📍 New field added in Version 7
+    val isTrainingWeek: Boolean = false
 )
 
 @Entity(tableName = "trip_breadcrumbs")
