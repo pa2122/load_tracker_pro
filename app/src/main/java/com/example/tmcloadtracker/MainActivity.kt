@@ -1,11 +1,14 @@
 package com.example.tmcloadtracker
 
 import android.Manifest
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.location.Geocoder
 import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -141,6 +144,24 @@ class MainActivity : ComponentActivity() {
                     var savedFlatTrainerPayRate by remember { mutableStateOf(value = "200.0") }
 
                     var showDevOptionsDialog by remember { mutableStateOf(value = false) }
+                    var showTesterFeedbackDialog by remember { mutableStateOf(value = false) }
+
+                    val currentDeviceId = remember {
+                        try {
+                            Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID) ?: "unknown"
+                        } catch (_: Exception) {
+                            "unknown"
+                        }
+                    }
+
+                    val devPrefs = remember { getSharedPreferences("dev_prefs", MODE_PRIVATE) }
+                    var isDeviceAuthorized by remember {
+                        val savedAuthorizedDevices = devPrefs.getStringSet("authorized_devices", emptySet()) ?: emptySet()
+                        mutableStateOf(
+                            BuildConfig.DEBUG || savedAuthorizedDevices.contains(currentDeviceId)
+                        )
+                    }
+                    var newTesterDeviceId by remember { mutableStateOf(value = "") }
 
                     fun resolveHomeAddress(input: String) {
                         val lines = input.lines().filter { it.isNotBlank() }
@@ -494,6 +515,23 @@ class MainActivity : ComponentActivity() {
                                     Button(
                                         onClick = {
                                             scope.launch { drawerState.close() }
+                                            showTesterFeedbackDialog = true
+                                        },
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                                        ),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Icon(Icons.Default.Edit, contentDescription = null)
+                                        Spacer(modifier = Modifier.width(width = 6.dp))
+                                        Text("🐛 Report Bug / Feedback")
+                                    }
+
+                                    HorizontalDivider()
+                                    Button(
+                                        onClick = {
+                                            scope.launch { drawerState.close() }
                                             triggerHelpView.value = true
                                         },
                                         colors = ButtonDefaults.buttonColors(
@@ -504,18 +542,20 @@ class MainActivity : ComponentActivity() {
                                         Text("Open Driver's Guide")
                                     }
 
-                                    Spacer(modifier = Modifier.weight(weight = 1f))
-                                    Button(
-                                        onClick = { showDevOptionsDialog = true },
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                                            contentColor = MaterialTheme.colorScheme.onSurfaceVariant
-                                        ),
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
-                                        Icon(Icons.Default.Build, contentDescription = null)
-                                        Spacer(modifier = Modifier.width(width = 6.dp))
-                                        Text("🛠️ Developer Options")
+                                    if (isDeviceAuthorized || BuildConfig.DEBUG) {
+                                        Spacer(modifier = Modifier.weight(weight = 1f))
+                                        Button(
+                                            onClick = { showDevOptionsDialog = true },
+                                            colors = ButtonDefaults.buttonColors(
+                                                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                                contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                                            ),
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Icon(Icons.Default.Build, contentDescription = null)
+                                            Spacer(modifier = Modifier.width(width = 6.dp))
+                                            Text("🛠️ Developer Options")
+                                        }
                                     }
                                 }
                             }
@@ -756,9 +796,12 @@ class MainActivity : ComponentActivity() {
                             onDismissRequest = { showDevOptionsDialog = false },
                             title = { Text("🛠️ Developer Options") },
                             text = {
+                                val devScrollState = rememberScrollState()
                                 Column(
-                                    verticalArrangement = Arrangement.spacedBy(space = 12.dp),
-                                    modifier = Modifier.fillMaxWidth()
+                                    verticalArrangement = Arrangement.spacedBy(space = 10.dp),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .verticalScroll(devScrollState)
                                 ) {
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
@@ -788,6 +831,62 @@ class MainActivity : ComponentActivity() {
                                         Spacer(modifier = Modifier.width(width = 6.dp))
                                         Text("Developer Notes & Bug Tracker")
                                     }
+
+                                    HorizontalDivider()
+
+                                    Text("Device Authorization", style = MaterialTheme.typography.titleSmall)
+                                    Text(
+                                        "Device ID: $currentDeviceId",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.secondary
+                                    )
+
+                                    Button(
+                                        onClick = {
+                                            val currentSet = devPrefs.getStringSet("authorized_devices", emptySet())?.toMutableSet() ?: mutableSetOf()
+                                            if (isDeviceAuthorized && !BuildConfig.DEBUG) {
+                                                currentSet.remove(currentDeviceId)
+                                                isDeviceAuthorized = false
+                                                Toast.makeText(this@MainActivity, "Device Deauthorized", Toast.LENGTH_SHORT).show()
+                                            } else {
+                                                currentSet.add(currentDeviceId)
+                                                isDeviceAuthorized = true
+                                                Toast.makeText(this@MainActivity, "This Device Authorized for Dev Mode!", Toast.LENGTH_SHORT).show()
+                                            }
+                                            devPrefs.edit().putStringSet("authorized_devices", currentSet).apply()
+                                        },
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = if (isDeviceAuthorized) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.secondaryContainer,
+                                            contentColor = if (isDeviceAuthorized) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSecondaryContainer
+                                        ),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text(if (isDeviceAuthorized) "✅ Device Authorized (Tap to Toggle)" else "📱 Authorize This Device")
+                                    }
+
+                                    OutlinedTextField(
+                                        value = newTesterDeviceId,
+                                        onValueChange = { newTesterDeviceId = it },
+                                        label = { Text("Authorize Tester Device ID") },
+                                        placeholder = { Text("Paste tester Device ID...") },
+                                        singleLine = true,
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+
+                                    if (newTesterDeviceId.isNotBlank()) {
+                                        Button(
+                                            onClick = {
+                                                val currentSet = devPrefs.getStringSet("authorized_devices", emptySet())?.toMutableSet() ?: mutableSetOf()
+                                                currentSet.add(newTesterDeviceId.trim())
+                                                devPrefs.edit().putStringSet("authorized_devices", currentSet).apply()
+                                                Toast.makeText(this@MainActivity, "Authorized Tester Device: ${newTesterDeviceId.trim()}", Toast.LENGTH_SHORT).show()
+                                                newTesterDeviceId = ""
+                                            },
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Text("➕ Authorize Tester Device")
+                                        }
+                                    }
                                 }
                             },
                             confirmButton = {
@@ -795,6 +894,12 @@ class MainActivity : ComponentActivity() {
                                     Text("Close")
                                 }
                             }
+                        )
+                    }
+
+                    if (showTesterFeedbackDialog) {
+                        TesterFeedbackDialog(
+                            onDismiss = { showTesterFeedbackDialog = false }
                         )
                     }
                 }
