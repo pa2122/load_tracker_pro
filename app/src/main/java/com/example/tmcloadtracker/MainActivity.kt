@@ -39,7 +39,6 @@ import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -175,6 +174,23 @@ class MainActivity : ComponentActivity() {
                     val scope = rememberCoroutineScope()
 
                     val savedLoads by viewModel.allLoads.collectAsState(initial = emptyList())
+
+                    val currentTargetFriday = remember {
+                        getPayPeriodDate(System.currentTimeMillis())
+                    }
+
+                    val currentWeekHasTrainingLoad = remember(savedLoads, currentTargetFriday) {
+                        savedLoads.any { load ->
+                            (getPayPeriodDate(load.pickupTimestamp) == currentTargetFriday) && load.isTrainingWeek
+                        }
+                    }
+
+                    LaunchedEffect(key1 = currentWeekHasTrainingLoad) {
+                        if (currentWeekHasTrainingLoad) {
+                            isTrainingActive = true
+                            savedIsTrainingActive = true
+                        }
+                    }
 
                     LaunchedEffect(key1 = savedLoads) {
                         val active = savedLoads.find { 

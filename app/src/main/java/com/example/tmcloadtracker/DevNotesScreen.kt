@@ -84,7 +84,7 @@ fun DevNotesScreen(
     var githubRepo by remember { mutableStateOf(prefs.getString("gh_repo", "pa2122/android_apps") ?: "pa2122/android_apps") }
     var githubToken by remember {
         mutableStateOf(
-            if (savedToken.isNotBlank()) savedToken else BuildConfig.DEFAULT_GITHUB_TOKEN
+            savedToken.ifBlank { BuildConfig.DEFAULT_GITHUB_TOKEN }
         )
     }
     var issueTitle by remember { mutableStateOf("") }
@@ -332,7 +332,7 @@ fun DevNotesScreen(
                                 isTestingConnection = true
                                 connectionStatusText = "🟡 Testing Connection..."
                                 scope.launch {
-                                    val (success, msg) = testGitHubConnection(githubRepo, githubToken)
+                                    val (_, msg) = testGitHubConnection(githubRepo, githubToken)
                                     isTestingConnection = false
                                     connectionStatusText = msg
                                 }

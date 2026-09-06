@@ -107,21 +107,21 @@ class TrackingService : Service() {
 
     private fun saveBreadcrumb(loc: Location) {
         val pro = activeProNumber ?: return
-                        serviceScope.launch {
-                            try {
-                                val db = AppDatabase.getDatabase(applicationContext)
-                                db.loadDao().insertBreadcrumb(
-                                    TripBreadcrumb(
-                                        proNumber = pro,
-                                        latitude = loc.latitude,
-                                        longitude = loc.longitude,
-                                        timestamp = System.currentTimeMillis(),
-                                    ),
-                                )
-                            } catch (e: Exception) {
-                                e.printStackTrace()
-                            }
-                        }
+        serviceScope.launch {
+            try {
+                val db = AppDatabase.getDatabase(applicationContext)
+                db.loadDao().insertBreadcrumb(
+                    TripBreadcrumb(
+                        proNumber = pro,
+                        latitude = loc.latitude,
+                        longitude = loc.longitude,
+                        timestamp = System.currentTimeMillis(),
+                    ),
+                )
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
     }
 
     private fun checkGeofence(currentLocation: Location) {
