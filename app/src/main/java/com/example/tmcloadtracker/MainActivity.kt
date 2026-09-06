@@ -131,6 +131,7 @@ class MainActivity : ComponentActivity() {
                     var homeRawPaste by remember { mutableStateOf(value = "15381 TX-198, Mabank, TX 75147") }
                     var homeLat by remember { mutableStateOf<Double?>(value = 32.3021) }
                     var homeLong by remember { mutableStateOf<Double?>(value = -96.1116) }
+                    var isHomeVerified by remember { mutableStateOf(value = true) }
 
                     var savedDefPercent by remember { mutableStateOf(value = "31.0") }
                     var savedTarp8Pay by remember { mutableStateOf(value = "50.0") }
@@ -153,6 +154,7 @@ class MainActivity : ComponentActivity() {
                                 val loc = results[0]
                                 homeLat = loc.latitude
                                 homeLong = loc.longitude
+                                isHomeVerified = true
                                 if (lines.size > 1) homeBase = lines[0].trim()
                             }
                         } catch (e: Exception) {
@@ -356,7 +358,12 @@ class MainActivity : ComponentActivity() {
 
                                     OutlinedTextField(
                                         value = homeRawPaste,
-                                        onValueChange = { homeRawPaste = it },
+                                        onValueChange = {
+                                            homeRawPaste = it
+                                            isHomeVerified = false
+                                            homeLat = null
+                                            homeLong = null
+                                        },
                                         label = { Text("Home Address (Paste)") },
                                         modifier = Modifier.fillMaxWidth(),
                                         minLines = 2
@@ -368,10 +375,10 @@ class MainActivity : ComponentActivity() {
                                     ) {
                                         Button(
                                             onClick = { resolveHomeAddress(homeRawPaste) },
-                                            enabled = homeRawPaste.isNotBlank(),
+                                            enabled = homeRawPaste.isNotBlank() && !isHomeVerified,
                                             modifier = Modifier.weight(weight = 1f)
                                         ) {
-                                            Text("Verify Address")
+                                            Text(if (isHomeVerified) "Verified ✅" else "Verify Address")
                                         }
 
                                         Button(
@@ -381,6 +388,7 @@ class MainActivity : ComponentActivity() {
                                                 if (lastLat != null && lastLong != null) {
                                                     homeLat = lastLat
                                                     homeLong = lastLong
+                                                    isHomeVerified = true
                                                 }
                                             },
                                             colors = ButtonDefaults.buttonColors(

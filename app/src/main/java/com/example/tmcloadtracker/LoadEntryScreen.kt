@@ -60,7 +60,6 @@ import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import java.time.DayOfWeek
 import java.time.Instant
-import java.time.ZoneId
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -120,11 +119,13 @@ fun LoadEntryScreen(
     var sName by remember { mutableStateOf(value = editingLoad?.shipperName ?: "") }
     var sLat by remember { mutableStateOf(value = editingLoad?.shipperLat) }
     var sLong by remember { mutableStateOf(value = editingLoad?.shipperLong) }
+    var isShipperVerified by remember { mutableStateOf(value = editingLoad?.shipperLat != null) }
 
     var cRawPaste by remember { mutableStateOf(value = "") }
     var cName by remember { mutableStateOf(value = editingLoad?.consigneeName ?: "") }
     var cLat by remember { mutableStateOf(value = editingLoad?.consigneeLat) }
     var cLong by remember { mutableStateOf(value = editingLoad?.consigneeLong) }
+    var isConsigneeVerified by remember { mutableStateOf(value = editingLoad?.consigneeLat != null) }
 
     fun resolveAddress(input: String, isShipper: Boolean) {
         val lines = input.lines().filter { it.isNotBlank() }
@@ -148,9 +149,11 @@ fun LoadEntryScreen(
                 if (isShipper) {
                     sLat = loc.latitude
                     sLong = loc.longitude
+                    isShipperVerified = true
                 } else {
                     cLat = loc.latitude
                     cLong = loc.longitude
+                    isConsigneeVerified = true
                 }
             }
         } catch (e: Exception) {
@@ -384,7 +387,12 @@ fun LoadEntryScreen(
         Text("Shipper Details (Required)", style = MaterialTheme.typography.titleMedium)
         OutlinedTextField(
             value = sRawPaste,
-            onValueChange = { input -> sRawPaste = input },
+            onValueChange = { input ->
+                sRawPaste = input
+                isShipperVerified = false
+                sLat = null
+                sLong = null
+            },
             label = { Text("Paste Shipper Name & Address") },
             modifier = Modifier.fillMaxWidth(),
             minLines = 3
@@ -396,13 +404,13 @@ fun LoadEntryScreen(
         ) {
             Column(modifier = Modifier.weight(weight = 1f)) {
                 Text(text = if (sName.isNotEmpty()) "Name: $sName" else "Name: Not Parsed", style = MaterialTheme.typography.bodySmall)
-                Text(text = if (sLat != null) "Location: Fixed 📍" else "Location: Pending", style = MaterialTheme.typography.bodySmall, color = if (sLat != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error)
+                Text(text = if (isShipperVerified) "Location: Fixed 📍" else "Location: Pending", style = MaterialTheme.typography.bodySmall, color = if (isShipperVerified) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error)
             }
             Button(
                 onClick = { resolveAddress(input = sRawPaste, isShipper = true) },
-                enabled = sRawPaste.isNotBlank(),
+                enabled = sRawPaste.isNotBlank() && !isShipperVerified,
             ) {
-                Text("Verify")
+                Text(if (isShipperVerified) "Verified ✅" else "Verify")
             }
         }
 
@@ -411,7 +419,12 @@ fun LoadEntryScreen(
         Text("Consignee Details (Required)", style = MaterialTheme.typography.titleMedium)
         OutlinedTextField(
             value = cRawPaste,
-            onValueChange = { input -> cRawPaste = input },
+            onValueChange = { input ->
+                cRawPaste = input
+                isConsigneeVerified = false
+                cLat = null
+                cLong = null
+            },
             label = { Text("Paste Consignee Name & Address") },
             modifier = Modifier.fillMaxWidth(),
             minLines = 3
@@ -423,13 +436,13 @@ fun LoadEntryScreen(
         ) {
             Column(modifier = Modifier.weight(weight = 1f)) {
                 Text(text = if (cName.isNotEmpty()) "Name: $cName" else "Name: Not Parsed", style = MaterialTheme.typography.bodySmall)
-                Text(text = if (cLat != null) "Location: Fixed 📍" else "Location: Pending", style = MaterialTheme.typography.bodySmall, color = if (cLat != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error)
+                Text(text = if (isConsigneeVerified) "Location: Fixed 📍" else "Location: Pending", style = MaterialTheme.typography.bodySmall, color = if (isConsigneeVerified) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error)
             }
             Button(
                 onClick = { resolveAddress(input = cRawPaste, isShipper = false) },
-                enabled = cRawPaste.isNotBlank(),
+                enabled = cRawPaste.isNotBlank() && !isConsigneeVerified,
             ) {
-                Text("Verify")
+                Text(if (isConsigneeVerified) "Verified ✅" else "Verify")
             }
         }
 
