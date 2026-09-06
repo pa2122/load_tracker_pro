@@ -1,5 +1,6 @@
 package com.example.tmcloadtracker
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -18,13 +19,13 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -52,12 +53,23 @@ fun FacilitySearchScreen(
     var searchQuery by remember { mutableStateOf("") }
     val filteredFacilities = facilities.filter { it.contains(searchQuery, ignoreCase = true) }
 
+    // Intercept back button when a facility is selected to return to facility list
+    BackHandler(enabled = selectedName.isNotBlank()) {
+        viewModel.selectFacility("")
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Facility Insights") },
+                title = { Text(selectedName.ifBlank { "Facility Insights" }) },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    IconButton(onClick = {
+                        if (selectedName.isNotBlank()) {
+                            viewModel.selectFacility("")
+                        } else {
+                            onBack()
+                        }
+                    }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 }
@@ -71,49 +83,73 @@ fun FacilitySearchScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Text("Review historical notes for shippers and receivers.", style = MaterialTheme.typography.bodyMedium)
+            if (selectedName.isBlank()) {
+                Text("Review historical notes for shippers and receivers.", style = MaterialTheme.typography.bodyMedium)
 
-            OutlinedTextField(
-                value = searchQuery,
-                onValueChange = { searchQuery = it },
-                label = { Text("Search Facility Name") },
-                modifier = Modifier.fillMaxWidth(),
-                trailingIcon = { Icon(Icons.Default.Search, contentDescription = null) }
-            )
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    label = { Text("Search Facility Name") },
+                    modifier = Modifier.fillMaxWidth(),
+                    trailingIcon = { Icon(Icons.Default.Search, contentDescription = null) }
+                )
 
-            if (selectedName.isBlank() || searchQuery.isNotEmpty()) {
-                Text("Select a Facility:", style = MaterialTheme.typography.titleSmall)
-                LazyColumn(
-                    modifier = Modifier.weight(0.4f),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    items(filteredFacilities) { name ->
-                        Card(
-                            modifier = Modifier.fillMaxWidth().clickable { 
-                                viewModel.selectFacility(name)
-                                searchQuery = "" // Clear search to focus on results
-                            },
-                            colors = CardDefaults.cardColors(
-                                containerColor = if (name == selectedName) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant
-                            )
-                        ) {
-                            Text(name, modifier = Modifier.padding(12.dp))
-                        }
-                    }
-                }
-            }
+                Text("Select a Facility (${filteredFacilities.size}):", style = MaterialTheme.typography.titleSmall)
 
-            if (selectedName.isNotBlank()) {
-                HorizontalDivider()
-                Text("Historical Notes: $selectedName", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
-                
-                if (notes.isEmpty()) {
+                if (filteredFacilities.isEmpty()) {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text("No notes found for this facility.", color = MaterialTheme.colorScheme.secondary)
+                        Text(
+                            if (facilities.isEmpty()) "No saved facilities found in load logs." else "No matching facilities found.",
+                            color = MaterialTheme.colorScheme.secondary
+                        )
                     }
                 } else {
                     LazyColumn(
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier.fillMaxSize(),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(filteredFacilities) { name ->
+                            Card(
+                                modifier = Modifier.fillMaxWidth().clickable { 
+                                    viewModel.selectFacility(name)
+                                    searchQuery = ""
+                                },
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+                                )
+                            ) {
+                                Text(
+                                    name,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    modifier = Modifier.padding(16.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            } else {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        "Historical Notes",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    TextButton(onClick = { viewModel.selectFacility("") }) {
+                        Text("← All Facilities")
+                    }
+                }
+
+                if (notes.isEmpty()) {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text("No notes recorded for $selectedName.", color = MaterialTheme.colorScheme.secondary)
+                    }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         items(notes) { note ->
@@ -125,12 +161,15 @@ fun FacilitySearchScreen(
                             }
                             Card(
                                 modifier = Modifier.fillMaxWidth(),
-                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                             ) {
                                 Column(modifier = Modifier.padding(16.dp)) {
-                                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                        Text("PRO #${note.proNumber}", style = MaterialTheme.typography.labelLarge)
-                                        Text(date, style = MaterialTheme.typography.labelSmall)
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text("PRO #${note.proNumber}", style = MaterialTheme.typography.titleSmall)
+                                        Text(date, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
                                     }
                                     Spacer(modifier = Modifier.height(8.dp))
                                     Text(note.tripNotes, style = MaterialTheme.typography.bodyMedium)

@@ -14,8 +14,8 @@ interface LoadDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertLoad(load: CurrentLoad)
 
-    // Fetches all past records from your phone's drive, sorting the newest loads to the top.
-    @Query("SELECT * FROM trucking_loads ORDER BY proNumber DESC")
+    // Fetches all past records from your phone's drive, sorting the newest loads to the top by pickup date.
+    @Query("SELECT * FROM trucking_loads ORDER BY pickupTimestamp DESC")
     fun getAllLoads(): Flow<List<CurrentLoad>>
 
     // Deletes an entry permanently from your phone's local storage file.

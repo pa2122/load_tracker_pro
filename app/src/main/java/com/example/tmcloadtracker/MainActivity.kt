@@ -103,15 +103,15 @@ class MainActivity : ComponentActivity() {
                     var tripToEdit by remember { mutableStateOf<CurrentLoad?>(value = null) }
                     var tripForMap by remember { mutableStateOf<CurrentLoad?>(value = null) }
 
-                    var isProUser by remember { mutableStateOf(value = false) }
+                    var isProUser by remember { mutableStateOf(value = true) }
 
                     var defPercent by remember { mutableStateOf(value = "31.0") }
                     var tarp8Pay by remember { mutableStateOf(value = "50.0") }
                     var tarp4Pay by remember { mutableStateOf(value = "30.0") }
-                    var homeBase by remember { mutableStateOf(value = "") }
-                    var homeRawPaste by remember { mutableStateOf(value = "") }
-                    var homeLat by remember { mutableStateOf<Double?>(value = null) }
-                    var homeLong by remember { mutableStateOf<Double?>(value = null) }
+                    var homeBase by remember { mutableStateOf(value = "15381 TX-198, Mabank, TX 75147") }
+                    var homeRawPaste by remember { mutableStateOf(value = "15381 TX-198, Mabank, TX 75147") }
+                    var homeLat by remember { mutableStateOf<Double?>(value = 32.3021) }
+                    var homeLong by remember { mutableStateOf<Double?>(value = -96.1116) }
 
                     fun resolveHomeAddress(input: String) {
                         val lines = input.lines().filter { it.isNotBlank() }
@@ -125,12 +125,15 @@ class MainActivity : ComponentActivity() {
                                 val loc = results[0]
                                 homeLat = loc.latitude
                                 homeLong = loc.longitude
-                                // Also update the display name if first line looks like a label
                                 if (lines.size > 1) homeBase = lines[0].trim()
                             }
                         } catch (e: Exception) {
                             e.printStackTrace()
                         }
+                    }
+
+                    LaunchedEffect(Unit) {
+                        resolveHomeAddress("15381 TX-198, Mabank, TX 75147")
                     }
 
                     var isTrainingActive by remember { mutableStateOf(value = false) }
@@ -567,6 +570,7 @@ class MainActivity : ComponentActivity() {
                                             LoadEntryScreen(
                                                 initialPercentage = defPercent,
                                                 initialIsTraining = isTrainingActive,
+                                                isProUser = isProUser,
                                                 editingLoad = tripToEdit,
                                                 onSaveClick = { finalizedLoadEntity ->
                                                     if (finalizedLoadEntity.tripState.startsWith(prefix = "ACTIVE")) {

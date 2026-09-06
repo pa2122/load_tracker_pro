@@ -18,7 +18,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
 import com.google.maps.android.compose.GoogleMap
@@ -35,11 +34,15 @@ fun RouteMapScreen(
     homeLocation: LatLng?,
     onBack: () -> Unit,
 ) {
-    val breadcrumbs by if (load != null) {
-        viewModel.getBreadcrumbs(load.proNumber).collectAsState(initial = emptyList())
-    } else {
-        viewModel.allBreadcrumbs.collectAsState(initial = emptyList())
+    // Correctly derive flow based on whether load is selected or global heatmap is active
+    val breadcrumbsFlow = remember(load?.proNumber) {
+        if (load != null) {
+            viewModel.getBreadcrumbs(load.proNumber)
+        } else {
+            viewModel.allBreadcrumbs
+        }
     }
+    val breadcrumbs by breadcrumbsFlow.collectAsState(initial = emptyList())
     
     val paths = remember(breadcrumbs) {
         breadcrumbs.groupBy { it.proNumber }.values.map { tripPoints ->
@@ -47,16 +50,19 @@ fun RouteMapScreen(
         }
     }
 
-    val cameraPositionState = rememberCameraPositionState {
+    // Re-initialize camera position whenever target load changes
+    val cameraPositionState = rememberCameraPositionState(key = load?.proNumber) {
         val center = if (load != null) {
-            val lat = load.shipperLat ?: 39.8283
-            val lng = load.shipperLong ?: -98.5795
+            val lat = load.shipperLat ?: homeLocation?.latitude ?: 39.8283
+            val lng = load.shipperLong ?: homeLocation?.longitude ?: -98.5795
             LatLng(lat, lng)
         } else {
             LatLng(39.8283, -98.5795)
         }
         position = CameraPosition.fromLatLngZoom(center, if (load != null) 7f else 4f)
     }
+
+    val hasMapContent = (paths.isNotEmpty()) || (load != null) || (homeLocation != null)
 
     Scaffold(
         topBar = {
@@ -71,9 +77,9 @@ fun RouteMapScreen(
         }
     ) { innerPadding ->
         Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
-            if (paths.isEmpty() && (load?.shipperLat == null)) {
+            if (!hasMapContent) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("No GPS data available.", color = MaterialTheme.colorScheme.secondary)
+                    Text("No GPS data recorded yet.", color = MaterialTheme.colorScheme.secondary)
                 }
             } else {
                 GoogleMap(

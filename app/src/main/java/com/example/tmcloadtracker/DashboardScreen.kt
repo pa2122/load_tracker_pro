@@ -61,7 +61,11 @@ fun DashboardScreen(
     onDismissHelpDialog: () -> Unit,
 ) {
     val activeTrip = pastLoads.find { it.tripState != "COMPLETED" }
-    val completedLoads = pastLoads.filter { it.tripState == "COMPLETED" }
+    val currentTargetFriday = getPayPeriodDate(System.currentTimeMillis())
+    val completedLoads = pastLoads.asSequence()
+        .filter { (it.tripState == "COMPLETED") && (getPayPeriodDate(it.pickupTimestamp) == currentTargetFriday) }
+        .sortedByDescending { it.pickupTimestamp }
+        .toList()
 
     var showCompletionDialog by remember { mutableStateOf(value = false) }
     var showHistoryDetailsDialog by remember { mutableStateOf(value = false) }
@@ -283,7 +287,7 @@ fun DashboardScreen(
 
                 item {
                     Text(
-                        "Past Load Logs (${completedLoads.size})",
+                        "Current Week Load Logs (${completedLoads.size})",
                         style = MaterialTheme.typography.titleMedium
                     )
                 }
@@ -307,7 +311,7 @@ fun DashboardScreen(
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                "No completed logs recorded yet.",
+                                "No completed logs recorded for this pay week.",
                                 color = MaterialTheme.colorScheme.secondary
                             )
                         }

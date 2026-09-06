@@ -2,6 +2,10 @@ package com.example.tmcloadtracker
 
 import android.content.Intent
 import android.location.Geocoder
+import android.net.Uri
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -11,16 +15,19 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.DropdownMenuItem
@@ -49,6 +56,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.text.TextRecognition
+import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import java.time.DayOfWeek
 import java.time.Instant
 import java.time.ZoneId
@@ -61,6 +71,7 @@ import java.util.Locale
 fun LoadEntryScreen(
     initialPercentage: String,
     initialIsTraining: Boolean = false,
+    isProUser: Boolean = true,
     editingLoad: CurrentLoad? = null,
     onSaveClick: (CurrentLoad) -> Unit,
     onCancelClick: () -> Unit,
@@ -151,6 +162,162 @@ fun LoadEntryScreen(
     var showFridayReminder by remember { mutableStateOf(value = false) }
     var pendingLoadSave by remember { mutableStateOf<CurrentLoad?>(value = null) }
 
+    fun processOcrText(rawText: String) {
+        val lines = rawText.lines().map { it.trim() }.filter { it.isNotBlank() }
+
+        // 1. Extract PRO #
+        val proRegex = Regex("""(?:PRO|Order|Load|Trip)\s*#?\s*:?\s*(\d{4,12})""", RegexOption.IGNORE_CASE)
+        val proMatch = proRegex.find(rawText)
+        if (proMatch != null && proMatch.groupValues.size > 1) {
+            proNum = proMatch.groupValues[1]
+        } else {
+            val fallbackPro = Regex("""\b\d{6,10}\b""").find(rawText)
+            if (fallbackPro != null) proNum = fallbackPro.value
+        }
+
+        // 2. Extract Load Pay
+        val payRegex = Regex("""(?:Pay|Gross|Rate|Linehaul|Total|Amount)\D*?\$?\s*([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]{2})?)""", RegexOption.IGNORE_CASE)
+        val payMatch = payRegex.find(rawText)
+        if (payMatch != null && payMatch.groupValues.size > 1) {
+            val cleanPay = payMatch.groupValues[1].replace(",", "")
+            loadPay = cleanPay
+        } else {
+            val dollarMatch = Regex("""\$?\s*([1-9][0-9]{2,4}(?:\.[0-9]{2})?)""").find(rawText)
+            if (dollarMatch != null && dollarMatch.groupValues.size > 1) {
+                loadPay = dollarMatch.groupValues[1].replace(",", "")
+            }
+        }
+
+        // 3. Extract Dispatched Miles (Loaded Miles & Bounce/Deadhead Miles)
+        val numRegex = Regex("""\b\d{1,4}(?:\.\d+)?\b""")
+        var extractedLoaded: String? = null
+        var extractedBounce: String? = null
+
+        // Line-by-line inspection
+        for (i in lines.indices) {
+            val line = lines[i]
+            val lower = line.lowercase(Locale.US)
+
+            // Look for Loaded Miles
+            if (extractedLoaded == null && (lower.contains("loaded miles") || lower.contains("loaded mi") || lower.contains("loaded") || lower.contains("load miles") || lower.contains("trip miles"))) {
+                val match = numRegex.find(line)
+                if (match != null) {
+                    extractedLoaded = match.value
+                } else if (i + 1 < lines.size) {
+                    val nextLineMatch = numRegex.find(lines[i + 1])
+                    if (nextLineMatch != null) {
+                        extractedLoaded = nextLineMatch.value
+                    }
+                }
+            }
+
+            // Look for Bounce / Deadhead Miles
+            if (extractedBounce == null && (lower.contains("bounce miles") || lower.contains("bounce mi") || lower.contains("bounce") || lower.contains("deadhead miles") || lower.contains("deadhead") || lower.contains("dh miles") || lower.contains("dh"))) {
+                val match = numRegex.find(line)
+                if (match != null) {
+                    extractedBounce = match.value
+                } else if (i + 1 < lines.size) {
+                    val nextLineMatch = numRegex.find(lines[i + 1])
+                    if (nextLineMatch != null) {
+                        extractedBounce = nextLineMatch.value
+                    }
+                }
+            }
+        }
+
+        // Regex fallbacks if line-by-line check didn't capture a value
+        if (extractedLoaded == null) {
+            val loadedRegex = Regex("""(?:loaded\s*miles|loaded\s*mi|loaded|load\s*miles|trip\s*miles|distance)\s*[:=\-\s]*(\d{1,4}(?:\.\d+)?)""", RegexOption.IGNORE_CASE)
+            val match = loadedRegex.find(rawText)
+            if (match != null && match.groupValues.size > 1) {
+                extractedLoaded = match.groupValues[1]
+            }
+        }
+
+        if (extractedBounce == null) {
+            val bounceRegex = Regex("""(?:bounce\s*miles|bounce\s*mi|bounce|deadhead\s*miles|deadhead|dh\s*miles|dh|empty)\s*[:=\-\s]*(\d{1,4}(?:\.\d+)?)""", RegexOption.IGNORE_CASE)
+            val match = bounceRegex.find(rawText)
+            if (match != null && match.groupValues.size > 1) {
+                extractedBounce = match.groupValues[1]
+            }
+        }
+
+        if (extractedLoaded != null) dLoaded = extractedLoaded
+        if (extractedBounce != null) dBounce = extractedBounce
+
+        // 4. Extract Shipper & Consignee
+        var foundShipper = false
+        var foundConsignee = false
+        val shipperSb = StringBuilder()
+        val consigneeSb = StringBuilder()
+
+        for (i in lines.indices) {
+            val line = lines[i]
+            val lower = line.lowercase(Locale.US)
+            if (lower.contains("shipper") || lower.contains("pickup") || lower.contains("origin")) {
+                foundShipper = true
+                foundConsignee = false
+                val name = line.substringAfter(":").trim()
+                if (name.isNotBlank()) shipperSb.append(name).append("\n")
+                continue
+            }
+            if (lower.contains("consignee") || lower.contains("delivery") || lower.contains("destination") || lower.contains("drop")) {
+                foundConsignee = true
+                foundShipper = false
+                val name = line.substringAfter(":").trim()
+                if (name.isNotBlank()) consigneeSb.append(name).append("\n")
+                continue
+            }
+            if (foundShipper && shipperSb.lines().size < 4) {
+                shipperSb.append(line).append("\n")
+            }
+            if (foundConsignee && consigneeSb.lines().size < 4) {
+                consigneeSb.append(line).append("\n")
+            }
+        }
+
+        if (shipperSb.isNotBlank()) {
+            sRawPaste = shipperSb.toString().trim()
+            resolveAddress(sRawPaste, isShipper = true)
+        }
+        if (consigneeSb.isNotBlank()) {
+            cRawPaste = consigneeSb.toString().trim()
+            resolveAddress(cRawPaste, isShipper = false)
+        }
+    }
+
+    var isScanningOcr by remember { mutableStateOf(false) }
+
+    val imagePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            isScanningOcr = true
+            try {
+                val inputImage = InputImage.fromFilePath(ctx, uri)
+                val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
+                recognizer.process(inputImage)
+                    .addOnSuccessListener { visionText ->
+                        isScanningOcr = false
+                        val text = visionText.text
+                        if (text.isNotBlank()) {
+                            processOcrText(text)
+                            Toast.makeText(ctx, "Scan complete! Auto-filled fields from screenshot.", Toast.LENGTH_LONG).show()
+                        } else {
+                            Toast.makeText(ctx, "No text detected in selected image.", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                    .addOnFailureListener { e ->
+                        isScanningOcr = false
+                        Toast.makeText(ctx, "Failed to scan image: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
+                    }
+            } catch (e: Exception) {
+                isScanningOcr = false
+                Toast.makeText(ctx, "Error reading image: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
     fun processSave(load: CurrentLoad) {
         val dateToCheck = Instant.ofEpochMilli(load.pickupTimestamp)
             .atZone(ZoneOffset.UTC).toLocalDate()
@@ -171,6 +338,37 @@ fun LoadEntryScreen(
         verticalArrangement = Arrangement.spacedBy(space = 16.dp),
     ) {
         Text(if (editingLoad == null) "New Freight Load" else "Edit Freight Load", style = MaterialTheme.typography.headlineMedium)
+
+        if (editingLoad == null) {
+            Button(
+                onClick = {
+                    if (isProUser) {
+                        imagePickerLauncher.launch("image/*")
+                    } else {
+                        Toast.makeText(ctx, "OCR Screenshot Auto-Fill is a Pro feature. Unlock Pro in side menu.", Toast.LENGTH_LONG).show()
+                    }
+                },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                ),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                if (isScanningOcr) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Scanning Screenshot...")
+                } else {
+                    Icon(Icons.Default.Search, contentDescription = null)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(if (isProUser) "📷 Auto-Fill from Screenshot (Pro)" else "📷 Auto-Fill from Screenshot (Pro Locked)")
+                }
+            }
+        }
 
         OutlinedTextField(
             value = proNum,
