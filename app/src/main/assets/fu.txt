@@ -1,0 +1,43 @@
+# Load Tracker Pro — Future Upgrades & Roadmap (fu.txt)
+
+## 💰 3-Tier Freemium Monetization & Upgrade Architecture
+
+### Tier 1: Free Tier ($0.00 / Free Download)
+- **Target Audience**: Trial drivers, company drivers testing the app.
+- **Features**:
+  - Core PRO number load logging.
+  - Real-time GPS Odometer & Bounce / Loaded tracking.
+  - Friday-to-Thursday TMC payroll estimates (27% / 31% rates, tarp pay, trainer pay, deadhead bonus).
+  - CSV Payload History Export.
+
+### Tier 2: Pro Driver Tier ($9.99 One-Time / In-App Purchase)
+- **Target Audience**: Professional W2 Company Drivers.
+- **SKU ID**: `load_tracker_pro_driver` ($9.99)
+- **Features Unlocked**:
+  - 🗺️ **Individual Trip Route Maps & Global Route Heatmaps**.
+  - 🏢 **Facility Insights Search**: Historical gate codes, parking notes, and entrance instructions indexed by `[Business Name] — [City, State]`.
+  - ✏️ **Historical Record Editing**: Ability to edit completed loads to correct gross pay, tarping selections, and trip notes.
+
+### Tier 3: Owner-Operator Command Center ($19.99 One-Time / $10.00 Discounted Upgrade)
+- **Target Audience**: Independent Contractors, Lease Operators, 1099 Drivers.
+- **SKU IDs**:
+  - `load_tracker_owner_operator` ($19.99 direct unlock)
+  - `load_tracker_pro_to_owner_op_upgrade` ($10.00 discounted upgrade for drivers who previously bought Pro Driver)
+- **Features Unlocked**:
+  - 📊 **Live Profit & Loss (P&L) Dashboard**: Net Operating Profit = Gross Load Pay - (Fuel + Truck Expenses + Tolls + Fixed Costs).
+  - 📈 **Cost-Per-Mile (CPM) & Margin Analytics**: Live Cost-Per-Mile vs Revenue-Per-Mile calculation.
+  - ⛽ **1-Tap Fuel & Maintenance Logger**: Diesel fill-ups, gallons, station discounts, and truck maintenance receipts.
+  - 📑 **IFTA State Tax Mileage Summaries**: Automatic quarterly fuel tax summaries by state.
+
+---
+
+## 🚀 v2.0.0 Owner-Operator Architecture Roadmap
+
+### 1. Dual Profile Mode (`Company Driver` vs. `Owner-Operator`)
+- Selectable in Settings:
+  - 🏢 **Company Driver Profile**: Clean percentage split (27%/31%), tarp bonuses, trainer pay math.
+  - 🚛 **Owner-Operator Profile**: Full P&L command center, fuel logging, CPM metrics, IFTA state tracking.
+
+### 2. Google Play Billing Client Integration (`billing-ktx`)
+- `BillingManager.kt` wrapper for querying Google Play SKUs, handling purchase callbacks, and acknowledging tokens.
+- Encrypted `SharedPreferences` / `DataStore` for persistent local license verification.
