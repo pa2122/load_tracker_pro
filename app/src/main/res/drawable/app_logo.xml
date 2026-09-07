@@ -21,101 +21,45 @@
         </aapt:attr>
     </path>
 
-    <!-- Metallic Speed Line Accents -->
+    <!-- Translucent Speed Lines -->
     <path android:fillColor="#1A3B82F6" android:pathData="M-10,20 L118,-34 L118,-14 L-10,40 Z" />
     <path android:fillColor="#153B82F6" android:pathData="M-10,50 L118,-4 L118,16 L-10,70 Z" />
     <path android:fillColor="#1AF59E0B" android:pathData="M-10,80 L118,26 L118,46 L-10,100 Z" />
 
-    <!-- Highway Road Line (Cobalt & Amber) -->
+    <!-- LAYER 1: Outermost White Shell Border (100% Scale) -->
     <path
-        android:fillColor="#3B82F6"
-        android:pathData="M12,68 L96,68 C97.1,68 98,68.9 98,70 L98,71 C98,72.1 97.1,73 96,73 L12,73 C10.9,73 10,72.1 10,71 L10,70 C10,68.9 10.9,68 12,68 Z" />
+        android:fillColor="#F8FAFC"
+        android:pathData="M54,14 Q42,20 30,18 C22,16 18,14 16,13.5 C10,38 16,67 32,79 C40,86 48,89 54,89 C60,89 68,86 76,79 C90,67 96,38 92,13.5 C90,14 86,16 78,18 Q66,20 54,14 Z" />
 
+    <!-- LAYER 2: Inner Black Accent Outline (Scaled 95%) -->
+    <group
+        android:pivotX="54"
+        android:pivotY="54"
+        android:scaleX="0.95"
+        android:scaleY="0.95">
+        <path
+            android:fillColor="#020617"
+            android:pathData="M54,14 Q42,20 30,18 C22,16 18,14 16,13.5 C10,38 16,67 32,79 C40,86 48,89 54,89 C60,89 68,86 76,79 C90,67 96,38 92,13.5 C90,14 86,16 78,18 Q66,20 54,14 Z" />
+    </group>
+
+    <!-- White Horizontal Divider Line -->
+    <path
+        android:fillColor="#F8FAFC"
+        android:pathData="M15,35 L93,35 L93,37.5 L15,37.5 Z" />
+
+    <!-- CENTER EMBLEM: GPS Location Pin with Dollar Sign -->
+    <!-- GPS Location Pin Core -->
+    <path
+        android:fillColor="#F8FAFC"
+        android:pathData="M54,42 C45.5,42 39,48.5 39,57 C39,67.5 54,78 54,78 C54,78 69,67.5 69,57 C69,48.5 62.5,42 54,42 Z" />
+
+    <path
+        android:fillColor="#0F172A"
+        android:pathData="M54,44 C46.8,44 41,49.8 41,57 C41,66.2 54,75 54,75 C54,75 67,66.2 67,57 C67,49.8 61.2,44 54,44 Z" />
+
+    <!-- Amber Gold Revenue Dollar Sign ($) Inside Pin Core -->
     <path
         android:fillColor="#F59E0B"
-        android:pathData="M18,74 L35,74 L35,75.5 L18,74 Z M46,74 L63,74 L63,75.5 L46,74 Z M74,74 L91,74 L91,75.5 L74,74 Z" />
-
-    <!-- Semi-Truck Tractor Cab (Clean White with Slate Accents) -->
-    <path
-        android:fillColor="#F8FAFC"
-        android:pathData="M18,66 L18,46 C18,44.3 19.3,43 21,43 L36,43 C37.2,43 38.3,43.6 38.9,44.6 L45,53 L56,53 C57.7,53 59,54.3 59,56 L59,66 L18,66 Z" />
-
-    <!-- Front Bumper & Chrome Grille (Amber Accent) -->
-    <path
-        android:fillColor="#F59E0B"
-        android:pathData="M16,62 L20,62 C20.6,62 21,62.4 21,63 L21,66 C21,66.6 20.6,67 20,67 L16,67 C15.4,67 15,66.6 15,66 L15,63 C15,62.4 15.4,62 16,62 Z" />
-
-    <!-- Exhaust Stack / Chrome Pipe -->
-    <path
-        android:fillColor="#94A3B8"
-        android:pathData="M37,36 L39,36 L39,44 L37,44 Z" />
-
-    <!-- Windshield (Cobalt Tint) -->
-    <path
-        android:fillColor="#3B82F6"
-        android:pathData="M36,44.5 L43,52 L32,52 L32,44.5 Z" />
-
-    <!-- Side Door Window -->
-    <path
-        android:fillColor="#1E293B"
-        android:pathData="M23,45.5 L30,45.5 L30,52 L23,52 Z" />
-
-    <!-- Flatbed Trailer Frame & Rub Rail (Cobalt Blue Frame) -->
-    <path
-        android:fillColor="#1D4ED8"
-        android:pathData="M59,62 L96,62 C96.6,62 97,62.4 97,63 L97,66 L59,66 Z" />
-
-    <!-- Flatbed Load Deck Surface (Amber Gold) -->
-    <path
-        android:fillColor="#F59E0B"
-        android:pathData="M59,58 L96,58 C96.6,58 97,58.4 97,59 L97,62 L59,62 Z" />
-
-    <!-- Freight Cargo Load: Steel Coils (Cobalt & Slate) -->
-    <path
-        android:fillColor="#3B82F6"
-        android:pathData="M63,50 C63,46.7 65.2,44 68,44 C70.8,44 73,46.7 73,50 L73,58 L63,58 Z" />
-    <path
-        android:fillColor="#60A5FA"
-        android:pathData="M65,50 C65,48.3 66.3,47 68,47 C69.7,47 71,48.3 71,50 L71,58 L65,58 Z" />
-
-    <path
-        android:fillColor="#1E293B"
-        android:pathData="M75,50 C75,46.7 77.2,44 80,44 C82.8,44 85,46.7 85,50 L85,58 L75,58 Z" />
-    <path
-        android:fillColor="#475569"
-        android:pathData="M77,50 C77,48.3 78.3,47 80,47 C81.7,47 83,48.3 83,50 L83,58 L77,58 Z" />
-
-    <!-- Load Winch Straps (Amber Tie-Downs) -->
-    <path android:fillColor="#F59E0B" android:pathData="M67,44 L69,44 L69,58 L67,58 Z" />
-    <path android:fillColor="#F59E0B" android:pathData="M79,44 L81,44 L81,58 L79,58 Z" />
-
-    <!-- Wheels & Chrome Hubs -->
-    <path
-        android:fillColor="#020617"
-        android:pathData="M26,69 C24.34,69 23,67.66 23,66 C23,64.34 24.34,63 26,63 C27.66,63 29,64.34 29,66 C29,67.66 27.66,69 26,69 Z" />
-    <path
-        android:fillColor="#F8FAFC"
-        android:pathData="M26,67.5 C25.17,67.5 24.5,66.83 24.5,66 C24.5,65.17 25.17,64.5 26,64.5 C26.83,64.5 27.5,65.17 27.5,66 C27.5,66.83 26.83,67.5 26,67.5 Z" />
-
-    <path
-        android:fillColor="#020617"
-        android:pathData="M48,69 C46.34,69 45,67.66 45,66 C45,64.34 46.34,63 48,63 C49.66,63 51,64.34 51,66 C51,67.66 49.66,69 48,69 Z" />
-    <path
-        android:fillColor="#F8FAFC"
-        android:pathData="M48,67.5 C47.17,67.5 46.5,66.83 46.5,66 C46.5,65.17 49.5,65.17 49.5,66 C49.5,66.83 48.83,67.5 48,67.5 Z" />
-
-    <path
-        android:fillColor="#020617"
-        android:pathData="M74,69 C72.34,69 71,67.66 71,66 C71,64.34 72.34,63 74,63 C75.66,63 77,64.34 77,66 C77,67.66 75.66,69 74,69 Z" />
-    <path
-        android:fillColor="#F8FAFC"
-        android:pathData="M74,67.5 C73.17,67.5 72.5,66.83 72.5,66 C72.5,65.17 73.17,64.5 74,64.5 C74.83,64.5 75.5,65.17 75.5,66 C75.5,66.83 74.83,67.5 74,67.5 Z" />
-
-    <path
-        android:fillColor="#020617"
-        android:pathData="M87,69 C85.34,69 84,67.66 84,66 C84,64.34 85.34,63 87,63 C88.66,63 90,64.34 90,66 C90,67.66 88.66,69 87,69 Z" />
-    <path
-        android:fillColor="#F8FAFC"
-        android:pathData="M87,67.5 C86.17,67.5 85.5,66.83 85.5,66 C85.5,65.17 86.17,64.5 87,64.5 C87.83,64.5 88.5,65.17 88.5,66 C88.5,66.83 87.83,67.5 87,67.5 Z" />
+        android:pathData="M55.5,49 L52.5,49 L52.5,50.7 C50.5,51.1 49,52.3 49,54.3 C49,56.7 51.2,57.3 53.2,57.8 C55,58.3 56,58.8 56,59.7 C56,60.6 54.8,61.2 53.5,61.2 C51.8,61.2 50.2,60.3 49.5,59.3 L47.8,60.7 C48.8,62.2 50.5,63.2 52.5,63.6 L52.5,65.3 L55.5,65.3 L55.5,63.6 C57.8,63.2 59.2,61.7 59.2,59.5 C59.2,56.9 56.8,56.3 54.8,55.8 C53,55.3 52.2,54.8 52.2,54 C52.2,53.2 53.2,52.6 54.5,52.6 C55.9,52.6 57.2,53.4 58,54.2 L59.6,52.7 C58.5,51.5 57.1,50.8 55.5,50.5 L55.5,49 Z" />
 
 </vector>
