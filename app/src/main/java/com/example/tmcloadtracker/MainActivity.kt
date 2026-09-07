@@ -286,14 +286,14 @@ class MainActivity : ComponentActivity() {
                         tarp8Pay,
                         tarp4Pay,
                         isTrainingActive,
-                        flatTrainerPayRate,
+                        calculatedTrainerPay,
                     ) {
                         derivedStateOf {
                             viewModel.getCurrentWeekSummary(
                                 lumberRate = tarp8Pay.toDoubleOrNull() ?: 0.0,
                                 steelRate = tarp4Pay.toDoubleOrNull() ?: 0.0,
                                 isTrainingGlobal = isTrainingActive,
-                                trainerRate = flatTrainerPayRate.toDoubleOrNull() ?: 0.0
+                                trainerRate = calculatedTrainerPay
                             )
                         }
                     }
