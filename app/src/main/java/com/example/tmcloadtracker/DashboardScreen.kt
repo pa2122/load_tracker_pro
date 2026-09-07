@@ -33,6 +33,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import dev.jeziellago.compose.markdowntext.MarkdownText
@@ -76,6 +77,7 @@ fun DashboardScreen(
     var selectedWeekFriday by remember { mutableStateOf(value = null as LocalDate?) }
     var showDeleteConfirmation by remember { mutableStateOf(value = false) }
     var tripToDelete by remember { mutableStateOf(value = null as CurrentLoad?) }
+    var showProUpgradeDialog by remember { mutableStateOf(value = false) }
 
     Scaffold { innerPadding ->
         Box(
@@ -553,7 +555,10 @@ fun DashboardScreen(
                                 }
                             } else {
                                 Button(
-                                    onClick = { /* Could trigger upgrade prompt here */ },
+                                    onClick = {
+                                        showHistoryDetailsDialog = false
+                                        showProUpgradeDialog = true
+                                    },
                                     modifier = Modifier.fillMaxWidth(),
                                     colors = ButtonDefaults.buttonColors(
                                         containerColor = MaterialTheme.colorScheme.secondary.copy(alpha = 0.5f)
@@ -603,6 +608,23 @@ fun DashboardScreen(
                                     color = MaterialTheme.colorScheme.primary
                                 )
                                 Text(trip.tripNotes, style = MaterialTheme.typography.bodyMedium)
+                            }
+
+                            Button(
+                                onClick = {
+                                    showHistoryDetailsDialog = false
+                                    if (isProUser) {
+                                        onEditTripClick(trip)
+                                    } else {
+                                        showProUpgradeDialog = true
+                                    }
+                                },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (isProUser) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.secondary.copy(alpha = 0.5f)
+                                ),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(if (isProUser) "✏️ Edit Load Details" else "✏️ Edit Load Details (Pro)")
                             }
                         }
                     },
@@ -824,7 +846,7 @@ fun DashboardScreen(
                                         if (load.isPreTarped) tarp /= 2.0
                                         val bonus = if (load.dispatchedBounceMiles >= 150.0) load.dispatchedBounceMiles * 0.20 else 0.0
                                         base + tarp + bonus
-                                    } + (if (loads.any { it.isTrainingWeek }) 200.0 else 0.0)
+                                    } + (if (loads.any { it.isTrainingWeek }) flatTrainerPayRate else 0.0)
                                     Card(
                                         modifier = Modifier.fillMaxWidth().clickable {
                                             selectedWeekFriday = friday
@@ -878,7 +900,7 @@ fun DashboardScreen(
         val totalBouncePay = weeklyTrips.sumOf { load ->
             if (load.dispatchedBounceMiles >= 150.0) load.dispatchedBounceMiles * 0.20 else 0.0
         }
-        val totalTrainerPay = if (weeklyTrips.any { it.isTrainingWeek }) 200.0 else 0.0
+        val totalTrainerPay = if (weeklyTrips.any { it.isTrainingWeek }) flatTrainerPayRate else 0.0
         val totalNetPay = totalDriverBase + totalTarpPay + totalBouncePay + totalTrainerPay
 
         AlertDialog(
@@ -1020,6 +1042,24 @@ fun DashboardScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showDeleteConfirmation = false }) { Text("Cancel") }
+            }
+        )
+    }
+
+    if (showProUpgradeDialog) {
+        AlertDialog(
+            onDismissRequest = { showProUpgradeDialog = false },
+            title = { Text("🚀 Unlock Load Tracker Pro") },
+            text = {
+                Text(
+                    "Editing completed historical loads, Facility Insights, and Route Heatmaps are Pro features.\n\nUpgrade to Pro to unlock historical record editing, IFTA reports, and global route heatmaps!",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            },
+            confirmButton = {
+                Button(onClick = { showProUpgradeDialog = false }) {
+                    Text("Got It")
+                }
             }
         )
     }

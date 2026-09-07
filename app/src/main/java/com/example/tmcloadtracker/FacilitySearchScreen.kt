@@ -108,21 +108,35 @@ fun FacilitySearchScreen(
                         modifier = Modifier.fillMaxSize(),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        items(filteredFacilities) { name ->
+                        items(filteredFacilities) { fullName ->
+                            val formattedTitle = remember(fullName) { formatFacilityTitle(fullName) }
+                            val addressDetails = remember(fullName) {
+                                val lines = fullName.lines().filter { it.isNotBlank() }
+                                if (lines.size > 1) lines.drop(1).joinToString(", ") else ""
+                            }
+
                             Card(
                                 modifier = Modifier.fillMaxWidth().clickable { 
-                                    viewModel.selectFacility(name)
+                                    viewModel.selectFacility(fullName)
                                     searchQuery = ""
                                 },
                                 colors = CardDefaults.cardColors(
                                     containerColor = MaterialTheme.colorScheme.surfaceVariant
                                 )
                             ) {
-                                Text(
-                                    name,
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    modifier = Modifier.padding(16.dp)
-                                )
+                                Column(modifier = Modifier.padding(16.dp)) {
+                                    Text(
+                                        formattedTitle,
+                                        style = MaterialTheme.typography.bodyLarge
+                                    )
+                                    if (addressDetails.isNotBlank()) {
+                                        Text(
+                                            addressDetails,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.secondary
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
@@ -181,4 +195,19 @@ fun FacilitySearchScreen(
             }
         }
     }
+}
+
+private fun formatFacilityTitle(fullName: String): String {
+    val lines = fullName.lines().filter { it.isNotBlank() }
+    if (lines.isEmpty()) return fullName
+    val mainName = lines[0].trim()
+
+    val cityStateRegex = Regex("""([A-Za-z\s]+),\s*([A-Z]{2})\b""")
+    for (i in 1 until lines.size) {
+        val match = cityStateRegex.find(lines[i])
+        if (match != null) {
+            return "$mainName — ${match.value}"
+        }
+    }
+    return mainName
 }

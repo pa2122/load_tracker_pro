@@ -8,6 +8,7 @@ import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.widget.Toast
+import androidx.compose.ui.text.font.FontWeight
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -27,6 +28,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.painterResource
 import androidx.compose.foundation.text.KeyboardActions
@@ -35,10 +37,16 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Done
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.NavigationRail
+import androidx.compose.material3.NavigationRailItem
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -62,6 +70,7 @@ import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -145,6 +154,12 @@ class MainActivity : ComponentActivity() {
 
                     var showDevOptionsDialog by remember { mutableStateOf(value = false) }
                     var showTesterFeedbackDialog by remember { mutableStateOf(value = false) }
+                    var showTrainerSettingsDialog by remember { mutableStateOf(value = false) }
+
+                    val devPrefs = remember { getSharedPreferences("dev_prefs", MODE_PRIVATE) }
+                    var savedTraineeTier by remember { mutableStateOf(value = devPrefs.getString("trainee_tier", "inexperienced") ?: "inexperienced") }
+                    var savedTrainingWeek by remember { mutableIntStateOf(value = devPrefs.getInt("training_week", 1)) }
+                    var savedIsTmcBoostActive by remember { mutableStateOf(value = devPrefs.getBoolean("is_tmc_boost_active", true)) }
 
                     val currentDeviceId = remember {
                         try {
@@ -154,7 +169,6 @@ class MainActivity : ComponentActivity() {
                         }
                     }
 
-                    val devPrefs = remember { getSharedPreferences("dev_prefs", MODE_PRIVATE) }
                     var isDeviceAuthorized by remember {
                         val savedAuthorizedDevices = devPrefs.getStringSet("authorized_devices", emptySet()) ?: emptySet()
                         mutableStateOf(
@@ -189,6 +203,15 @@ class MainActivity : ComponentActivity() {
 
                     var isTrainingActive by remember { mutableStateOf(value = false) }
                     var flatTrainerPayRate by remember { mutableStateOf(value = "200.0") }
+
+                    val calculatedTrainerPay = remember(isTrainingActive, savedTraineeTier, savedTrainingWeek, savedIsTmcBoostActive, flatTrainerPayRate) {
+                        if (!isTrainingActive) 0.0
+                        else {
+                            val base = calculateBaseTrainerPay(savedTraineeTier, savedTrainingWeek, flatTrainerPayRate.toDoubleOrNull() ?: 200.0)
+                            val boost = if (savedIsTmcBoostActive && savedTraineeTier != "custom") 100.0 else 0.0
+                            base + boost
+                        }
+                    }
 
                     val triggerHelpView = remember { mutableStateOf(value = false) }
 
@@ -431,38 +454,52 @@ class MainActivity : ComponentActivity() {
                                     )
 
                                     HorizontalDivider()
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                    ) {
-                                        Text("Active Training Week")
-                                        Switch(
-                                            checked = isTrainingActive,
-                                            onCheckedChange = { isTrainingActive = it },
-                                        )
-                                    }
-
-                                    OutlinedTextField(
-                                        value = flatTrainerPayRate,
-                                        onValueChange = { input ->
-                                            flatTrainerPayRate =
-                                                input.filter { it.isDigit() || it == '.' }
-                                        },
-                                        label = { Text("Weekly Trainer Bonus ($)") },
-                                        singleLine = true,
-                                        enabled = isTrainingActive,
-                                        keyboardOptions = KeyboardOptions(
-                                            keyboardType = KeyboardType.Number,
-                                            imeAction = ImeAction.Done
-                                        ),
-                                        keyboardActions = KeyboardActions(
-                                            onDone = {
-                                                scope.launch { drawerState.close() }
-                                            }
-                                        ),
+                                    Text("🎓 Trainer Incentive Settings", style = MaterialTheme.typography.titleSmall)
+                                    Surface(
+                                        color = if (isTrainingActive) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+                                        shape = RoundedCornerShape(8.dp),
                                         modifier = Modifier.fillMaxWidth()
-                                    )
+                                    ) {
+                                        Column(
+                                            modifier = Modifier.padding(10.dp),
+                                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                                        ) {
+                                            Text(
+                                                text = if (isTrainingActive) "Status: ACTIVE 🟢" else "Status: INACTIVE 🔴",
+                                                style = MaterialTheme.typography.labelLarge,
+                                                fontWeight = FontWeight.Bold,
+                                                color = if (isTrainingActive) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                            if (isTrainingActive) {
+                                                val tierLabel = when (savedTraineeTier) {
+                                                    "inexperienced" -> "Inexperienced (Wk $savedTrainingWeek of 4)"
+                                                    "experienced" -> "Experienced (Wk $savedTrainingWeek of 2)"
+                                                    else -> "Custom Rate"
+                                                }
+                                                Text(tierLabel, style = MaterialTheme.typography.bodySmall)
+                                                Text(
+                                                    "Added: +$${String.format(Locale.US, "%.2f", calculatedTrainerPay)}/wk",
+                                                    style = MaterialTheme.typography.labelMedium,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = MaterialTheme.colorScheme.primary
+                                                )
+                                            }
+
+                                            Button(
+                                                onClick = {
+                                                    scope.launch { drawerState.close() }
+                                                    showTrainerSettingsDialog = true
+                                                },
+                                                colors = ButtonDefaults.buttonColors(
+                                                    containerColor = MaterialTheme.colorScheme.secondary,
+                                                    contentColor = MaterialTheme.colorScheme.onSecondary
+                                                ),
+                                                modifier = Modifier.fillMaxWidth()
+                                            ) {
+                                                Text("⚙️ Configure Trainer Pay")
+                                            }
+                                        }
+                                    }
 
                                     HorizontalDivider()
                                     Button(
@@ -561,6 +598,9 @@ class MainActivity : ComponentActivity() {
                             }
                         }
                     ) {
+                        val configuration = LocalConfiguration.current
+                        val isTablet = configuration.screenWidthDp >= 600
+
                         Scaffold(
                             topBar = {
                                 TopAppBar(
@@ -576,7 +616,64 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
                         ) { innerPadding ->
-                            Surface(modifier = Modifier.padding(paddingValues = innerPadding)) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(paddingValues = innerPadding)
+                            ) {
+                                if (isTablet && !isAppStartingUp) {
+                                    NavigationRail(
+                                        modifier = Modifier.padding(top = 8.dp)
+                                    ) {
+                                        NavigationRailItem(
+                                            selected = currentScreen == "dashboard",
+                                            onClick = { currentScreen = "dashboard" },
+                                            icon = { Icon(Icons.Default.Home, contentDescription = "Dashboard") },
+                                            label = { Text("Dashboard") }
+                                        )
+                                        NavigationRailItem(
+                                            selected = currentScreen == "entry",
+                                            onClick = {
+                                                tripToEdit = null
+                                                currentScreen = "entry"
+                                            },
+                                            icon = { Icon(Icons.Default.Add, contentDescription = "New Load") },
+                                            label = { Text("New Load") }
+                                        )
+                                        NavigationRailItem(
+                                            selected = currentScreen == "route_map",
+                                            onClick = {
+                                                tripForMap = null
+                                                currentScreen = "route_map"
+                                            },
+                                            icon = { Icon(Icons.Default.LocationOn, contentDescription = "Heatmap") },
+                                            label = { Text("Heatmap") }
+                                        )
+                                        NavigationRailItem(
+                                            selected = currentScreen == "facility_search",
+                                            onClick = { currentScreen = "facility_search" },
+                                            icon = { Icon(Icons.Default.Search, contentDescription = "Facilities") },
+                                            label = { Text("Facilities") }
+                                        )
+                                        NavigationRailItem(
+                                            selected = false,
+                                            onClick = { showTesterFeedbackDialog = true },
+                                            icon = { Icon(Icons.Default.Edit, contentDescription = "Feedback") },
+                                            label = { Text("Feedback") }
+                                        )
+                                        if (isDeviceAuthorized || BuildConfig.DEBUG) {
+                                            NavigationRailItem(
+                                                selected = false,
+                                                onClick = { showDevOptionsDialog = true },
+                                                icon = { Icon(Icons.Default.Build, contentDescription = "Dev") },
+                                                label = { Text("Dev Mode") }
+                                            )
+                                        }
+                                    }
+                                }
+
+                                Box(modifier = Modifier.weight(1f)) {
+                                    Surface(modifier = Modifier.fillMaxSize()) {
                                 if (isAppStartingUp) {
                                     Box(
                                         modifier = Modifier
@@ -653,8 +750,7 @@ class MainActivity : ComponentActivity() {
                                                 liveBounceMiles = liveBounce,
                                                 liveLoadedMiles = liveLoaded,
                                                 isTrainingActive = isTrainingActive,
-                                                flatTrainerPayRate = flatTrainerPayRate.toDoubleOrNull()
-                                                    ?: 0.0,
+                                                flatTrainerPayRate = calculatedTrainerPay,
                                                 showHelpOnLaunch = triggerHelpView.value,
                                                 onDismissHelpDialog = {
                                                     triggerHelpView.value = false
@@ -772,20 +868,11 @@ class MainActivity : ComponentActivity() {
                                                     homeLocation = homeLatLng,
                                                     onBack = { currentScreen = "dashboard" }
                                                 )
-                                            } ?: run {
-                                                RouteMapScreen(
-                                                    load = null,
-                                                    viewModel = viewModel,
-                                                    homeLocation = homeLatLng,
-                                                    onBack = { currentScreen = "dashboard" }
-                                                )
                                             }
                                         }
                                     }
                                 }
                             }
-                        }
-                    }
 
                     if (showDevOptionsDialog) {
                         AlertDialog(
@@ -829,6 +916,8 @@ class MainActivity : ComponentActivity() {
                                     }
 
                                     HorizontalDivider()
+
+
 
                                     Text("Device Authorization", style = MaterialTheme.typography.titleSmall)
                                     Text(
@@ -898,10 +987,42 @@ class MainActivity : ComponentActivity() {
                             onDismiss = { showTesterFeedbackDialog = false }
                         )
                     }
+
+                    if (showTrainerSettingsDialog) {
+                        TrainerSettingsDialog(
+                            initialIsActive = isTrainingActive,
+                            initialTier = savedTraineeTier,
+                            initialWeek = savedTrainingWeek,
+                            initialIsBoostActive = savedIsTmcBoostActive,
+                            initialCustomRate = flatTrainerPayRate,
+                            onSave = { active, tier, week, boost, customRate, _ ->
+                                isTrainingActive = active
+                                savedIsTrainingActive = active
+                                savedTraineeTier = tier
+                                savedTrainingWeek = week
+                                savedIsTmcBoostActive = boost
+                                flatTrainerPayRate = customRate
+                                showTrainerSettingsDialog = false
+
+                                devPrefs.edit()
+                                    .putBoolean("is_training_active", active)
+                                    .putString("trainee_tier", tier)
+                                    .putInt("training_week", week)
+                                    .putBoolean("is_tmc_boost_active", boost)
+                                    .putString("custom_trainer_rate", customRate)
+                                    .apply()
+                            },
+                            onDismiss = { showTrainerSettingsDialog = false }
+                        )
+                    }
                 }
             }
         }
     }
+}
+}
+}
+}
 
     private fun exportToCsv() {
         val csvContent = viewModel.generateCsvContent()

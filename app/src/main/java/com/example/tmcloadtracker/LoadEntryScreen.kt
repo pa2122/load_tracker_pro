@@ -115,14 +115,14 @@ fun LoadEntryScreen(
         instant.atZone(ZoneOffset.UTC).toLocalDate().format(formatter)
     }
 
-    var sRawPaste by remember { mutableStateOf(value = "") }
-    var sName by remember { mutableStateOf(value = editingLoad?.shipperName ?: "") }
+    var sRawPaste by remember { mutableStateOf(value = editingLoad?.shipperName ?: "") }
+    var sName by remember { mutableStateOf(value = editingLoad?.shipperName?.lines()?.firstOrNull()?.trim() ?: "") }
     var sLat by remember { mutableStateOf(value = editingLoad?.shipperLat) }
     var sLong by remember { mutableStateOf(value = editingLoad?.shipperLong) }
     var isShipperVerified by remember { mutableStateOf(value = editingLoad?.shipperLat != null) }
 
-    var cRawPaste by remember { mutableStateOf(value = "") }
-    var cName by remember { mutableStateOf(value = editingLoad?.consigneeName ?: "") }
+    var cRawPaste by remember { mutableStateOf(value = editingLoad?.consigneeName ?: "") }
+    var cName by remember { mutableStateOf(value = editingLoad?.consigneeName?.lines()?.firstOrNull()?.trim() ?: "") }
     var cLat by remember { mutableStateOf(value = editingLoad?.consigneeLat) }
     var cLong by remember { mutableStateOf(value = editingLoad?.consigneeLong) }
     var isConsigneeVerified by remember { mutableStateOf(value = editingLoad?.consigneeLat != null) }
@@ -635,10 +635,10 @@ fun LoadEntryScreen(
                             tripState = "COMPLETED",
                             tripNotes = tripNotes.ifBlank { null },
                             deliveryTimestamp = selectedDateMillis + 3600000,
-                            shipperName = sName,
+                            shipperName = if (sRawPaste.isNotBlank()) sRawPaste.trim() else sName,
                             shipperLat = sLat,
                             shipperLong = sLong,
-                            consigneeName = cName,
+                            consigneeName = if (cRawPaste.isNotBlank()) cRawPaste.trim() else cName,
                             consigneeLat = cLat,
                             consigneeLong = cLong
                         )
@@ -661,10 +661,10 @@ fun LoadEntryScreen(
                         pickupTimestamp = System.currentTimeMillis(),
                         tripState = "ACTIVE_BOUNCE",
                         tripNotes = tripNotes.ifBlank { null },
-                        shipperName = sName,
+                        shipperName = if (sRawPaste.isNotBlank()) sRawPaste.trim() else sName,
                         shipperLat = sLat,
                         shipperLong = sLong,
-                        consigneeName = cName,
+                        consigneeName = if (cRawPaste.isNotBlank()) cRawPaste.trim() else cName,
                         consigneeLat = cLat,
                         consigneeLong = cLong
                     )
