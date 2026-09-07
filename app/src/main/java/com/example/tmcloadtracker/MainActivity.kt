@@ -5,7 +5,9 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.location.Geocoder
 import android.os.Build
+import android.net.TrafficStats
 import android.os.Bundle
+import android.os.Process
 import android.provider.Settings
 import android.widget.Toast
 import androidx.compose.ui.text.font.FontWeight
@@ -71,6 +73,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -155,6 +158,9 @@ class MainActivity : ComponentActivity() {
                     var showDevOptionsDialog by remember { mutableStateOf(value = false) }
                     var showTesterFeedbackDialog by remember { mutableStateOf(value = false) }
                     var showTrainerSettingsDialog by remember { mutableStateOf(value = false) }
+
+                    var initialRxBytes by remember { mutableLongStateOf(value = TrafficStats.getUidRxBytes(Process.myUid())) }
+                    var initialTxBytes by remember { mutableLongStateOf(value = TrafficStats.getUidTxBytes(Process.myUid())) }
 
                     val devPrefs = remember { getSharedPreferences("dev_prefs", MODE_PRIVATE) }
                     var savedTraineeTier by remember { mutableStateOf(value = devPrefs.getString("trainee_tier", "inexperienced") ?: "inexperienced") }
@@ -917,7 +923,68 @@ class MainActivity : ComponentActivity() {
 
                                     HorizontalDivider()
 
+                                    Text("📊 Live Network & GPS Telemetry", style = MaterialTheme.typography.titleSmall)
 
+                                    val currentRx = TrafficStats.getUidRxBytes(Process.myUid())
+                                    val currentTx = TrafficStats.getUidTxBytes(Process.myUid())
+                                    val sessionRxMb = if (currentRx >= initialRxBytes) (currentRx - initialRxBytes) / (1024.0 * 1024.0) else 0.0
+                                    val sessionTxMb = if (currentTx >= initialTxBytes) (currentTx - initialTxBytes) / (1024.0 * 1024.0) else 0.0
+                                    val sessionTotalMb = sessionRxMb + sessionTxMb
+
+                                    Surface(
+                                        color = MaterialTheme.colorScheme.surfaceVariant,
+                                        shape = RoundedCornerShape(8.dp),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Column(
+                                            modifier = Modifier.padding(10.dp),
+                                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                                        ) {
+                                            Text("Network Data (This Session):", style = MaterialTheme.typography.labelMedium)
+                                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                                Text("Downloaded (Rx):", style = MaterialTheme.typography.bodySmall)
+                                                Text("${String.format(Locale.US, "%.2f", sessionRxMb)} MB", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
+                                            }
+                                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                                Text("Uploaded (Tx):", style = MaterialTheme.typography.bodySmall)
+                                                Text("${String.format(Locale.US, "%.2f", sessionTxMb)} MB", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
+                                            }
+                                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                                Text("Total Data Used:", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                                                Text("${String.format(Locale.US, "%.2f", sessionTotalMb)} MB", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                                            }
+
+                                            Spacer(modifier = Modifier.height(4.dp))
+                                            Button(
+                                                onClick = {
+                                                    initialRxBytes = TrafficStats.getUidRxBytes(Process.myUid())
+                                                    initialTxBytes = TrafficStats.getUidTxBytes(Process.myUid())
+                                                    Toast.makeText(this@MainActivity, "Data Counter Reset to 0.00 MB!", Toast.LENGTH_SHORT).show()
+                                                },
+                                                modifier = Modifier.fillMaxWidth()
+                                            ) {
+                                                Text("🔄 Reset Data Counter")
+                                            }
+
+                                            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+
+                                            Text("GPS Tracking Telemetry:", style = MaterialTheme.typography.labelMedium)
+                                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                                Text("Active Segment:", style = MaterialTheme.typography.bodySmall)
+                                                Text(TrackingService.activeSegment, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                                            }
+                                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                                Text("PRO Number:", style = MaterialTheme.typography.bodySmall)
+                                                Text(TrackingService.activeProNumber ?: "None", style = MaterialTheme.typography.bodySmall)
+                                            }
+                                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                                Text("Geofence Target:", style = MaterialTheme.typography.bodySmall)
+                                                Text(if (TrackingService.isGeofenceActive) "${TrackingService.targetName} 📍" else "Inactive", style = MaterialTheme.typography.bodySmall)
+                                            }
+                                        }
+                                    }
+
+                                    HorizontalDivider()
 
                                     Text("Device Authorization", style = MaterialTheme.typography.titleSmall)
                                     Text(
