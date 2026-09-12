@@ -36,6 +36,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import dev.jeziellago.compose.markdowntext.MarkdownText
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -182,11 +183,15 @@ fun FacilitySearchScreen(
                                         modifier = Modifier.fillMaxWidth(),
                                         horizontalArrangement = Arrangement.SpaceBetween
                                     ) {
-                                        Text("PRO #${note.proNumber}", style = MaterialTheme.typography.titleSmall)
+                                        Text("Logged Entry", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
                                         Text(date, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
                                     }
                                     Spacer(modifier = Modifier.height(8.dp))
-                                    Text(note.tripNotes, style = MaterialTheme.typography.bodyMedium)
+                                    MarkdownText(
+                                        markdown = note.tripNotes,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
                                 }
                             }
                         }

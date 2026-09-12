@@ -322,6 +322,90 @@ fun LoadEntryScreen(
                 else -> "None"
             }
         }
+
+        // 7. Extract Optional Facility Instructions, Directions & Parking Info
+        var currentFacility = ""
+        val shipperInst = StringBuilder()
+        val shipperDir = StringBuilder()
+        var shipperPark = ""
+
+        val consigneeInst = StringBuilder()
+        val consigneeDir = StringBuilder()
+        var consigneePark = ""
+
+        var currentField = ""
+
+        for (i in lines.indices) {
+            val line = lines[i]
+            val lower = line.lowercase(Locale.US)
+
+            if (lower.contains("shipper") || lower.contains("pickup") || lower.contains("origin")) {
+                currentFacility = "shipper"
+                currentField = ""
+            } else if (lower.contains("consignee") || lower.contains("delivery") || lower.contains("destination") || lower.contains("drop")) {
+                currentFacility = "consignee"
+                currentField = ""
+            } else if (lower.contains("pro number") || lower.contains("load number") || lower.contains("gross:") || lower.contains("additional load notes")) {
+                currentFacility = ""
+                currentField = ""
+            }
+
+            if (lower.startsWith("instructions:") || lower.startsWith("instruction:")) {
+                currentField = "instructions"
+                val content = line.substringAfter(":").trim()
+                if (content.isNotBlank()) {
+                    if (currentFacility == "shipper") shipperInst.append(content).append(" ")
+                    else if (currentFacility == "consignee") consigneeInst.append(content).append(" ")
+                }
+                continue
+            }
+
+            if (lower.startsWith("directions:") || lower.startsWith("direction:")) {
+                currentField = "directions"
+                val content = line.substringAfter(":").trim()
+                if (content.isNotBlank()) {
+                    if (currentFacility == "shipper") shipperDir.append(content).append(" ")
+                    else if (currentFacility == "consignee") consigneeDir.append(content).append(" ")
+                }
+                continue
+            }
+
+            if (lower.startsWith("parking:")) {
+                currentField = "parking"
+                val content = line.substringAfter(":").trim()
+                if (currentFacility == "shipper") shipperPark = content
+                else if (currentFacility == "consignee") consigneePark = content
+                continue
+            }
+
+            if (currentField == "instructions" && !line.contains(":")) {
+                if (currentFacility == "shipper") shipperInst.append(line).append(" ")
+                else if (currentFacility == "consignee") consigneeInst.append(line).append(" ")
+            } else if (currentField == "directions" && !line.contains(":")) {
+                if (currentFacility == "shipper") shipperDir.append(line).append(" ")
+                else if (currentFacility == "consignee") consigneeDir.append(line).append(" ")
+            }
+        }
+
+        val notesSb = StringBuilder()
+        if (shipperInst.isNotBlank() || shipperDir.isNotBlank() || shipperPark.isNotBlank()) {
+            notesSb.append("--- SHIPPER FACILITY NOTES ---\n")
+            if (shipperInst.isNotBlank()) notesSb.append("⚠️ Instructions: ").append(shipperInst.toString().trim()).append("\n")
+            if (shipperDir.isNotBlank()) notesSb.append("🗺️ Directions: ").append(shipperDir.toString().trim()).append("\n")
+            if (shipperPark.isNotBlank()) notesSb.append("🅿️ Parking: ").append(shipperPark).append("\n")
+            notesSb.append("\n")
+        }
+
+        if (consigneeInst.isNotBlank() || consigneeDir.isNotBlank() || consigneePark.isNotBlank()) {
+            notesSb.append("--- CONSIGNEE FACILITY NOTES ---\n")
+            if (consigneeInst.isNotBlank()) notesSb.append("⚠️ Instructions: ").append(consigneeInst.toString().trim()).append("\n")
+            if (consigneeDir.isNotBlank()) notesSb.append("🗺️ Directions: ").append(consigneeDir.toString().trim()).append("\n")
+            if (consigneePark.isNotBlank()) notesSb.append("🅿️ Parking: ").append(consigneePark).append("\n")
+        }
+
+        if (notesSb.isNotBlank()) {
+            tripNotes = notesSb.toString().trim()
+        }
     }
 
     var isScanningOcr by remember { mutableStateOf(false) }
