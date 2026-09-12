@@ -1,5 +1,8 @@
 package com.example.tmcloadtracker
 
+import android.content.Intent
+import android.net.Uri
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -16,6 +19,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.Card
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -35,6 +41,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import dev.jeziellago.compose.markdowntext.MarkdownText
 import java.time.Instant
@@ -156,6 +163,28 @@ fun FacilitySearchScreen(
                     TextButton(onClick = { viewModel.selectFacility("") }) {
                         Text("← All Facilities")
                     }
+                }
+
+                val context = LocalContext.current
+                val facilityTitle = remember(selectedName) { formatFacilityTitle(selectedName) }
+                Button(
+                    onClick = {
+                        val geoUri = Uri.parse("geo:0,0?q=${Uri.encode(selectedName)}")
+                        val mapIntent = Intent(Intent.ACTION_VIEW, geoUri)
+                        val chooser = Intent.createChooser(mapIntent, "Navigate with Trucker Path or Maps")
+                        try {
+                            context.startActivity(chooser)
+                        } catch (_: Exception) {
+                            Toast.makeText(context, "No navigation app found on device.", Toast.LENGTH_LONG).show()
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("🧭 Launch Navigation ($facilityTitle)")
                 }
 
                 if (notes.isEmpty()) {

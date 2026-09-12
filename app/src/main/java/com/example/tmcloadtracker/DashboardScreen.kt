@@ -1,5 +1,9 @@
 package com.example.tmcloadtracker
 
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.widget.Toast
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -230,6 +234,25 @@ fun DashboardScreen(
                                 }
                                 Spacer(modifier = Modifier.height(16.dp))
                                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.2f))
+
+                                val (targetLat, targetLong, targetName) = when (activeTrip.tripState) {
+                                    "ACTIVE_BOUNCE", "ACTIVE_SHIPPER" -> Triple(activeTrip.shipperLat, activeTrip.shipperLong, activeTrip.shipperName ?: "Shipper")
+                                    else -> Triple(activeTrip.consigneeLat, activeTrip.consigneeLong, activeTrip.consigneeName ?: "Consignee")
+                                }
+
+                                if (targetLat != null && targetLong != null) {
+                                    val context = LocalContext.current
+                                    Button(
+                                        onClick = { launchNavigationIntent(context, targetLat, targetLong, targetName) },
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                                        ),
+                                        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+                                    ) {
+                                        Text("🧭 Launch Navigation ($targetName)")
+                                    }
+                                }
 
                                 when (activeTrip.tripState) {
                                     "PAUSED_AT_HOME" -> {
@@ -1346,5 +1369,21 @@ fun DashboardScreen(
                 }
             }
         )
+    }
+}
+
+private fun launchNavigationIntent(context: Context, lat: Double?, lng: Double?, facilityName: String?) {
+    if (lat != null && lng != null) {
+        val label = facilityName ?: "Facility Destination"
+        val geoUri = Uri.parse("geo:$lat,$lng?q=$lat,$lng(${Uri.encode(label)})")
+        val mapIntent = Intent(Intent.ACTION_VIEW, geoUri)
+        val chooser = Intent.createChooser(mapIntent, "Navigate with Trucker Path or Maps")
+        try {
+            context.startActivity(chooser)
+        } catch (_: Exception) {
+            Toast.makeText(context, "No navigation app found on device.", Toast.LENGTH_LONG).show()
+        }
+    } else {
+        Toast.makeText(context, "GPS coordinates not available for this facility.", Toast.LENGTH_SHORT).show()
     }
 } 
