@@ -84,7 +84,16 @@ class LoadViewModel(application: Application) :
         consigneeLat: Double? = null,
         consigneeLong: Double? = null,
         isTrainingWeek: Boolean = false,
-        trainerPayRate: Double = 0.0
+        trainerPayRate: Double = 0.0,
+        pickupApptText: String? = null,
+        pickupApptTimestamp: Long? = null,
+        pickupApptType: String? = null,
+        consigneeApptText: String? = null,
+        consigneeApptTimestamp: Long? = null,
+        consigneeApptType: String? = null,
+        dockArrivalTime: Long? = null,
+        detentionHoursLogged: Double = 0.0,
+        detentionFlatPay: Double = 0.0
     ) {
         viewModelScope.launch {
             val newLoad = CurrentLoad(
@@ -111,7 +120,16 @@ class LoadViewModel(application: Application) :
                 consigneeLat = consigneeLat,
                 consigneeLong = consigneeLong,
                 isTrainingWeek = isTrainingWeek,
-                trainerPayRate = trainerPayRate
+                trainerPayRate = trainerPayRate,
+                pickupApptText = pickupApptText,
+                pickupApptTimestamp = pickupApptTimestamp,
+                pickupApptType = pickupApptType,
+                consigneeApptText = consigneeApptText,
+                consigneeApptTimestamp = consigneeApptTimestamp,
+                consigneeApptType = consigneeApptType,
+                dockArrivalTime = dockArrivalTime,
+                detentionHoursLogged = detentionHoursLogged,
+                detentionFlatPay = detentionFlatPay
             )
             loadDao.insertLoad(newLoad)
         }

@@ -890,7 +890,16 @@ class MainActivity : ComponentActivity() {
                                                         consigneeLat = updatedTripEntity.consigneeLat,
                                                         consigneeLong = updatedTripEntity.consigneeLong,
                                                         isTrainingWeek = updatedTripEntity.isTrainingWeek,
-                                                        trainerPayRate = updatedTripEntity.trainerPayRate
+                                                        trainerPayRate = updatedTripEntity.trainerPayRate,
+                                                        pickupApptText = updatedTripEntity.pickupApptText,
+                                                        pickupApptTimestamp = updatedTripEntity.pickupApptTimestamp,
+                                                        pickupApptType = updatedTripEntity.pickupApptType,
+                                                        consigneeApptText = updatedTripEntity.consigneeApptText,
+                                                        consigneeApptTimestamp = updatedTripEntity.consigneeApptTimestamp,
+                                                        consigneeApptType = updatedTripEntity.consigneeApptType,
+                                                        dockArrivalTime = updatedTripEntity.dockArrivalTime,
+                                                        detentionHoursLogged = updatedTripEntity.detentionHoursLogged,
+                                                        detentionFlatPay = updatedTripEntity.detentionFlatPay
                                                     )
                                                 }
                                             )
@@ -931,7 +940,16 @@ class MainActivity : ComponentActivity() {
                                                         consigneeLat = finalizedLoadEntity.consigneeLat,
                                                         consigneeLong = finalizedLoadEntity.consigneeLong,
                                                         isTrainingWeek = finalizedLoadEntity.isTrainingWeek,
-                                                        trainerPayRate = finalizedLoadEntity.trainerPayRate
+                                                        trainerPayRate = finalizedLoadEntity.trainerPayRate,
+                                                        pickupApptText = finalizedLoadEntity.pickupApptText,
+                                                        pickupApptTimestamp = finalizedLoadEntity.pickupApptTimestamp,
+                                                        pickupApptType = finalizedLoadEntity.pickupApptType,
+                                                        consigneeApptText = finalizedLoadEntity.consigneeApptText,
+                                                        consigneeApptTimestamp = finalizedLoadEntity.consigneeApptTimestamp,
+                                                        consigneeApptType = finalizedLoadEntity.consigneeApptType,
+                                                        dockArrivalTime = finalizedLoadEntity.dockArrivalTime,
+                                                        detentionHoursLogged = finalizedLoadEntity.detentionHoursLogged,
+                                                        detentionFlatPay = finalizedLoadEntity.detentionFlatPay
                                                     )
                                                     tripToEdit = null
                                                     currentScreen = "dashboard"

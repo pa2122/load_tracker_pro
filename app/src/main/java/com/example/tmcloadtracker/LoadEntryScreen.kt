@@ -65,6 +65,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.time.DayOfWeek
 import java.time.Instant
+import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
@@ -135,6 +136,14 @@ fun LoadEntryScreen(
     var cLong by remember { mutableStateOf(value = editingLoad?.consigneeLong) }
     var isConsigneeVerified by remember { mutableStateOf(value = editingLoad?.consigneeLat != null) }
 
+    var sApptText by remember { mutableStateOf(value = editingLoad?.pickupApptText) }
+    var sApptTimestamp by remember { mutableStateOf(value = editingLoad?.pickupApptTimestamp) }
+    var sApptType by remember { mutableStateOf(value = editingLoad?.pickupApptType) }
+
+    var cApptText by remember { mutableStateOf(value = editingLoad?.consigneeApptText) }
+    var cApptTimestamp by remember { mutableStateOf(value = editingLoad?.consigneeApptTimestamp) }
+    var cApptType by remember { mutableStateOf(value = editingLoad?.consigneeApptType) }
+
     fun resolveAddress(input: String, isShipper: Boolean) {
         val lines = input.lines().filter { it.isNotBlank() }
         if (lines.isEmpty()) return
@@ -175,6 +184,23 @@ fun LoadEntryScreen(
 
     var showFridayReminder by remember { mutableStateOf(value = false) }
     var pendingLoadSave by remember { mutableStateOf<CurrentLoad?>(value = null) }
+
+    fun parseApptDateToMillis(dateStr: String): Long? {
+        val patterns = listOf(
+            "M/d/yyyy h:mm:ss a",
+            "M/d/yyyy h:mm a",
+            "MM/dd/yyyy HH:mm:ss",
+            "MM/dd/yyyy HH:mm"
+        )
+        for (pattern in patterns) {
+            try {
+                val formatter = DateTimeFormatter.ofPattern(pattern, Locale.US)
+                val ldt = LocalDateTime.parse(dateStr, formatter)
+                return ldt.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+            } catch (_: Exception) {}
+        }
+        return null
+    }
 
     fun processOcrText(rawText: String) {
         val lines = rawText.lines().map { it.trim() }.filter { it.isNotBlank() }
@@ -405,6 +431,30 @@ fun LoadEntryScreen(
 
         if (notesSb.isNotBlank()) {
             tripNotes = notesSb.toString().trim()
+        }
+
+        // 8. Extract Appointment Date/Time Lines (@ or B)
+        val apptRegex = Regex("""(?:[@B]\s*)?(\d{1,2}/\d{1,2}/\d{2,4}\s+\d{1,2}:\d{2}(?::\d{2})?\s*(?:AM|PM)?)""", RegexOption.IGNORE_CASE)
+        for (i in lines.indices) {
+            val line = lines[i]
+            val match = apptRegex.find(line)
+            if (match != null) {
+                val apptText = line.trim()
+                val isBeforeType = apptText.startsWith("B", ignoreCase = true)
+                val type = if (isBeforeType) "BEFORE" else "EXACT"
+                val rawDateStr = match.groupValues[1].trim()
+                val parsedTs = parseApptDateToMillis(rawDateStr)
+
+                if (i < lines.size / 2 && sApptTimestamp == null) {
+                    sApptText = apptText
+                    sApptTimestamp = parsedTs
+                    sApptType = type
+                } else if (cApptTimestamp == null) {
+                    cApptText = apptText
+                    cApptTimestamp = parsedTs
+                    cApptType = type
+                }
+            }
         }
     }
 
@@ -779,7 +829,13 @@ fun LoadEntryScreen(
                         shipperLong = sLong,
                         consigneeName = if (cRawPaste.isNotBlank()) cRawPaste.trim() else cName,
                         consigneeLat = cLat,
-                        consigneeLong = cLong
+                        consigneeLong = cLong,
+                        pickupApptText = sApptText,
+                        pickupApptTimestamp = sApptTimestamp,
+                        pickupApptType = sApptType,
+                        consigneeApptText = cApptText,
+                        consigneeApptTimestamp = cApptTimestamp,
+                        consigneeApptType = cApptType
                     )
                     processSave(manualData)
                 } else {
@@ -806,7 +862,13 @@ fun LoadEntryScreen(
                         shipperLong = sLong,
                         consigneeName = if (cRawPaste.isNotBlank()) cRawPaste.trim() else cName,
                         consigneeLat = cLat,
-                        consigneeLong = cLong
+                        consigneeLong = cLong,
+                        pickupApptText = sApptText,
+                        pickupApptTimestamp = sApptTimestamp,
+                        pickupApptType = sApptType,
+                        consigneeApptText = cApptText,
+                        consigneeApptTimestamp = cApptTimestamp,
+                        consigneeApptType = cApptType
                     )
                     TrackingService.resetTrackingState()
                     TrackingService.activeProNumber = proNum.trim()

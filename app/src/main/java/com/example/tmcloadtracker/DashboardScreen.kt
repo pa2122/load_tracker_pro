@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -25,8 +26,10 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -252,7 +255,8 @@ fun DashboardScreen(
                                                 onUpdateTripClick(
                                                     activeTrip.copy(
                                                         tripState = "ACTIVE_SHIPPER",
-                                                        bounceMilesEnd = liveBounceMiles
+                                                        bounceMilesEnd = liveBounceMiles,
+                                                        dockArrivalTime = System.currentTimeMillis()
                                                     )
                                                 )
                                             },
@@ -261,6 +265,73 @@ fun DashboardScreen(
                                     }
 
                                     "ACTIVE_SHIPPER" -> {
+                                        val arrivalTs = activeTrip.dockArrivalTime ?: System.currentTimeMillis()
+                                        val apptTs = activeTrip.pickupApptTimestamp
+                                        val apptType = activeTrip.pickupApptType
+                                        val apptText = activeTrip.pickupApptText
+
+                                        val clockStartTs = if (apptType == "BEFORE" || apptTs == null) {
+                                            arrivalTs
+                                        } else {
+                                            if (arrivalTs < apptTs) apptTs else arrivalTs
+                                        }
+
+                                        val now = System.currentTimeMillis()
+                                        val totalDockMins = maxOf(0L, (now - arrivalTs) / 60000L)
+                                        val clockMins = maxOf(0L, (now - clockStartTs) / 60000L)
+
+                                        val totalDockStr = "${totalDockMins / 60}h ${totalDockMins % 60}m"
+                                        val is1Point5HrAlert = clockMins >= 90L
+                                        val billableMins = maxOf(0L, clockMins - 120L)
+
+                                        Surface(
+                                            color = MaterialTheme.colorScheme.surfaceVariant,
+                                            shape = RoundedCornerShape(8.dp),
+                                            modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
+                                        ) {
+                                            Column(
+                                                modifier = Modifier.padding(12.dp),
+                                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                                            ) {
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    horizontalArrangement = Arrangement.SpaceBetween
+                                                ) {
+                                                    Text("⏱️ Facility Dock Time:", style = MaterialTheme.typography.titleSmall)
+                                                    Text(totalDockStr, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                                                }
+
+                                                if (!apptText.isNullOrBlank()) {
+                                                    Text("Appt Schedule: $apptText", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
+                                                }
+
+                                                if (is1Point5HrAlert && billableMins == 0L) {
+                                                    Text(
+                                                        "⚠️ 1.5 Hours Elapsed: Contact Detention Dispatch!",
+                                                        style = MaterialTheme.typography.labelMedium,
+                                                        color = MaterialTheme.colorScheme.error,
+                                                        fontWeight = FontWeight.Bold
+                                                    )
+                                                } else if (billableMins > 0L) {
+                                                    val detHrs = billableMins / 60
+                                                    val detMins = billableMins % 60
+                                                    Text(
+                                                        "🚨 Detention Accruing: ${detHrs}h ${detMins}m",
+                                                        style = MaterialTheme.typography.labelMedium,
+                                                        color = MaterialTheme.colorScheme.error,
+                                                        fontWeight = FontWeight.Bold
+                                                    )
+                                                } else {
+                                                    val remainingFree = 120L - clockMins
+                                                    Text(
+                                                        "Free Time: ${remainingFree}m remaining",
+                                                        style = MaterialTheme.typography.bodySmall,
+                                                        color = MaterialTheme.colorScheme.primary
+                                                    )
+                                                }
+                                            }
+                                        }
+
                                         Button(
                                             onClick = {
                                                 TrackingService.activeSegment = "Loaded"
@@ -268,13 +339,82 @@ fun DashboardScreen(
                                                 TrackingService.targetLong = activeTrip.consigneeLong
                                                 TrackingService.targetName = activeTrip.consigneeName ?: "Consignee"
                                                 TrackingService.isGeofenceActive = activeTrip.consigneeLat != null
-                                                onUpdateTripClick(activeTrip.copy(tripState = "ACTIVE_LOADED"))
+                                                onUpdateTripClick(activeTrip.copy(tripState = "ACTIVE_LOADED", dockArrivalTime = null))
                                             },
                                             modifier = Modifier.fillMaxWidth()
                                         ) { Text("Depart Shipper (Loaded)") }
                                     }
 
                                     "ACTIVE_LOADED", "ACTIVE_CONSIGNEE" -> {
+                                        if (activeTrip.tripState == "ACTIVE_CONSIGNEE") {
+                                            val arrivalTs = activeTrip.dockArrivalTime ?: System.currentTimeMillis()
+                                            val apptTs = activeTrip.consigneeApptTimestamp
+                                            val apptType = activeTrip.consigneeApptType
+                                            val apptText = activeTrip.consigneeApptText
+
+                                            val clockStartTs = if (apptType == "BEFORE" || apptTs == null) {
+                                                arrivalTs
+                                            } else {
+                                                if (arrivalTs < apptTs) apptTs else arrivalTs
+                                            }
+
+                                            val now = System.currentTimeMillis()
+                                            val totalDockMins = maxOf(0L, (now - arrivalTs) / 60000L)
+                                            val clockMins = maxOf(0L, (now - clockStartTs) / 60000L)
+
+                                            val totalDockStr = "${totalDockMins / 60}h ${totalDockMins % 60}m"
+                                            val is1Point5HrAlert = clockMins >= 90L
+                                            val billableMins = maxOf(0L, clockMins - 120L)
+
+                                            Surface(
+                                                color = MaterialTheme.colorScheme.surfaceVariant,
+                                                shape = RoundedCornerShape(8.dp),
+                                                modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
+                                            ) {
+                                                Column(
+                                                    modifier = Modifier.padding(12.dp),
+                                                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                                                ) {
+                                                    Row(
+                                                        modifier = Modifier.fillMaxWidth(),
+                                                        horizontalArrangement = Arrangement.SpaceBetween
+                                                    ) {
+                                                        Text("⏱️ Facility Dock Time:", style = MaterialTheme.typography.titleSmall)
+                                                        Text(totalDockStr, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                                                    }
+
+                                                    if (!apptText.isNullOrBlank()) {
+                                                        Text("Appt Schedule: $apptText", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
+                                                    }
+
+                                                    if (is1Point5HrAlert && billableMins == 0L) {
+                                                        Text(
+                                                            "⚠️ 1.5 Hours Elapsed: Contact Detention Dispatch!",
+                                                            style = MaterialTheme.typography.labelMedium,
+                                                            color = MaterialTheme.colorScheme.error,
+                                                            fontWeight = FontWeight.Bold
+                                                        )
+                                                    } else if (billableMins > 0L) {
+                                                        val detHrs = billableMins / 60
+                                                        val detMins = billableMins % 60
+                                                        Text(
+                                                            "🚨 Detention Accruing: ${detHrs}h ${detMins}m",
+                                                            style = MaterialTheme.typography.labelMedium,
+                                                            color = MaterialTheme.colorScheme.error,
+                                                            fontWeight = FontWeight.Bold
+                                                        )
+                                                    } else {
+                                                        val remainingFree = 120L - clockMins
+                                                        Text(
+                                                            "Free Time: ${remainingFree}m remaining",
+                                                            style = MaterialTheme.typography.bodySmall,
+                                                            color = MaterialTheme.colorScheme.primary
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                        }
+
                                         Button(
                                             onClick = {
                                                 TrackingService.isGeofenceActive = false

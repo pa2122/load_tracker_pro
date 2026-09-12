@@ -31,7 +31,17 @@ data class CurrentLoad(
     // 📍 New field added in Version 7
     val isTrainingWeek: Boolean = false,
     // 📍 New field added in Version 8
-    val trainerPayRate: Double = 0.0
+    val trainerPayRate: Double = 0.0,
+    // 📍 New fields added in Version 10 for Appointment & Detention Clock
+    val pickupApptText: String? = null,
+    val pickupApptTimestamp: Long? = null,
+    val pickupApptType: String? = null,
+    val consigneeApptText: String? = null,
+    val consigneeApptTimestamp: Long? = null,
+    val consigneeApptType: String? = null,
+    val dockArrivalTime: Long? = null,
+    val detentionHoursLogged: Double = 0.0,
+    val detentionFlatPay: Double = 0.0
 )
 
 @Entity(tableName = "trip_breadcrumbs")

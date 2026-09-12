@@ -7,7 +7,7 @@ import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
-@Database(entities = [CurrentLoad::class, TripBreadcrumb::class], version = 9, exportSchema = true)
+@Database(entities = [CurrentLoad::class, TripBreadcrumb::class], version = 10, exportSchema = true)
 abstract class AppDatabase : RoomDatabase() {
 
     abstract fun loadDao(): LoadDao
@@ -67,6 +67,20 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_9_10 = object : Migration(9, 10) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE trucking_loads ADD COLUMN pickupApptText TEXT")
+                db.execSQL("ALTER TABLE trucking_loads ADD COLUMN pickupApptTimestamp INTEGER")
+                db.execSQL("ALTER TABLE trucking_loads ADD COLUMN pickupApptType TEXT")
+                db.execSQL("ALTER TABLE trucking_loads ADD COLUMN consigneeApptText TEXT")
+                db.execSQL("ALTER TABLE trucking_loads ADD COLUMN consigneeApptTimestamp INTEGER")
+                db.execSQL("ALTER TABLE trucking_loads ADD COLUMN consigneeApptType TEXT")
+                db.execSQL("ALTER TABLE trucking_loads ADD COLUMN dockArrivalTime INTEGER")
+                db.execSQL("ALTER TABLE trucking_loads ADD COLUMN detentionHoursLogged REAL NOT NULL DEFAULT 0.0")
+                db.execSQL("ALTER TABLE trucking_loads ADD COLUMN detentionFlatPay REAL NOT NULL DEFAULT 0.0")
+            }
+        }
+
         // Safe singleton factory constructor to control access to your data file
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
@@ -75,7 +89,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "tmc_loads_local.db" // The actual tiny file written to your phone's hardware
                 )
-                    .addMigrations(MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9)
+                    .addMigrations(MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10)
                     .build()
                 INSTANCE = instance
                 instance
