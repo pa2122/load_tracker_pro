@@ -285,7 +285,7 @@ fun LoadEntryScreen(
                 foundConsignee = true
                 foundShipper = false
                 val name = line.substringAfter(":").trim()
-                if (name.isNotBlank() && !name.equals("final dropoff", ignoreCase = true) && !name.equals("dropoff", ignoreCase = true) && !name.equals("consignee", ignoreCase = true) && !name.equals("delivery", ignoreCase = true)) {
+                if (name.isNotBlank() && !name.equals("final dropoff", ignoreCase = true) && !name.equals("dropoff", ignoreCase = true) && !name.equals("drop", ignoreCase = true) && !name.equals("consignee", ignoreCase = true) && !name.equals("delivery", ignoreCase = true)) {
                     consigneeSb.append(name).append("\n")
                 }
                 continue
