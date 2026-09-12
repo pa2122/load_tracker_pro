@@ -71,12 +71,12 @@ fun ProPaywallDialog(
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
                                 Text(
-                                    "One-Time Lifetime License",
+                                    "Pro Driver License ($9.99 One-Time)",
                                     style = MaterialTheme.typography.labelMedium,
                                     color = MaterialTheme.colorScheme.onPrimaryContainer
                                 )
                                 Text(
-                                    "$19.99",
+                                    "$9.99",
                                     style = MaterialTheme.typography.headlineLarge,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.primary
@@ -92,7 +92,7 @@ fun ProPaywallDialog(
 
                     item {
                         Text(
-                            "Pro Feature Suite:",
+                            "Pro Driver Feature Suite:",
                             style = MaterialTheme.typography.labelLarge,
                             color = MaterialTheme.colorScheme.primary
                         )
@@ -151,7 +151,7 @@ fun ProPaywallDialog(
                     containerColor = MaterialTheme.colorScheme.primary
                 )
             ) {
-                Text("🚀 Unlock Pro ($19.99 Lifetime)")
+                Text("🚀 Unlock Pro Driver ($9.99 Lifetime)")
             }
         },
         dismissButton = {
