@@ -36,8 +36,10 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
@@ -53,7 +55,9 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Done
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LocationOn
+import dev.jeziellago.compose.markdowntext.MarkdownText
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
@@ -174,6 +178,7 @@ class MainActivity : ComponentActivity() {
                     var showTesterFeedbackDialog by remember { mutableStateOf(value = false) }
                     var showTrainerSettingsDialog by remember { mutableStateOf(value = false) }
                     var showProUpgradeDialog by remember { mutableStateOf(value = false) }
+                    var showReadmeDialog by remember { mutableStateOf(value = false) }
 
                     var initialRxBytes by remember { mutableLongStateOf(value = TrafficStats.getUidRxBytes(Process.myUid())) }
                     var initialTxBytes by remember { mutableLongStateOf(value = TrafficStats.getUidTxBytes(Process.myUid())) }
@@ -636,6 +641,23 @@ class MainActivity : ComponentActivity() {
                                         modifier = Modifier.fillMaxWidth()
                                     ) {
                                         Text("Open Driver's Guide")
+                                    }
+
+                                    HorizontalDivider()
+                                    Button(
+                                        onClick = {
+                                            scope.launch { drawerState.close() }
+                                            showReadmeDialog = true
+                                        },
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                                        ),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Icon(Icons.Default.Info, contentDescription = null)
+                                        Spacer(modifier = Modifier.width(width = 6.dp))
+                                        Text("📖 App Technical Specs (README)")
                                     }
 
                                     if (isDeviceAuthorized || BuildConfig.DEBUG) {
@@ -1164,6 +1186,39 @@ class MainActivity : ComponentActivity() {
                                 Toast.makeText(this@MainActivity, "🎉 Pro Features Unlocked!", Toast.LENGTH_LONG).show()
                             },
                             onDismiss = { showProUpgradeDialog = false }
+                        )
+                    }
+
+                    if (showReadmeDialog) {
+                        val readmeTextString = remember {
+                            try {
+                                applicationContext.assets.open("README.md").bufferedReader().use { it.readText() }
+                            } catch (_: Exception) {
+                                "# Error\nCould not locate `README.md` asset file."
+                            }
+                        }
+
+                        AlertDialog(
+                            onDismissRequest = { showReadmeDialog = false },
+                            title = { Text("App Info & Technical Overview") },
+                            text = {
+                                Box(modifier = Modifier.heightIn(max = 450.dp)) {
+                                    LazyColumn {
+                                        item {
+                                            MarkdownText(
+                                                markdown = readmeTextString,
+                                                color = MaterialTheme.colorScheme.onSurface,
+                                                style = MaterialTheme.typography.bodyMedium
+                                            )
+                                        }
+                                    }
+                                }
+                            },
+                            confirmButton = {
+                                Button(onClick = { showReadmeDialog = false }) {
+                                    Text("Close")
+                                }
+                            }
                         )
                     }
 
