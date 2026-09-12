@@ -34,7 +34,13 @@ interface LoadDao {
     @Query("SELECT * FROM trip_breadcrumbs ORDER BY timestamp ASC")
     fun getAllBreadcrumbs(): Flow<List<TripBreadcrumb>>
 
-    @Query("SELECT DISTINCT shipperName FROM trucking_loads WHERE shipperName IS NOT NULL UNION SELECT DISTINCT consigneeName FROM trucking_loads WHERE consigneeName IS NOT NULL")
+    @Query("""
+        SELECT DISTINCT shipperName FROM trucking_loads 
+        WHERE shipperName IS NOT NULL AND LOWER(shipperName) NOT IN ('origin', 'pickup', 'shipper', '')
+        UNION 
+        SELECT DISTINCT consigneeName FROM trucking_loads 
+        WHERE consigneeName IS NOT NULL AND LOWER(consigneeName) NOT IN ('final dropoff', 'dropoff', 'drop', 'consignee', 'delivery', '')
+    """)
     fun getAllFacilityNames(): Flow<List<String>>
 
     @Query("SELECT tripNotes, pickupTimestamp, proNumber FROM trucking_loads WHERE (shipperName = :name OR consigneeName = :name) AND tripNotes IS NOT NULL")
