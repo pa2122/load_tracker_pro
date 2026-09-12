@@ -10,12 +10,17 @@ import android.os.Bundle
 import android.os.Process
 import android.provider.Settings
 import android.widget.Toast
+import org.json.JSONArray
+import java.net.HttpURLConnection
+import java.net.URL
 import androidx.compose.ui.text.font.FontWeight
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -201,6 +206,37 @@ class MainActivity : ComponentActivity() {
                             }
                         } catch (e: Exception) {
                             e.printStackTrace()
+                        }
+                    }
+
+                    LaunchedEffect(isProUser) {
+                        TrackingService.isProUser = isProUser
+                    }
+
+                    LaunchedEffect(currentDeviceId) {
+                        withContext(Dispatchers.IO) {
+                            try {
+                                val url = URL("https://raw.githubusercontent.com/pa2122/android_apps/master/authorized_devs.json")
+                                val conn = url.openConnection() as HttpURLConnection
+                                conn.requestMethod = "GET"
+                                conn.connectTimeout = 5000
+                                conn.readTimeout = 5000
+                                if (conn.responseCode == 200) {
+                                    val jsonText = conn.inputStream.bufferedReader().use { it.readText() }
+                                    val array = JSONArray(jsonText)
+                                    val remoteIds = mutableSetOf<String>()
+                                    for (i in 0 until array.length()) {
+                                        remoteIds.add(array.getString(i).trim())
+                                    }
+                                    withContext(Dispatchers.Main) {
+                                        if (remoteIds.contains(currentDeviceId) || BuildConfig.DEBUG) {
+                                            isDeviceAuthorized = true
+                                        }
+                                    }
+                                }
+                            } catch (e: Exception) {
+                                e.printStackTrace()
+                            }
                         }
                     }
 

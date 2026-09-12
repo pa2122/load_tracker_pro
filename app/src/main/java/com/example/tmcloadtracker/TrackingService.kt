@@ -51,6 +51,7 @@ class TrackingService : Service() {
         var targetLong: Double? = null
         var targetName: String? = null
         var isGeofenceActive = false
+        var isProUser = true
 
         var currentLatitude: Double? = null
         var currentLongitude: Double? = null
@@ -163,8 +164,8 @@ class TrackingService : Service() {
             }
         }
 
-        // 2. Standard Facility Geofencing
-        if (!isGeofenceActive || targetLat == null || targetLong == null) return
+        // 2. Standard Facility Geofencing (Pro Feature)
+        if (!isProUser || !isGeofenceActive || targetLat == null || targetLong == null) return
 
         val targetLoc = Location("").apply {
             latitude = targetLat!!
