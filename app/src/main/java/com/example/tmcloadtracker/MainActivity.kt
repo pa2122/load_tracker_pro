@@ -21,6 +21,9 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.time.format.DateTimeFormatter
+import java.time.Instant
+import java.time.ZoneId
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -44,6 +47,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Done
@@ -51,7 +55,11 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.NavigationRail
 import androidx.compose.material3.NavigationRailItem
 import androidx.compose.ui.platform.LocalConfiguration
@@ -162,6 +170,7 @@ class MainActivity : ComponentActivity() {
                     var savedFlatTrainerPayRate by remember { mutableStateOf(value = "200.0") }
 
                     var showDevOptionsDialog by remember { mutableStateOf(value = false) }
+                    var showDevAccessRequestDialog by remember { mutableStateOf(value = false) }
                     var showTesterFeedbackDialog by remember { mutableStateOf(value = false) }
                     var showTrainerSettingsDialog by remember { mutableStateOf(value = false) }
 
@@ -635,6 +644,23 @@ class MainActivity : ComponentActivity() {
                                             Icon(Icons.Default.Build, contentDescription = null)
                                             Spacer(modifier = Modifier.width(width = 6.dp))
                                             Text("🛠️ Developer Options")
+                                        }
+                                    } else {
+                                        Spacer(modifier = Modifier.weight(weight = 1f))
+                                        Button(
+                                            onClick = {
+                                                scope.launch { drawerState.close() }
+                                                showDevAccessRequestDialog = true
+                                            },
+                                            colors = ButtonDefaults.buttonColors(
+                                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                                            ),
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Icon(Icons.Default.Share, contentDescription = null)
+                                            Spacer(modifier = Modifier.width(width = 6.dp))
+                                            Text("📱 Request Developer Access")
                                         }
                                     }
                                 }
@@ -1122,6 +1148,125 @@ class MainActivity : ComponentActivity() {
                             onDismiss = { showTrainerSettingsDialog = false }
                         )
                     }
+
+                    if (showDevAccessRequestDialog) {
+                        var requesterName by remember { mutableStateOf("") }
+                        var requesterEmail by remember { mutableStateOf("") }
+                        var requesterNote by remember { mutableStateOf("") }
+                        var isSubmitting by remember { mutableStateOf(false) }
+
+                        AlertDialog(
+                            onDismissRequest = {
+                                if (!isSubmitting) showDevAccessRequestDialog = false
+                            },
+                            title = { Text("📱 Request Developer Access") },
+                            text = {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .verticalScroll(rememberScrollState()),
+                                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    Text(
+                                        "Submit your device information to request developer/tester access to advanced tools.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.secondary
+                                    )
+
+                                    Card(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        colors = CardDefaults.cardColors(
+                                            containerColor = MaterialTheme.colorScheme.surfaceVariant
+                                        )
+                                    ) {
+                                        Column(modifier = Modifier.padding(10.dp)) {
+                                            Text("Your Device ID:", style = MaterialTheme.typography.labelSmall)
+                                            Text(currentDeviceId, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                                        }
+                                    }
+
+                                    OutlinedTextField(
+                                        value = requesterName,
+                                        onValueChange = { requesterName = it },
+                                        label = { Text("Your Name (Required)") },
+                                        placeholder = { Text("e.g. Driver John") },
+                                        singleLine = true,
+                                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+
+                                    OutlinedTextField(
+                                        value = requesterEmail,
+                                        onValueChange = { requesterEmail = it },
+                                        label = { Text("Your Email Address (Required)") },
+                                        placeholder = { Text("e.g. john@example.com") },
+                                        singleLine = true,
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Next),
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+
+                                    OutlinedTextField(
+                                        value = requesterNote,
+                                        onValueChange = { requesterNote = it },
+                                        label = { Text("Reason / Note (Optional)") },
+                                        placeholder = { Text("e.g. Need access to test SQLite database viewer") },
+                                        minLines = 2,
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+                                }
+                            },
+                            confirmButton = {
+                                Button(
+                                    onClick = {
+                                        if (requesterName.isBlank() || requesterEmail.isBlank()) {
+                                            Toast.makeText(this@MainActivity, "Please enter your Name and Email.", Toast.LENGTH_SHORT).show()
+                                            return@Button
+                                        }
+                                        isSubmitting = true
+                                        val repo = devPrefs.getString("gh_repo", "pa2122/android_apps") ?: "pa2122/android_apps"
+                                        val token = devPrefs.getString("gh_token", "")?.ifBlank { BuildConfig.DEFAULT_GITHUB_TOKEN } ?: BuildConfig.DEFAULT_GITHUB_TOKEN
+
+                                        scope.launch {
+                                            val (success, message) = submitDevAccessRequest(
+                                                repo = repo,
+                                                token = token,
+                                                name = requesterName,
+                                                email = requesterEmail,
+                                                deviceId = currentDeviceId,
+                                                note = requesterNote
+                                            )
+                                            isSubmitting = false
+                                            Toast.makeText(this@MainActivity, message, Toast.LENGTH_LONG).show()
+                                            if (success) {
+                                                showDevAccessRequestDialog = false
+                                            }
+                                        }
+                                    },
+                                    enabled = !isSubmitting && requesterName.isNotBlank() && requesterEmail.isNotBlank()
+                                ) {
+                                    if (isSubmitting) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(16.dp),
+                                            strokeWidth = 2.dp,
+                                            color = MaterialTheme.colorScheme.onPrimary
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text("Submitting...")
+                                    } else {
+                                        Icon(Icons.AutoMirrored.Filled.Send, contentDescription = null)
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text("🚀 Submit Access Request")
+                                    }
+                                }
+                            },
+                            dismissButton = {
+                                TextButton(
+                                    onClick = { showDevAccessRequestDialog = false },
+                                    enabled = !isSubmitting
+                                ) { Text("Cancel") }
+                            }
+                        )
+                    }
                 }
             }
         }
@@ -1130,6 +1275,73 @@ class MainActivity : ComponentActivity() {
 }
 }
 }
+
+    private suspend fun submitDevAccessRequest(
+        repo: String,
+        token: String,
+        name: String,
+        email: String,
+        deviceId: String,
+        note: String
+    ): Pair<Boolean, String> = withContext(Dispatchers.IO) {
+        try {
+            val cleanRepo = repo.trim().removePrefix("https://github.com/").removeSuffix(".git")
+            if (cleanRepo.isBlank() || token.trim().isBlank()) {
+                return@withContext Pair(false, "Developer access request service is currently offline.")
+            }
+            val url = URL("https://api.github.com/repos/$cleanRepo/issues")
+            val conn = url.openConnection() as HttpURLConnection
+            conn.requestMethod = "POST"
+            conn.setRequestProperty("Authorization", "Bearer ${token.trim()}")
+            conn.setRequestProperty("Accept", "application/vnd.github+json")
+            conn.setRequestProperty("Content-Type", "application/json; utf-8")
+            conn.setRequestProperty("User-Agent", "LoadTrackerPro")
+            conn.doOutput = true
+
+            val title = "[Dev Access Request]: $name"
+            val formatter = DateTimeFormatter.ofPattern("MM/dd/yyyy @ hh:mm a")
+            val nowFormatted = Instant.ofEpochMilli(System.currentTimeMillis()).atZone(ZoneId.systemDefault()).format(formatter)
+
+            val bodyText = """
+                ### 📱 Developer Access Request
+                - **Requester Name:** $name
+                - **Email Address:** $email
+                - **Device ID:** `$deviceId`
+                - **Requested On:** $nowFormatted
+                ${if (note.isNotBlank()) "- **Notes / Reason:** $note" else ""}
+            """.trimIndent()
+
+            val jsonPayload = """
+                {
+                  "title": "${escapeJsonPayload(title)}",
+                  "body": "${escapeJsonPayload(bodyText)}",
+                  "labels": ["dev-access-request"]
+                }
+            """.trimIndent()
+
+            conn.outputStream.use { os ->
+                os.write(jsonPayload.toByteArray(Charsets.UTF_8))
+            }
+
+            val responseCode = conn.responseCode
+            if (responseCode in 200..299) {
+                Pair(true, "Dev access request submitted! You will be notified once approved.")
+            } else {
+                val errText = conn.errorStream?.bufferedReader()?.use { it.readText() } ?: "HTTP $responseCode"
+                Pair(false, "Could not submit request ($responseCode): $errText")
+            }
+        } catch (e: Exception) {
+            Pair(false, "Network error: ${e.localizedMessage}")
+        }
+    }
+
+    private fun escapeJsonPayload(str: String): String {
+        return str.replace("\\", "\\\\")
+            .replace("\"", "\\\"")
+            .replace("\n", "\\n")
+            .replace("\r", "\\r")
+            .replace("\t", "\\t")
+    }
 
     private fun exportToCsv() {
         val csvContent = viewModel.generateCsvContent()
