@@ -1166,20 +1166,11 @@ fun DashboardScreen(
     }
 
     if (showProUpgradeDialog) {
-        AlertDialog(
-            onDismissRequest = { showProUpgradeDialog = false },
-            title = { Text("🚀 Unlock Load Tracker Pro") },
-            text = {
-                Text(
-                    "Editing completed historical loads, Facility Insights, and Route Heatmaps are Pro features.\n\nUpgrade to Pro to unlock historical record editing, IFTA reports, and global route heatmaps!",
-                    style = MaterialTheme.typography.bodyMedium
-                )
+        ProPaywallDialog(
+            onUnlockClick = {
+                showProUpgradeDialog = false
             },
-            confirmButton = {
-                Button(onClick = { showProUpgradeDialog = false }) {
-                    Text("Got It")
-                }
-            }
+            onDismiss = { showProUpgradeDialog = false }
         )
     }
 

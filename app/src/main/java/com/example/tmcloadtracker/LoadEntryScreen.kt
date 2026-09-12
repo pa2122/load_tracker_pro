@@ -115,6 +115,7 @@ fun LoadEntryScreen(
     var matchDispatched by remember { mutableStateOf(value = true) }
 
     var showDatePicker by remember { mutableStateOf(value = false) }
+    var showProPaywallDialog by remember { mutableStateOf(value = false) }
     var selectedDateMillis by remember { mutableLongStateOf(value = editingLoad?.pickupTimestamp ?: System.currentTimeMillis()) }
     val dateLabel = remember(key1 = selectedDateMillis) {
         val instant = Instant.ofEpochMilli(selectedDateMillis)
@@ -385,7 +386,7 @@ fun LoadEntryScreen(
                     if (isProUser) {
                         imagePickerLauncher.launch("image/*")
                     } else {
-                        Toast.makeText(ctx, "OCR Screenshot Auto-Fill is a Pro feature. Unlock Pro in side menu.", Toast.LENGTH_LONG).show()
+                        showProPaywallDialog = true
                     }
                 },
                 colors = ButtonDefaults.buttonColors(
@@ -770,6 +771,16 @@ fun LoadEntryScreen(
                     showFridayReminder = false
                 }) { Text("No, Work Only") }
             }
+        )
+    }
+
+    if (showProPaywallDialog) {
+        ProPaywallDialog(
+            onUnlockClick = {
+                showProPaywallDialog = false
+                Toast.makeText(ctx, "Unlock Pro in side menu or Dev Options.", Toast.LENGTH_LONG).show()
+            },
+            onDismiss = { showProPaywallDialog = false }
         )
     }
 }

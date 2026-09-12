@@ -173,6 +173,7 @@ class MainActivity : ComponentActivity() {
                     var showDevAccessRequestDialog by remember { mutableStateOf(value = false) }
                     var showTesterFeedbackDialog by remember { mutableStateOf(value = false) }
                     var showTrainerSettingsDialog by remember { mutableStateOf(value = false) }
+                    var showProUpgradeDialog by remember { mutableStateOf(value = false) }
 
                     var initialRxBytes by remember { mutableLongStateOf(value = TrafficStats.getUidRxBytes(Process.myUid())) }
                     var initialTxBytes by remember { mutableLongStateOf(value = TrafficStats.getUidTxBytes(Process.myUid())) }
@@ -557,9 +558,12 @@ class MainActivity : ComponentActivity() {
                                     Button(
                                         onClick = {
                                             scope.launch { drawerState.close() }
-                                            currentScreen = "facility_search"
+                                            if (isProUser) {
+                                                currentScreen = "facility_search"
+                                            } else {
+                                                showProUpgradeDialog = true
+                                            }
                                         },
-                                        enabled = isProUser,
                                         colors = ButtonDefaults.buttonColors(
                                             containerColor = MaterialTheme.colorScheme.secondaryContainer,
                                             contentColor = MaterialTheme.colorScheme.onSecondaryContainer
@@ -573,10 +577,13 @@ class MainActivity : ComponentActivity() {
                                     Button(
                                         onClick = {
                                             scope.launch { drawerState.close() }
-                                            tripForMap = null
-                                            currentScreen = "route_map"
+                                            if (isProUser) {
+                                                tripForMap = null
+                                                currentScreen = "route_map"
+                                            } else {
+                                                showProUpgradeDialog = true
+                                            }
                                         },
-                                        enabled = isProUser,
                                         colors = ButtonDefaults.buttonColors(
                                             containerColor = MaterialTheme.colorScheme.secondaryContainer,
                                             contentColor = MaterialTheme.colorScheme.onSecondaryContainer
@@ -1146,6 +1153,17 @@ class MainActivity : ComponentActivity() {
                                     .apply()
                             },
                             onDismiss = { showTrainerSettingsDialog = false }
+                        )
+                    }
+
+                    if (showProUpgradeDialog) {
+                        ProPaywallDialog(
+                            onUnlockClick = {
+                                isProUser = true
+                                showProUpgradeDialog = false
+                                Toast.makeText(this@MainActivity, "🎉 Pro Features Unlocked!", Toast.LENGTH_LONG).show()
+                            },
+                            onDismiss = { showProUpgradeDialog = false }
                         )
                     }
 
