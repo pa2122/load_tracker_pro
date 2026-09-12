@@ -5,6 +5,7 @@ import android.content.Intent
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
+import dev.jeziellago.compose.markdowntext.MarkdownText
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -36,12 +37,16 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.PrimaryTabRow
@@ -120,6 +125,9 @@ fun DevNotesScreen(
     var issuesErrorText by remember { mutableStateOf("") }
     var issuesFilterState by remember { mutableStateOf("open") } // "all", "open", "closed"
     var expandedIssueNumber by remember { mutableIntStateOf(-1) }
+    var isIssueReaderExpanded by remember { mutableStateOf(false) }
+    var showNewIssueDialog by remember { mutableStateOf(false) }
+    var labelDropdownExpanded by remember { mutableStateOf(false) }
 
     fun loadIssues() {
         if (githubRepo.isNotBlank()) {
@@ -409,139 +417,166 @@ fun DevNotesScreen(
 
                     HorizontalDivider()
 
-                    // READ-ONLY GITHUB ISSUE READER
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                    // READ-ONLY GITHUB ISSUE READER (Collapsible Dropdown)
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { isIssueReaderExpanded = !isIssueReaderExpanded },
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant
+                        )
                     ) {
-                        Text(
-                            "📋 GitHub Issue Reader",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-
-                        IconButton(
-                            onClick = { loadIssues() },
-                            enabled = !isFetchingIssues
-                        ) {
-                            Icon(Icons.Default.Refresh, contentDescription = "Refresh Issues List")
-                        }
-                    }
-
-                    // Filter Chips for Issues
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        FilterChip(
-                            selected = issuesFilterState == "open",
-                            onClick = { issuesFilterState = "open" },
-                            label = { Text("Open (${githubIssues.count { it.state == "open" }})") }
-                        )
-                        FilterChip(
-                            selected = issuesFilterState == "closed",
-                            onClick = { issuesFilterState = "closed" },
-                            label = { Text("Closed (${githubIssues.count { it.state == "closed" }})") }
-                        )
-                        FilterChip(
-                            selected = issuesFilterState == "all",
-                            onClick = { issuesFilterState = "all" },
-                            label = { Text("All (${githubIssues.size})") }
-                        )
-                    }
-
-                    if (isFetchingIssues) {
                         Row(
-                            modifier = Modifier.fillMaxWidth().padding(16.dp),
-                            horizontalArrangement = Arrangement.Center,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(14.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Text("Fetching issues from GitHub...", style = MaterialTheme.typography.bodyMedium)
-                        }
-                    } else if (issuesErrorText.isNotBlank()) {
-                        Text(
-                            issuesErrorText,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.error,
-                            modifier = Modifier.padding(vertical = 8.dp)
-                        )
-                    } else {
-                        val filteredIssues = githubIssues.filter {
-                            when (issuesFilterState) {
-                                "open" -> it.state == "open"
-                                "closed" -> it.state == "closed"
-                                else -> true
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    "📋 GitHub Issue Reader",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                val openCount = githubIssues.count { it.state == "open" }
+                                Text(
+                                    if (githubIssues.isNotEmpty()) "$openCount Open (${githubIssues.size} Total)" else "Tap to expand issue list",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.secondary
+                                )
+                            }
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                IconButton(
+                                    onClick = { loadIssues() },
+                                    enabled = !isFetchingIssues
+                                ) {
+                                    Icon(Icons.Default.Refresh, contentDescription = "Refresh Issues List")
+                                }
+                                Icon(
+                                    if (isIssueReaderExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.secondary
+                                )
                             }
                         }
+                    }
 
-                        if (filteredIssues.isEmpty()) {
+                    if (isIssueReaderExpanded) {
+                        // Filter Chips for Issues
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            FilterChip(
+                                selected = issuesFilterState == "open",
+                                onClick = { issuesFilterState = "open" },
+                                label = { Text("Open (${githubIssues.count { it.state == "open" }})") }
+                            )
+                            FilterChip(
+                                selected = issuesFilterState == "closed",
+                                onClick = { issuesFilterState = "closed" },
+                                label = { Text("Closed (${githubIssues.count { it.state == "closed" }})") }
+                            )
+                            FilterChip(
+                                selected = issuesFilterState == "all",
+                                onClick = { issuesFilterState = "all" },
+                                label = { Text("All (${githubIssues.size})") }
+                            )
+                        }
+
+                        if (isFetchingIssues) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Text("Fetching issues from GitHub...", style = MaterialTheme.typography.bodyMedium)
+                            }
+                        } else if (issuesErrorText.isNotBlank()) {
                             Text(
-                                "No ${issuesFilterState} issues found for $githubRepo.",
+                                issuesErrorText,
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.secondary,
+                                color = MaterialTheme.colorScheme.error,
                                 modifier = Modifier.padding(vertical = 8.dp)
                             )
                         } else {
-                            filteredIssues.forEach { issue ->
-                                val isExpanded = expandedIssueNumber == issue.number
-                                Card(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable {
-                                            expandedIssueNumber = if (isExpanded) -1 else issue.number
-                                        },
-                                    colors = CardDefaults.cardColors(
-                                        containerColor = MaterialTheme.colorScheme.surfaceVariant
-                                    )
-                                ) {
-                                    Column(
-                                        modifier = Modifier.padding(12.dp),
-                                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                            val filteredIssues = githubIssues.filter {
+                                when (issuesFilterState) {
+                                    "open" -> it.state == "open"
+                                    "closed" -> it.state == "closed"
+                                    else -> true
+                                }
+                            }
+
+                            if (filteredIssues.isEmpty()) {
+                                Text(
+                                    "No ${issuesFilterState} issues found for $githubRepo.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.secondary,
+                                    modifier = Modifier.padding(vertical = 8.dp)
+                                )
+                            } else {
+                                filteredIssues.forEach { issue ->
+                                    val isExpanded = expandedIssueNumber == issue.number
+                                    Card(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable {
+                                                expandedIssueNumber = if (isExpanded) -1 else issue.number
+                                            },
+                                        colors = CardDefaults.cardColors(
+                                            containerColor = MaterialTheme.colorScheme.surface
+                                        )
                                     ) {
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.SpaceBetween,
-                                            verticalAlignment = Alignment.CenterVertically
+                                        Column(
+                                            modifier = Modifier.padding(12.dp),
+                                            verticalArrangement = Arrangement.spacedBy(6.dp)
                                         ) {
-                                            Text(
-                                                "#${issue.number} ${issue.title}",
-                                                style = MaterialTheme.typography.titleSmall,
-                                                modifier = Modifier.weight(1f)
-                                            )
-                                            Icon(
-                                                if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                                                contentDescription = null,
-                                                tint = MaterialTheme.colorScheme.secondary
-                                            )
-                                        }
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Text(
+                                                    "#${issue.number} ${issue.title}",
+                                                    style = MaterialTheme.typography.titleSmall,
+                                                    modifier = Modifier.weight(1f)
+                                                )
+                                                Icon(
+                                                    if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                                    contentDescription = null,
+                                                    tint = MaterialTheme.colorScheme.secondary
+                                                )
+                                            }
 
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.SpaceBetween,
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Text(
-                                                "by @${issue.author} • ${issue.createdAt}",
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.secondary
-                                            )
-                                            Text(
-                                                text = issue.state.uppercase(),
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = if (issue.state == "open") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.tertiary
-                                            )
-                                        }
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Text(
+                                                    "by @${issue.author} • ${issue.createdAt}",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.secondary
+                                                )
+                                                Text(
+                                                    text = issue.state.uppercase(),
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = if (issue.state == "open") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.tertiary
+                                                )
+                                            }
 
-                                        if (isExpanded) {
-                                            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-                                            Text(
-                                                text = issue.body.ifBlank { "No description provided." },
-                                                style = MaterialTheme.typography.bodyMedium,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
+                                            if (isExpanded) {
+                                                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                                                MarkdownText(
+                                                    markdown = issue.body.ifBlank { "_No description provided._" },
+                                                    style = MaterialTheme.typography.bodyMedium,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
                                         }
                                     }
                                 }
@@ -551,29 +586,73 @@ fun DevNotesScreen(
 
                     HorizontalDivider()
 
-                    // PUSH NEW ISSUE SECTION
-                    Text("➕ Push New GitHub Issue", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
-
-                    Text("Issue Category / Label:", style = MaterialTheme.typography.titleSmall)
-                    Row(
+                    // PUSH NEW ISSUE POPOUT BUTTON
+                    Button(
+                        onClick = { showNewIssueDialog = true },
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary
+                        )
                     ) {
-                        FilterChip(
-                            selected = selectedLabel == "bug",
-                            onClick = { selectedLabel = "bug" },
-                            label = { Text("Bug 🐛") }
+                        Icon(Icons.AutoMirrored.Filled.Send, contentDescription = null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("➕ Push New GitHub Issue")
+                    }
+                }
+            }
+        }
+    }
+
+    if (showNewIssueDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                if (!isPostingToGithub) showNewIssueDialog = false
+            },
+            title = { Text("➕ Push New GitHub Issue") },
+            text = {
+                val labelOptions = listOf(
+                    "bug" to "Bug 🐛",
+                    "enhancement" to "Feature 💡",
+                    "documentation" to "Doc 📝"
+                )
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    ExposedDropdownMenuBox(
+                        expanded = labelDropdownExpanded,
+                        onExpandedChange = { labelDropdownExpanded = !labelDropdownExpanded }
+                    ) {
+                        val selectedDisplay = labelOptions.find { it.first == selectedLabel }?.second ?: "Bug 🐛"
+                        OutlinedTextField(
+                            value = selectedDisplay,
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text("Issue Category / Label") },
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = labelDropdownExpanded) },
+                            colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .menuAnchor(type = MenuAnchorType.PrimaryNotEditable, enabled = true)
                         )
-                        FilterChip(
-                            selected = selectedLabel == "enhancement",
-                            onClick = { selectedLabel = "enhancement" },
-                            label = { Text("Feature 💡") }
-                        )
-                        FilterChip(
-                            selected = selectedLabel == "documentation",
-                            onClick = { selectedLabel = "documentation" },
-                            label = { Text("Doc 📝") }
-                        )
+                        ExposedDropdownMenu(
+                            expanded = labelDropdownExpanded,
+                            onDismissRequest = { labelDropdownExpanded = false }
+                        ) {
+                            labelOptions.forEach { (value, label) ->
+                                DropdownMenuItem(
+                                    text = { Text(text = label) },
+                                    onClick = {
+                                        selectedLabel = value
+                                        labelDropdownExpanded = false
+                                    },
+                                    contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding
+                                )
+                            }
+                        }
                     }
 
                     OutlinedTextField(
@@ -589,7 +668,7 @@ fun DevNotesScreen(
                     OutlinedTextField(
                         value = issueBody,
                         onValueChange = { issueBody = it },
-                        label = { Text("Issue Description / Body") },
+                        label = { Text("Issue Description / Body (Markdown)") },
                         placeholder = { Text("Detailed notes, steps to reproduce, or feature details...") },
                         minLines = 4,
                         modifier = Modifier.fillMaxWidth()
@@ -602,57 +681,62 @@ fun DevNotesScreen(
                             Text("📋 Copy text from Local Scratchpad into Body")
                         }
                     }
-
-                    Button(
-                        onClick = {
-                            saveGithubPrefs()
-                            if (githubToken.isBlank()) {
-                                Toast.makeText(ctx, "Please enter your GitHub Personal Access Token.", Toast.LENGTH_LONG).show()
-                                return@Button
-                            }
-                            if (issueTitle.isBlank()) {
-                                Toast.makeText(ctx, "Please enter an Issue Title.", Toast.LENGTH_SHORT).show()
-                                return@Button
-                            }
-
-                            isPostingToGithub = true
-                            scope.launch {
-                                val (success, message) = createGitHubIssue(
-                                    repo = githubRepo,
-                                    token = githubToken,
-                                    title = issueTitle,
-                                    body = issueBody,
-                                    labels = listOf(selectedLabel)
-                                )
-                                isPostingToGithub = false
-                                Toast.makeText(ctx, message, Toast.LENGTH_LONG).show()
-                                if (success) {
-                                    issueTitle = ""
-                                    issueBody = ""
-                                    loadIssues()
-                                }
-                            }
-                        },
-                        enabled = !isPostingToGithub && issueTitle.isNotBlank(),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        if (isPostingToGithub) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(20.dp),
-                                strokeWidth = 2.dp,
-                                color = MaterialTheme.colorScheme.onPrimary
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Pushing to GitHub...")
-                        } else {
-                            Icon(Icons.AutoMirrored.Filled.Send, contentDescription = null)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("🚀 Push Issue to GitHub")
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        saveGithubPrefs()
+                        if (githubToken.isBlank()) {
+                            Toast.makeText(ctx, "Please enter your GitHub Personal Access Token.", Toast.LENGTH_LONG).show()
+                            return@Button
                         }
+                        if (issueTitle.isBlank()) {
+                            Toast.makeText(ctx, "Please enter an Issue Title.", Toast.LENGTH_SHORT).show()
+                            return@Button
+                        }
+
+                        isPostingToGithub = true
+                        scope.launch {
+                            val (success, message) = createGitHubIssue(
+                                repo = githubRepo,
+                                token = githubToken,
+                                title = issueTitle,
+                                body = issueBody,
+                                labels = listOf(selectedLabel)
+                            )
+                            isPostingToGithub = false
+                            Toast.makeText(ctx, message, Toast.LENGTH_LONG).show()
+                            if (success) {
+                                issueTitle = ""
+                                issueBody = ""
+                                showNewIssueDialog = false
+                                loadIssues()
+                            }
+                        }
+                    },
+                    enabled = !isPostingToGithub && issueTitle.isNotBlank()
+                ) {
+                    if (isPostingToGithub) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.onPrimary
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Pushing...")
+                    } else {
+                        Text("🚀 Push to GitHub")
                     }
                 }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { showNewIssueDialog = false },
+                    enabled = !isPostingToGithub
+                ) { Text("Cancel") }
             }
-        }
+        )
     }
 
     if (showClearDialog) {

@@ -48,6 +48,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -55,11 +56,16 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.time.DayOfWeek
 import java.time.Instant
+import java.time.ZoneId
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -69,6 +75,7 @@ import java.util.Locale
 fun LoadEntryScreen(
     initialPercentage: String,
     initialIsTraining: Boolean = false,
+    initialTrainerPayRate: Double = 200.0,
     isProUser: Boolean = true,
     editingLoad: CurrentLoad? = null,
     onSaveClick: (CurrentLoad) -> Unit,
@@ -76,6 +83,7 @@ fun LoadEntryScreen(
 ) {
     val ctx = LocalContext.current
     val scroll = rememberScrollState()
+    val scope = rememberCoroutineScope()
 
     var proNum by remember { mutableStateOf(value = editingLoad?.proNumber ?: "") }
     var dBounce by remember { mutableStateOf(value = editingLoad?.dispatchedBounceMiles?.toString() ?: "") }
@@ -111,7 +119,6 @@ fun LoadEntryScreen(
     val dateLabel = remember(key1 = selectedDateMillis) {
         val instant = Instant.ofEpochMilli(selectedDateMillis)
         val formatter = DateTimeFormatter.ofPattern("MM/dd/yyyy")
-        // 📍 FIX: DatePicker returns UTC. Use ZoneOffset.UTC to prevent day-shifting in local time zones.
         instant.atZone(ZoneOffset.UTC).toLocalDate().format(formatter)
     }
 
@@ -140,24 +147,28 @@ fun LoadEntryScreen(
 
         if (isShipper) sName = name else cName = name
 
-        try {
-            val geocoder = Geocoder(ctx, Locale.US)
-            @Suppress("DEPRECATION")
-            val results = geocoder.getFromLocationName(addressPart, 1)
-            if (!results.isNullOrEmpty()) {
-                val loc = results[0]
-                if (isShipper) {
-                    sLat = loc.latitude
-                    sLong = loc.longitude
-                    isShipperVerified = true
-                } else {
-                    cLat = loc.latitude
-                    cLong = loc.longitude
-                    isConsigneeVerified = true
+        scope.launch(Dispatchers.IO) {
+            try {
+                val geocoder = Geocoder(ctx, Locale.US)
+                @Suppress("DEPRECATION")
+                val results = geocoder.getFromLocationName(addressPart, 1)
+                withContext(Dispatchers.Main) {
+                    if (!results.isNullOrEmpty()) {
+                        val loc = results[0]
+                        if (isShipper) {
+                            sLat = loc.latitude
+                            sLong = loc.longitude
+                            isShipperVerified = true
+                        } else {
+                            cLat = loc.latitude
+                            cLong = loc.longitude
+                            isConsigneeVerified = true
+                        }
+                    }
                 }
+            } catch (e: Exception) {
+                e.printStackTrace()
             }
-        } catch (e: Exception) {
-            e.printStackTrace()
         }
     }
 
@@ -178,11 +189,15 @@ fun LoadEntryScreen(
         }
 
         // 2. Extract Load Pay
-        val payRegex = Regex("""(?:Pay|Gross|Rate|Linehaul|Total|Amount)\D*?\$?\s*([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]{2})?)""", RegexOption.IGNORE_CASE)
+        val payRegex = Regex(
+            """(?:Pay|Gross|Rate|Linehaul|Total|Amount)\D*?\$?\s*([0-9]{1,3}(?:,[0-9]{3})*|\d+)(?:\.([0-9]{1,2}))?""",
+            RegexOption.IGNORE_CASE
+        )
         val payMatch = payRegex.find(rawText)
         if (payMatch != null && payMatch.groupValues.size > 1) {
-            val cleanPay = payMatch.groupValues[1].replace(",", "")
-            loadPay = cleanPay
+            val intPart = payMatch.groupValues[1].replace(",", "")
+            val decPart = if (payMatch.groupValues.size > 2 && payMatch.groupValues[2].isNotBlank()) "." + payMatch.groupValues[2] else ""
+            loadPay = intPart + decPart
         } else {
             val dollarMatch = Regex("""\$?\s*([1-9][0-9]{2,4}(?:\.[0-9]{2})?)""").find(rawText)
             if (dollarMatch != null && dollarMatch.groupValues.size > 1) {
@@ -260,14 +275,18 @@ fun LoadEntryScreen(
                 foundShipper = true
                 foundConsignee = false
                 val name = line.substringAfter(":").trim()
-                if (name.isNotBlank()) shipperSb.append(name).append("\n")
+                if (name.isNotBlank() && !name.equals("origin", ignoreCase = true) && !name.equals("pickup", ignoreCase = true) && !name.equals("shipper", ignoreCase = true)) {
+                    shipperSb.append(name).append("\n")
+                }
                 continue
             }
             if (lower.contains("consignee") || lower.contains("delivery") || lower.contains("destination") || lower.contains("drop")) {
                 foundConsignee = true
                 foundShipper = false
                 val name = line.substringAfter(":").trim()
-                if (name.isNotBlank()) consigneeSb.append(name).append("\n")
+                if (name.isNotBlank() && !name.equals("final dropoff", ignoreCase = true) && !name.equals("dropoff", ignoreCase = true) && !name.equals("consignee", ignoreCase = true) && !name.equals("delivery", ignoreCase = true)) {
+                    consigneeSb.append(name).append("\n")
+                }
                 continue
             }
             if (foundShipper && shipperSb.lines().size < 4) {
@@ -285,6 +304,22 @@ fun LoadEntryScreen(
         if (consigneeSb.isNotBlank()) {
             cRawPaste = consigneeSb.toString().trim()
             resolveAddress(cRawPaste, isShipper = false)
+        }
+
+        // 5. Extract Going Home status
+        val homeMatch = Regex("""(?:Going\s*Home|Home\s*Run|Home)\s*[:=\-\s]*([YN])""", RegexOption.IGNORE_CASE).find(rawText)
+        if (homeMatch != null && homeMatch.groupValues.size > 1) {
+            isGoingHome = homeMatch.groupValues[1].equals("Y", ignoreCase = true)
+        }
+
+        // 6. Extract Tarp type
+        val tarpMatch = Regex("""Tarp\s*[:=\-\s]*([SLN])""", RegexOption.IGNORE_CASE).find(rawText)
+        if (tarpMatch != null && tarpMatch.groupValues.size > 1) {
+            selectedTarp = when (tarpMatch.groupValues[1].uppercase(Locale.US)) {
+                "S" -> "4' Drop"
+                "L" -> "8' Drop"
+                else -> "None"
+            }
         }
     }
 
@@ -313,6 +348,9 @@ fun LoadEntryScreen(
                         isScanningOcr = false
                         Toast.makeText(ctx, "Failed to scan image: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
                     }
+                    .addOnCompleteListener {
+                        recognizer.close()
+                    }
             } catch (e: Exception) {
                 isScanningOcr = false
                 Toast.makeText(ctx, "Error reading image: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
@@ -322,7 +360,7 @@ fun LoadEntryScreen(
 
     fun processSave(load: CurrentLoad) {
         val dateToCheck = Instant.ofEpochMilli(load.pickupTimestamp)
-            .atZone(ZoneOffset.UTC).toLocalDate()
+            .atZone(ZoneId.systemDefault()).toLocalDate()
 
         if (!isManualEntry && (dateToCheck.dayOfWeek == DayOfWeek.FRIDAY) && !load.isGoingHome) {
             pendingLoadSave = load
@@ -604,7 +642,12 @@ fun LoadEntryScreen(
 
         HorizontalDivider()
 
-        val isFormValid = (proNum.trim().isNotEmpty()) && (loadPay.trim().isNotEmpty()) && (sLat != null) && (cLat != null) && (dBounce.trim().isNotEmpty()) && (dLoaded.trim().isNotEmpty())
+        val isFormValid = proNum.trim().isNotEmpty() &&
+                loadPay.toDoubleOrNull() != null &&
+                dBounce.toDoubleOrNull() != null &&
+                dLoaded.toDoubleOrNull() != null &&
+                sLat != null &&
+                cLat != null
 
         Button(
             onClick = {
@@ -616,32 +659,43 @@ fun LoadEntryScreen(
                 val dispB = dBounce.toDoubleOrNull() ?: 0.0
                 val dispL = dLoaded.toDoubleOrNull() ?: 0.0
 
+                val resolvedTrainerRate = if (isTrainingWeek) {
+                    if (editingLoad != null && editingLoad.trainerPayRate > 0.0) {
+                        editingLoad.trainerPayRate
+                    } else {
+                        initialTrainerPayRate
+                    }
+                } else {
+                    0.0
+                }
+
                 if (isManualEntry) {
-                        val manualData = CurrentLoad(
-                            proNumber = proNum.trim(),
-                            dispatchedBounceMiles = dispB,
-                            dispatchedLoadedMiles = dispL,
-                            bounceMilesStart = 0.0,
-                            bounceMilesEnd = if (matchDispatched) dispB else manualActBounce.toDoubleOrNull() ?: 0.0,
-                            loadedMilesStart = 0.0,
-                            loadedMilesEnd = if (matchDispatched) dispL else manualActLoaded.toDoubleOrNull() ?: 0.0,
-                            percentageRate = ratePct.toDoubleOrNull() ?: 31.0,
-                            loadPay = loadPay.toDoubleOrNull() ?: 0.0,
-                            tarpType = tChar,
-                            isPreTarped = isPreTarped,
-                            isGoingHome = isGoingHome,
-                            isTrainingWeek = isTrainingWeek,
-                            pickupTimestamp = selectedDateMillis,
-                            tripState = "COMPLETED",
-                            tripNotes = tripNotes.ifBlank { null },
-                            deliveryTimestamp = selectedDateMillis + 3600000,
-                            shipperName = if (sRawPaste.isNotBlank()) sRawPaste.trim() else sName,
-                            shipperLat = sLat,
-                            shipperLong = sLong,
-                            consigneeName = if (cRawPaste.isNotBlank()) cRawPaste.trim() else cName,
-                            consigneeLat = cLat,
-                            consigneeLong = cLong
-                        )
+                    val manualData = CurrentLoad(
+                        proNumber = proNum.trim(),
+                        dispatchedBounceMiles = dispB,
+                        dispatchedLoadedMiles = dispL,
+                        bounceMilesStart = 0.0,
+                        bounceMilesEnd = if (matchDispatched) dispB else manualActBounce.toDoubleOrNull() ?: 0.0,
+                        loadedMilesStart = 0.0,
+                        loadedMilesEnd = if (matchDispatched) dispL else manualActLoaded.toDoubleOrNull() ?: 0.0,
+                        percentageRate = ratePct.toDoubleOrNull() ?: 31.0,
+                        loadPay = loadPay.toDoubleOrNull() ?: 0.0,
+                        tarpType = tChar,
+                        isPreTarped = isPreTarped,
+                        isGoingHome = isGoingHome,
+                        isTrainingWeek = isTrainingWeek,
+                        trainerPayRate = resolvedTrainerRate,
+                        pickupTimestamp = selectedDateMillis,
+                        tripState = "COMPLETED",
+                        tripNotes = tripNotes.ifBlank { null },
+                        deliveryTimestamp = selectedDateMillis + 3600000,
+                        shipperName = if (sRawPaste.isNotBlank()) sRawPaste.trim() else sName,
+                        shipperLat = sLat,
+                        shipperLong = sLong,
+                        consigneeName = if (cRawPaste.isNotBlank()) cRawPaste.trim() else cName,
+                        consigneeLat = cLat,
+                        consigneeLong = cLong
+                    )
                     processSave(manualData)
                 } else {
                     val draftData = CurrentLoad(
@@ -658,6 +712,7 @@ fun LoadEntryScreen(
                         isPreTarped = isPreTarped,
                         isGoingHome = isGoingHome,
                         isTrainingWeek = isTrainingWeek,
+                        trainerPayRate = resolvedTrainerRate,
                         pickupTimestamp = System.currentTimeMillis(),
                         tripState = "ACTIVE_BOUNCE",
                         tripNotes = tripNotes.ifBlank { null },
@@ -668,11 +723,13 @@ fun LoadEntryScreen(
                         consigneeLat = cLat,
                         consigneeLong = cLong
                     )
+                    TrackingService.resetTrackingState()
+                    TrackingService.activeProNumber = proNum.trim()
                     TrackingService.targetLat = sLat
                     TrackingService.targetLong = sLong
                     TrackingService.targetName = sName
                     TrackingService.isGeofenceActive = true
-                    ctx.startService(Intent(ctx, TrackingService::class.java))
+                    ContextCompat.startForegroundService(ctx, Intent(ctx, TrackingService::class.java))
                     processSave(draftData)
                 }
             },
@@ -691,24 +748,25 @@ fun LoadEntryScreen(
         ) {
             Text("Cancel Load Entry")
         }
-        
+
         Spacer(modifier = Modifier.height(32.dp))
     }
 
-    if (showFridayReminder && pendingLoadSave != null) {
+    val pending = pendingLoadSave
+    if (showFridayReminder && pending != null) {
         AlertDialog(
             onDismissRequest = { showFridayReminder = false },
             title = { Text("Friday Home Run?") },
             text = { Text("It's Friday! Is this a 'Going Home' load? Marking it as such will protect your OOR percentage.") },
             confirmButton = {
                 Button(onClick = {
-                    onSaveClick(pendingLoadSave!!.copy(isGoingHome = true))
+                    onSaveClick(pending.copy(isGoingHome = true))
                     showFridayReminder = false
                 }) { Text("Yes, Home Run") }
             },
             dismissButton = {
                 TextButton(onClick = {
-                    onSaveClick(pendingLoadSave!!)
+                    onSaveClick(pending)
                     showFridayReminder = false
                 }) { Text("No, Work Only") }
             }

@@ -54,6 +54,16 @@ class TrackingService : Service() {
 
         var currentLatitude: Double? = null
         var currentLongitude: Double? = null
+
+        fun resetTrackingState() {
+            totalBounceMilesTracked.value = 0.0
+            totalLoadedMilesTracked.value = 0.0
+            activeSegment = "Bounce"
+            activeProNumber = null
+            isGeofenceActive = false
+            currentLatitude = null
+            currentLongitude = null
+        }
     }
 
     override fun onCreate() {
@@ -164,9 +174,26 @@ class TrackingService : Service() {
         val distanceToTarget = currentLocation.distanceTo(targetLoc)
         
         if (distanceToTarget < 305.0) { // 1,000 feet
+            val previousSegment = activeSegment
             activeSegment = "Paused"
             isGeofenceActive = false 
             updateNotification()
+
+            val pro = activeProNumber
+            if (pro != null) {
+                serviceScope.launch {
+                    try {
+                        val dao = AppDatabase.getDatabase(applicationContext).loadDao()
+                        if (previousSegment == "Bounce") {
+                            dao.updateTripState(pro, "ACTIVE_SHIPPER")
+                        } else if (previousSegment == "Loaded") {
+                            dao.updateTripState(pro, "ACTIVE_CONSIGNEE")
+                        }
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
+            }
         }
     }
 
@@ -216,7 +243,7 @@ class TrackingService : Service() {
         super.onDestroy()
         fusedLocationClient.removeLocationUpdates(locationCallback)
         lastLocation = null
-        isGeofenceActive = false
+        resetTrackingState()
     }
 
     override fun onBind(intent: Intent?): IBinder? = null

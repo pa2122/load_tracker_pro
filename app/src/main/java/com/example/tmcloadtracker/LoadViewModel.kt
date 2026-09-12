@@ -83,7 +83,8 @@ class LoadViewModel(application: Application) :
         consigneeName: String? = null,
         consigneeLat: Double? = null,
         consigneeLong: Double? = null,
-        isTrainingWeek: Boolean = false
+        isTrainingWeek: Boolean = false,
+        trainerPayRate: Double = 0.0
     ) {
         viewModelScope.launch {
             val newLoad = CurrentLoad(
@@ -109,7 +110,8 @@ class LoadViewModel(application: Application) :
                 consigneeName = consigneeName,
                 consigneeLat = consigneeLat,
                 consigneeLong = consigneeLong,
-                isTrainingWeek = isTrainingWeek
+                isTrainingWeek = isTrainingWeek,
+                trainerPayRate = trainerPayRate
             )
             loadDao.insertLoad(newLoad)
         }
@@ -136,6 +138,8 @@ class LoadViewModel(application: Application) :
         var totalDispatchedMiles = 0.0
         var totalOutOfRouteMiles = 0.0
         var weekContainsTrainingLoad = false
+
+        val weekLoads = _allLoads.value.filter { getPayPeriodDate(it.pickupTimestamp) == targetFriday }
 
         _allLoads.value.forEach { load ->
             val loadFriday = getPayPeriodDate(
@@ -190,10 +194,11 @@ class LoadViewModel(application: Application) :
             }
         }
 
-        // 📍 TRAINER LOGIC: Apply bonus if week is marked as training, OR if currently toggled on
-        if (weekContainsTrainingLoad || isTrainingGlobal) {
-            totalPay += trainerRate
-        }
+        // 📍 TRAINER LOGIC: Use stored snapshot trainerPayRate if present, else fallback to global trainerRate
+        val weekTrainerPay = weekLoads.maxOfOrNull { it.trainerPayRate }?.takeIf { it > 0.0 }
+            ?: if (weekContainsTrainingLoad || isTrainingGlobal) trainerRate else 0.0
+
+        totalPay += weekTrainerPay
 
         val oorPct = if (totalDispatchedMiles > 0.0) {
             (totalOutOfRouteMiles / totalDispatchedMiles) * 100.0

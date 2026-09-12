@@ -12,6 +12,7 @@ import android.provider.Settings
 import android.widget.Toast
 import androidx.compose.ui.text.font.FontWeight
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
@@ -748,8 +749,7 @@ class MainActivity : ComponentActivity() {
                                                 onDeleteTripClick = { load ->
                                                     if (load.tripState != "COMPLETED") {
                                                         stopService(Intent(this@MainActivity, TrackingService::class.java))
-                                                        TrackingService.totalBounceMilesTracked.value = 0.0
-                                                        TrackingService.totalLoadedMilesTracked.value = 0.0
+                                                        TrackingService.resetTrackingState()
                                                     }
                                                     viewModel.deleteLoad(load)
                                                 },
@@ -773,7 +773,7 @@ class MainActivity : ComponentActivity() {
                                                                 TrackingService::class.java
                                                             )
                                                         )
-                                                        TrackingService.activeProNumber = null
+                                                        TrackingService.resetTrackingState()
                                                     }
                                                     viewModel.saveLoad(
                                                         proNumber = updatedTripEntity.proNumber,
@@ -798,7 +798,8 @@ class MainActivity : ComponentActivity() {
                                                         consigneeName = updatedTripEntity.consigneeName,
                                                         consigneeLat = updatedTripEntity.consigneeLat,
                                                         consigneeLong = updatedTripEntity.consigneeLong,
-                                                        isTrainingWeek = updatedTripEntity.isTrainingWeek
+                                                        isTrainingWeek = updatedTripEntity.isTrainingWeek,
+                                                        trainerPayRate = updatedTripEntity.trainerPayRate
                                                     )
                                                 }
                                             )
@@ -808,6 +809,7 @@ class MainActivity : ComponentActivity() {
                                             LoadEntryScreen(
                                                 initialPercentage = defPercent,
                                                 initialIsTraining = isTrainingActive,
+                                                initialTrainerPayRate = calculatedTrainerPay,
                                                 isProUser = isProUser,
                                                 editingLoad = tripToEdit,
                                                 onSaveClick = { finalizedLoadEntity ->
@@ -837,7 +839,8 @@ class MainActivity : ComponentActivity() {
                                                         consigneeName = finalizedLoadEntity.consigneeName,
                                                         consigneeLat = finalizedLoadEntity.consigneeLat,
                                                         consigneeLong = finalizedLoadEntity.consigneeLong,
-                                                        isTrainingWeek = finalizedLoadEntity.isTrainingWeek
+                                                        isTrainingWeek = finalizedLoadEntity.isTrainingWeek,
+                                                        trainerPayRate = finalizedLoadEntity.trainerPayRate
                                                     )
                                                     tripToEdit = null
                                                     currentScreen = "dashboard"
@@ -863,18 +866,19 @@ class MainActivity : ComponentActivity() {
                                         }
 
                                         "route_map" -> {
+                                            BackHandler(enabled = true) {
+                                                currentScreen = "dashboard"
+                                            }
                                             val homeLatLng = if (homeLat != null && homeLong != null) {
                                                 LatLng(homeLat!!, homeLong!!)
                                             } else null
 
-                                            tripForMap?.let { load ->
-                                                RouteMapScreen(
-                                                    load = load,
-                                                    viewModel = viewModel,
-                                                    homeLocation = homeLatLng,
-                                                    onBack = { currentScreen = "dashboard" }
-                                                )
-                                            }
+                                            RouteMapScreen(
+                                                load = tripForMap,
+                                                viewModel = viewModel,
+                                                homeLocation = homeLatLng,
+                                                onBack = { currentScreen = "dashboard" }
+                                            )
                                         }
                                     }
                                 }

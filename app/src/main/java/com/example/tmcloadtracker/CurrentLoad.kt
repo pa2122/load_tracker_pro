@@ -29,7 +29,9 @@ data class CurrentLoad(
     val consigneeLat: Double? = null,
     val consigneeLong: Double? = null,
     // 📍 New field added in Version 7
-    val isTrainingWeek: Boolean = false
+    val isTrainingWeek: Boolean = false,
+    // 📍 New field added in Version 8
+    val trainerPayRate: Double = 0.0
 )
 
 @Entity(tableName = "trip_breadcrumbs")
