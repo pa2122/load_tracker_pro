@@ -936,6 +936,7 @@ class MainActivity : ComponentActivity() {
                                                 isProUser = isProUser,
                                                 editingLoad = tripToEdit,
                                                 isHistorical = isHistoricalEntry,
+                                                existingProNumbers = savedLoads.map { it.proNumber },
                                                 onSaveClick = { finalizedLoadEntity ->
                                                     if (finalizedLoadEntity.tripState.startsWith(prefix = "ACTIVE")) {
                                                         TrackingService.activeProNumber = finalizedLoadEntity.proNumber
