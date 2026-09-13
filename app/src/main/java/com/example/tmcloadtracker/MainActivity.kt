@@ -179,6 +179,7 @@ class MainActivity : ComponentActivity() {
                     var showTrainerSettingsDialog by remember { mutableStateOf(value = false) }
                     var showProUpgradeDialog by remember { mutableStateOf(value = false) }
                     var showReadmeDialog by remember { mutableStateOf(value = false) }
+                    var isHistoricalEntry by remember { mutableStateOf(value = false) }
 
                     var initialRxBytes by remember { mutableLongStateOf(value = TrafficStats.getUidRxBytes(Process.myUid())) }
                     var initialTxBytes by remember { mutableLongStateOf(value = TrafficStats.getUidTxBytes(Process.myUid())) }
@@ -660,6 +661,28 @@ class MainActivity : ComponentActivity() {
                                         Text("📖 App Technical Specs (README)")
                                     }
 
+                                    val hasActiveTrip = savedLoads.any { it.tripState != "COMPLETED" && it.tripState != "NOT_STARTED" }
+                                    if (hasActiveTrip) {
+                                        HorizontalDivider()
+                                        Button(
+                                            onClick = {
+                                                scope.launch { drawerState.close() }
+                                                tripToEdit = null
+                                                isHistoricalEntry = true
+                                                currentScreen = "entry"
+                                            },
+                                            colors = ButtonDefaults.buttonColors(
+                                                containerColor = MaterialTheme.colorScheme.primary,
+                                                contentColor = MaterialTheme.colorScheme.onPrimary
+                                            ),
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Icon(Icons.Default.Add, contentDescription = null)
+                                            Spacer(modifier = Modifier.width(width = 6.dp))
+                                            Text("➕ Add Historical Completed Load")
+                                        }
+                                    }
+
                                     if (isDeviceAuthorized || BuildConfig.DEBUG) {
                                         Spacer(modifier = Modifier.weight(weight = 1f))
                                         Button(
@@ -912,6 +935,7 @@ class MainActivity : ComponentActivity() {
                                                 initialTrainerPayRate = calculatedTrainerPay,
                                                 isProUser = isProUser,
                                                 editingLoad = tripToEdit,
+                                                isHistorical = isHistoricalEntry,
                                                 onSaveClick = { finalizedLoadEntity ->
                                                     if (finalizedLoadEntity.tripState.startsWith(prefix = "ACTIVE")) {
                                                         TrackingService.activeProNumber = finalizedLoadEntity.proNumber
@@ -930,9 +954,9 @@ class MainActivity : ComponentActivity() {
                                                         isPreTarped = finalizedLoadEntity.isPreTarped,
                                                         pickupTimestamp = finalizedLoadEntity.pickupTimestamp,
                                                         isGoingHome = finalizedLoadEntity.isGoingHome,
-                                                        tripState = finalizedLoadEntity.tripState,
+                                                        tripState = if (isHistoricalEntry) "COMPLETED" else finalizedLoadEntity.tripState,
                                                         tripNotes = finalizedLoadEntity.tripNotes,
-                                                        deliveryTimestamp = finalizedLoadEntity.deliveryTimestamp,
+                                                        deliveryTimestamp = if (isHistoricalEntry) finalizedLoadEntity.pickupTimestamp + 86400000L else finalizedLoadEntity.deliveryTimestamp,
                                                         shipperName = finalizedLoadEntity.shipperName,
                                                         shipperLat = finalizedLoadEntity.shipperLat,
                                                         shipperLong = finalizedLoadEntity.shipperLong,
@@ -952,10 +976,12 @@ class MainActivity : ComponentActivity() {
                                                         detentionFlatPay = finalizedLoadEntity.detentionFlatPay
                                                     )
                                                     tripToEdit = null
+                                                    isHistoricalEntry = false
                                                     currentScreen = "dashboard"
                                                 },
                                                 onCancelClick = {
                                                     tripToEdit = null
+                                                    isHistoricalEntry = false
                                                     currentScreen = "dashboard"
                                                 }
                                             )

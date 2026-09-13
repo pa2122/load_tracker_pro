@@ -79,6 +79,7 @@ fun LoadEntryScreen(
     initialTrainerPayRate: Double = 200.0,
     isProUser: Boolean = true,
     editingLoad: CurrentLoad? = null,
+    isHistorical: Boolean = false,
     onSaveClick: (CurrentLoad) -> Unit,
     onCancelClick: () -> Unit,
 ) {
@@ -449,6 +450,9 @@ fun LoadEntryScreen(
                     sApptText = apptText
                     sApptTimestamp = parsedTs
                     sApptType = type
+                    if (parsedTs != null) {
+                        selectedDateMillis = parsedTs
+                    }
                 } else if (cApptTimestamp == null) {
                     cApptText = apptText
                     cApptTimestamp = parsedTs
@@ -512,9 +516,9 @@ fun LoadEntryScreen(
             .verticalScroll(state = scroll),
         verticalArrangement = Arrangement.spacedBy(space = 16.dp),
     ) {
-        Text(if (editingLoad == null) "New Freight Load" else "Edit Freight Load", style = MaterialTheme.typography.headlineMedium)
+        Text(if (editingLoad == null) (if (isHistorical) "New Historical Completed Load" else "New Freight Load") else "Edit Freight Load", style = MaterialTheme.typography.headlineMedium)
 
-        if (editingLoad == null) {
+        if (editingLoad == null || isHistorical) {
             Button(
                 onClick = {
                     if (isProUser) {
@@ -550,7 +554,7 @@ fun LoadEntryScreen(
             onValueChange = { input -> proNum = input.filter { it.isDigit() } },
             label = { Text("PRO # (Required)") },
             singleLine = true,
-            enabled = editingLoad == null,
+            enabled = editingLoad == null || isHistorical,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Next),
             modifier = Modifier.fillMaxWidth()
         )
