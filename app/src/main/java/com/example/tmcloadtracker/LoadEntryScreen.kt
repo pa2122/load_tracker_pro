@@ -210,7 +210,7 @@ fun LoadEntryScreen(
         val lines = rawText.lines().map { it.trim() }.filter { it.isNotBlank() }
 
         // 1. Extract PRO #
-        val proRegex = Regex("""(?:PRO|Order|Load|Trip)\s*#?\s*:?\s*(\d{4,12})""", RegexOption.IGNORE_CASE)
+        val proRegex = Regex("""\b(?:PRO|Order|Load|Trip)\s*(?:Number|No|Num)?\s*#?\s*:?\s*(\d{4,12})""", RegexOption.IGNORE_CASE)
         val proMatch = proRegex.find(rawText)
         if (proMatch != null && proMatch.groupValues.size > 1) {
             proNum = proMatch.groupValues[1]
@@ -221,7 +221,7 @@ fun LoadEntryScreen(
 
         // 2. Extract Load Pay
         val payRegex = Regex(
-            """(?:Pay|Gross|Rate|Linehaul|Total|Amount)\D*?\$?\s*([0-9]{1,3}(?:,[0-9]{3})*|\d+)(?:\.([0-9]{1,2}))?""",
+            """(?:Pay|Gross|Rate|Linehaul|Total|Amount)\D*?\$?\s*(\d{1,3}(?:,\d{3})+|\d+)(?:\.(\d{1,2}))?""",
             RegexOption.IGNORE_CASE
         )
         val payMatch = payRegex.find(rawText)
