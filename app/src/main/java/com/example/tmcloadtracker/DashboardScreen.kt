@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -29,6 +30,8 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -44,6 +47,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import dev.jeziellago.compose.markdowntext.MarkdownText
 import java.time.Instant
@@ -87,6 +91,9 @@ fun DashboardScreen(
     var showDeleteConfirmation by remember { mutableStateOf(value = false) }
     var tripToDelete by remember { mutableStateOf(value = null as CurrentLoad?) }
     var showProUpgradeDialog by remember { mutableStateOf(value = false) }
+    var showUndoPromptDialog by remember { mutableStateOf(false) }
+    var showMileageEditDialog by remember { mutableStateOf(false) }
+    var mileageEditInput by remember { mutableStateOf("") }
 
     Scaffold { innerPadding ->
         Box(
@@ -251,6 +258,36 @@ fun DashboardScreen(
                                         modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
                                     ) {
                                         Text("🧭 Launch Navigation ($targetName)")
+                                    }
+                                }
+
+                                if (activeTrip.tripState != "ACTIVE_BOUNCE" && activeTrip.tripState != "PAUSED_AT_HOME") {
+                                    OutlinedButton(
+                                        onClick = {
+                                            when (activeTrip.tripState) {
+                                                "ACTIVE_LOADED", "ACTIVE_CONSIGNEE" -> {
+                                                    TrackingService.activeSegment = "Paused"
+                                                    TrackingService.targetLat = activeTrip.shipperLat
+                                                    TrackingService.targetLong = activeTrip.shipperLong
+                                                    TrackingService.targetName = activeTrip.shipperName ?: "Shipper"
+                                                    TrackingService.isGeofenceActive = false
+                                                    onUpdateTripClick(activeTrip.copy(tripState = "ACTIVE_SHIPPER"))
+                                                    showUndoPromptDialog = true
+                                                }
+                                                "ACTIVE_SHIPPER" -> {
+                                                    TrackingService.activeSegment = "Bounce"
+                                                    TrackingService.targetLat = activeTrip.shipperLat
+                                                    TrackingService.targetLong = activeTrip.shipperLong
+                                                    TrackingService.targetName = activeTrip.shipperName ?: "Shipper"
+                                                    TrackingService.isGeofenceActive = true
+                                                    onUpdateTripClick(activeTrip.copy(tripState = "ACTIVE_BOUNCE", dockArrivalTime = null))
+                                                    showUndoPromptDialog = true
+                                                }
+                                            }
+                                        },
+                                        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+                                    ) {
+                                        Text("↩️ Undo Step (Go Back)")
                                     }
                                 }
 
@@ -1334,6 +1371,61 @@ fun DashboardScreen(
                 showProUpgradeDialog = false
             },
             onDismiss = { showProUpgradeDialog = false }
+        )
+    }
+
+    if (showUndoPromptDialog) {
+        AlertDialog(
+            onDismissRequest = { showUndoPromptDialog = false },
+            title = { Text("↩️ Step Reverted Successfully") },
+            text = { Text("Do you need to adjust or correct your tracked mileage for this leg?") },
+            confirmButton = {
+                Button(onClick = {
+                    showUndoPromptDialog = false
+                    mileageEditInput = ""
+                    showMileageEditDialog = true
+                }) { Text("Yes, Adjust Miles") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showUndoPromptDialog = false }) { Text("No, Keep Mileage As-Is") }
+            }
+        )
+    }
+
+    if (showMileageEditDialog) {
+        var correctedMilesStr by remember { mutableStateOf(mileageEditInput) }
+        AlertDialog(
+            onDismissRequest = { showMileageEditDialog = false },
+            title = { Text("✏️ Correct Leg Mileage") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Enter the correct total miles for this leg:")
+                    OutlinedTextField(
+                        value = correctedMilesStr,
+                        onValueChange = { correctedMilesStr = it },
+                        label = { Text("Corrected Miles") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                    )
+                }
+            },
+            confirmButton = {
+                Button(onClick = {
+                    val newMiles = correctedMilesStr.toDoubleOrNull()
+                    if (newMiles != null) {
+                        if (activeTrip?.tripState == "ACTIVE_SHIPPER") {
+                            TrackingService.totalBounceMilesTracked.value = newMiles
+                        } else {
+                            TrackingService.totalLoadedMilesTracked.value = newMiles
+                        }
+                    }
+                    showMileageEditDialog = false
+                }) { Text("Save Corrected Miles") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showMileageEditDialog = false }) { Text("Cancel") }
+            }
         )
     }
 
