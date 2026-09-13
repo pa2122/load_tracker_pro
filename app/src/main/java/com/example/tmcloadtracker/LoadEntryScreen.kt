@@ -80,6 +80,7 @@ fun LoadEntryScreen(
     isProUser: Boolean = true,
     editingLoad: CurrentLoad? = null,
     isHistorical: Boolean = false,
+    existingProNumbers: List<String> = emptyList(),
     onSaveClick: (CurrentLoad) -> Unit,
     onCancelClick: () -> Unit,
 ) {
@@ -88,6 +89,8 @@ fun LoadEntryScreen(
     val scope = rememberCoroutineScope()
 
     var proNum by remember { mutableStateOf(value = editingLoad?.proNumber ?: "") }
+    var showDuplicateWarningDialog by remember { mutableStateOf(false) }
+    var pendingDuplicateLoad by remember { mutableStateOf<CurrentLoad?>(null) }
     var dBounce by remember { mutableStateOf(value = editingLoad?.dispatchedBounceMiles?.toString() ?: "") }
     var dLoaded by remember { mutableStateOf(value = editingLoad?.dispatchedLoadedMiles?.toString() ?: "") }
     var ratePct by remember { mutableStateOf(value = editingLoad?.percentageRate?.toString() ?: initialPercentage) }
@@ -497,15 +500,21 @@ fun LoadEntryScreen(
         }
     }
 
-    fun processSave(load: CurrentLoad) {
-        val dateToCheck = Instant.ofEpochMilli(load.pickupTimestamp)
+    fun processSave(loadToSave: CurrentLoad) {
+        if (editingLoad == null && existingProNumbers.contains(loadToSave.proNumber)) {
+            pendingDuplicateLoad = loadToSave
+            showDuplicateWarningDialog = true
+            return
+        }
+
+        val dateToCheck = Instant.ofEpochMilli(loadToSave.pickupTimestamp)
             .atZone(ZoneId.systemDefault()).toLocalDate()
 
-        if (!isManualEntry && (dateToCheck.dayOfWeek == DayOfWeek.FRIDAY) && !load.isGoingHome) {
-            pendingLoadSave = load
+        if (!isManualEntry && (dateToCheck.dayOfWeek == DayOfWeek.FRIDAY) && !loadToSave.isGoingHome) {
+            pendingLoadSave = loadToSave
             showFridayReminder = true
         } else {
-            onSaveClick(load)
+            onSaveClick(loadToSave)
         }
     }
 
@@ -788,6 +797,15 @@ fun LoadEntryScreen(
                 sLat != null &&
                 cLat != null
 
+        fun processSave(loadToSave: CurrentLoad) {
+            if (editingLoad == null && existingProNumbers.contains(loadToSave.proNumber)) {
+                pendingDuplicateLoad = loadToSave
+                showDuplicateWarningDialog = true
+            } else {
+                onSaveClick(loadToSave)
+            }
+        }
+
         Button(
             onClick = {
                 val tChar = when(selectedTarp) {
@@ -931,6 +949,23 @@ fun LoadEntryScreen(
                 Toast.makeText(ctx, "Unlock Pro in side menu or Dev Options.", Toast.LENGTH_LONG).show()
             },
             onDismiss = { showProPaywallDialog = false }
+        )
+    }
+
+    if (showDuplicateWarningDialog && pendingDuplicateLoad != null) {
+        AlertDialog(
+            onDismissRequest = { showDuplicateWarningDialog = false },
+            title = { Text("⚠️ Duplicate PRO Number") },
+            text = { Text("PRO #${pendingDuplicateLoad?.proNumber} already exists in your records. Would you like to update the existing record with these new details?") },
+            confirmButton = {
+                Button(onClick = {
+                    onSaveClick(pendingDuplicateLoad!!)
+                    showDuplicateWarningDialog = false
+                }) { Text("Yes, Update") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDuplicateWarningDialog = false }) { Text("Cancel") }
+            }
         )
     }
 }
