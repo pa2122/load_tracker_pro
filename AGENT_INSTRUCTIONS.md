@@ -10,8 +10,9 @@
 - **File Safety:** Always use `read_file` to verify the current state of a file before attempting a surgical replacement.
 
 ## 2. 💬 Communication & Execution Protocol
-- **Answer First, Code Later:** Always address the user's questions or thoughts directly first. Provide an analysis or proposed design.
-- **Wait for Confirmation:** Do **not** modify code, push commits, or close issues until the user explicitly confirms or says "go ahead" / "do it".
+- **Answer First, Act Later:** Always address the user's questions or thoughts directly first. Provide an analysis or proposed design.
+- **Wait for Confirmation:** Do **not** modify code, push Git commits, or make GitHub API calls (creating issues, milestones, etc.) until the user explicitly confirms or says "go ahead" / "do it".
+- **Exceptions:** Reading files, semantic searching, and compiling code do not require prior permission.
 
 ## 3. 🐙 GitHub Issue Workflow
 - **`needs-verification` Label:** When a feature or bug fix is implemented, pushed, and verified via unit tests/builds, you must comment on the GitHub issue detailing the changes.
