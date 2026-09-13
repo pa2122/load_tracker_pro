@@ -19,7 +19,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.Card
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -221,6 +220,26 @@ fun FacilitySearchScreen(
                                         style = MaterialTheme.typography.bodyMedium,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
+
+                                    val phoneMatchResult = extractPhoneNumber(note.tripNotes)
+                                    if (phoneMatchResult != null) {
+                                        val (dialableNumber, displayString) = phoneMatchResult
+                                        Spacer(modifier = Modifier.height(12.dp))
+                                        Button(
+                                            onClick = {
+                                                val dialIntent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:$dialableNumber"))
+                                                try {
+                                                    context.startActivity(dialIntent)
+                                                } catch (_: Exception) {
+                                                    Toast.makeText(context, "No dialer app found.", Toast.LENGTH_SHORT).show()
+                                                }
+                                            },
+                                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Text("📞 Call Shipping Office: $displayString")
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -245,3 +264,28 @@ private fun formatFacilityTitle(fullName: String): String {
     }
     return mainName
 }
+
+private fun extractPhoneNumber(text: String): Pair<String, String>? {
+    val keywordRegex = Regex("""(?:call|contact|poc|phone|tel)\b.{0,20}?\(?\b(\d{3})\)?[-.\s]?(\d{3})[-.\s]?(\d{4})\b""", RegexOption.IGNORE_CASE)
+    val keywordMatch = keywordRegex.find(text)
+
+    if (keywordMatch != null && keywordMatch.groupValues.size >= 4) {
+        val area = keywordMatch.groupValues[1]
+        val mid = keywordMatch.groupValues[2]
+        val end = keywordMatch.groupValues[3]
+        return Pair("$area$mid$end", "($area) $mid-$end")
+    }
+
+    val standardRegex = Regex("""\(?\b(\d{3})\)?[-.\s]+(\d{3})[-.\s]+(\d{4})\b""")
+    val standardMatch = standardRegex.find(text)
+
+    if (standardMatch != null && standardMatch.groupValues.size >= 4) {
+        val area = standardMatch.groupValues[1]
+        val mid = standardMatch.groupValues[2]
+        val end = standardMatch.groupValues[3]
+        return Pair("$area$mid$end", "($area) $mid-$end")
+    }
+
+    return null
+}
+
