@@ -95,9 +95,9 @@ class TrackingService : Service() {
                         updateNotification()
                         checkGeofence(location)
 
-                        // 📍 NEW: Record Breadcrumb every 5 minutes OR every 5 miles
+                        // 📍 Record Breadcrumb every 2.5 minutes for smooth route map geometry
                         val now = System.currentTimeMillis()
-                        if ((activeProNumber != null) && (activeSegment != "Paused") && (now - lastBreadcrumbTime > 300000)) {
+                        if ((activeProNumber != null) && (activeSegment != "Paused") && (now - lastBreadcrumbTime > 150000)) {
                             saveBreadcrumb(location)
                             lastBreadcrumbTime = now
                         }

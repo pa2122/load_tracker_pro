@@ -34,6 +34,12 @@ interface LoadDao {
     @Query("SELECT * FROM trip_breadcrumbs ORDER BY timestamp ASC")
     fun getAllBreadcrumbs(): Flow<List<TripBreadcrumb>>
 
+    @Query("DELETE FROM trip_breadcrumbs")
+    suspend fun clearAllBreadcrumbs()
+
+    @Query("SELECT COUNT(*) FROM trip_breadcrumbs")
+    fun getBreadcrumbCount(): Flow<Int>
+
     @Query("""
         SELECT DISTINCT shipperName FROM trucking_loads 
         WHERE shipperName IS NOT NULL AND LOWER(shipperName) NOT IN ('origin', 'pickup', 'shipper', '')

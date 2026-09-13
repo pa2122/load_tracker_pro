@@ -14,7 +14,10 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -30,12 +33,14 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -57,6 +62,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -66,6 +72,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
@@ -76,6 +83,7 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
+import java.util.Locale
 
 data class GitHubIssue(
     val number: Int,
@@ -128,6 +136,19 @@ fun DevNotesScreen(
     var isIssueReaderExpanded by remember { mutableStateOf(false) }
     var showNewIssueDialog by remember { mutableStateOf(false) }
     var labelDropdownExpanded by remember { mutableStateOf(false) }
+
+    // Tab 3: SQLite Room Database Inspector
+    val db = remember { AppDatabase.getDatabase(ctx) }
+    val allLoads by db.loadDao().getAllLoads().collectAsState(initial = emptyList())
+    val breadcrumbCount by db.loadDao().getBreadcrumbCount().collectAsState(initial = 0)
+
+    var dbSearchQuery by remember { mutableStateOf("") }
+    var selectedDbTable by remember { mutableStateOf("trucking_loads") }
+    var editingDbLoad by remember { mutableStateOf<CurrentLoad?>(null) }
+    var showDbDeleteConfirmation by remember { mutableStateOf(false) }
+    var dbLoadToDelete by remember { mutableStateOf<CurrentLoad?>(null) }
+    var showClearBreadcrumbsConfirmation by remember { mutableStateOf(false) }
+    var stateDropdownExpanded by remember { mutableStateOf(false) }
 
     fun loadIssues() {
         if (githubRepo.isNotBlank()) {
@@ -249,7 +270,7 @@ fun DevNotesScreen(
                 Tab(
                     selected = selectedTabIndex == 0,
                     onClick = { selectedTabIndex = 0 },
-                    text = { Text("📝 Local Scratchpad") },
+                    text = { Text("📝 Scratchpad") },
                     icon = { Icon(Icons.Default.Edit, contentDescription = null) }
                 )
                 Tab(
@@ -257,6 +278,12 @@ fun DevNotesScreen(
                     onClick = { selectedTabIndex = 1 },
                     text = { Text("🚀 GitHub Sync") },
                     icon = { Icon(Icons.Default.Build, contentDescription = null) }
+                )
+                Tab(
+                    selected = selectedTabIndex == 2,
+                    onClick = { selectedTabIndex = 2 },
+                    text = { Text("🗄️ DB Inspector") },
+                    icon = { Icon(Icons.Default.Search, contentDescription = null) }
                 )
             }
 
@@ -326,7 +353,7 @@ fun DevNotesScreen(
                         }
                     }
                 }
-            } else {
+            } else if (selectedTabIndex == 1) {
                 // TAB 2: GITHUB ISSUES SYNC & READER
                 val scrollState = rememberScrollState()
                 Column(
@@ -599,6 +626,142 @@ fun DevNotesScreen(
                         Text("➕ Push New GitHub Issue")
                     }
                 }
+            } else {
+                // TAB 3: SQLITE ROOM DATABASE INSPECTOR
+                val scrollState = rememberScrollState()
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(16.dp)
+                        .verticalScroll(scrollState),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        "Inspect and edit raw local SQLite database rows stored in `tmc_loads_local.db`.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.secondary
+                    )
+
+                    // Table Selection Filter Chips
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        FilterChip(
+                            selected = selectedDbTable == "trucking_loads",
+                            onClick = { selectedDbTable = "trucking_loads" },
+                            label = { Text("📦 trucking_loads (${allLoads.size})") }
+                        )
+                        FilterChip(
+                            selected = selectedDbTable == "trip_breadcrumbs",
+                            onClick = { selectedDbTable = "trip_breadcrumbs" },
+                            label = { Text("📍 breadcrumbs ($breadcrumbCount)") }
+                        )
+                    }
+
+                    if (selectedDbTable == "trucking_loads") {
+                        OutlinedTextField(
+                            value = dbSearchQuery,
+                            onValueChange = { dbSearchQuery = it },
+                            label = { Text("Search PRO #, Shipper, or Consignee") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        val filteredLoads = allLoads.filter { load ->
+                            dbSearchQuery.isBlank() ||
+                                    load.proNumber.contains(dbSearchQuery, ignoreCase = true) ||
+                                    (load.shipperName?.contains(dbSearchQuery, ignoreCase = true) == true) ||
+                                    (load.consigneeName?.contains(dbSearchQuery, ignoreCase = true) == true) ||
+                                    load.tripState.contains(dbSearchQuery, ignoreCase = true)
+                        }
+
+                        if (filteredLoads.isEmpty()) {
+                            Text(
+                                if (allLoads.isEmpty()) "No loads recorded in local database." else "No loads match '$dbSearchQuery'.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.secondary
+                            )
+                        } else {
+                            filteredLoads.forEach { load ->
+                                Card(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                                ) {
+                                    Column(
+                                        modifier = Modifier.padding(12.dp),
+                                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text("PRO #${load.proNumber}", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                                            Text(
+                                                load.tripState,
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.primary,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+
+                                        Text("• Pay: $${String.format(Locale.US, "%.2f", load.loadPay)} (${load.percentageRate}%) | Tarp: ${load.tarpType}")
+                                        Text("• Miles: ${load.dispatchedLoadedMiles.toInt()} Loaded / ${load.dispatchedBounceMiles.toInt()} Bounce")
+                                        if (!load.shipperName.isNullOrBlank()) Text("• Shipper: ${load.shipperName?.lines()?.firstOrNull()}")
+                                        if (!load.consigneeName.isNullOrBlank()) Text("• Consignee: ${load.consigneeName?.lines()?.firstOrNull()}")
+
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            Button(
+                                                onClick = { editingDbLoad = load },
+                                                modifier = Modifier.weight(1f)
+                                            ) {
+                                                Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(16.dp))
+                                                Spacer(modifier = Modifier.width(4.dp))
+                                                Text("Edit Row")
+                                            }
+
+                                            IconButton(
+                                                onClick = {
+                                                    dbLoadToDelete = load
+                                                    showDbDeleteConfirmation = true
+                                                }
+                                            ) {
+                                                Icon(Icons.Default.Delete, contentDescription = "Delete Load", tint = MaterialTheme.colorScheme.error)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text("📍 GPS Location Breadcrumbs", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                Text("Total Recorded Breadcrumbs: $breadcrumbCount rows")
+                                Text("GPS points recorded every 2.5 minutes during active trips for high-accuracy route heatmaps.")
+
+                                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+
+                                Button(
+                                    onClick = { showClearBreadcrumbsConfirmation = true },
+                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Icon(Icons.Default.Delete, contentDescription = null)
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("🧹 Clear All GPS Breadcrumbs")
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -756,6 +919,237 @@ fun DevNotesScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showClearDialog = false }) { Text("Cancel") }
+            }
+        )
+    }
+
+    val currentDbEdit = editingDbLoad
+    if (currentDbEdit != null) {
+        var editPro by remember { mutableStateOf(currentDbEdit.proNumber) }
+        var editPay by remember { mutableStateOf(currentDbEdit.loadPay.toString()) }
+        var editPct by remember { mutableStateOf(currentDbEdit.percentageRate.toString()) }
+        var editTrainerPay by remember { mutableStateOf(currentDbEdit.trainerPayRate.toString()) }
+        var editDispBounce by remember { mutableStateOf(currentDbEdit.dispatchedBounceMiles.toString()) }
+        var editDispLoaded by remember { mutableStateOf(currentDbEdit.dispatchedLoadedMiles.toString()) }
+        var editShipper by remember { mutableStateOf(currentDbEdit.shipperName ?: "") }
+        var editConsignee by remember { mutableStateOf(currentDbEdit.consigneeName ?: "") }
+        var editTripState by remember { mutableStateOf(currentDbEdit.tripState) }
+        var editIsTraining by remember { mutableStateOf(currentDbEdit.isTrainingWeek) }
+        var editNotes by remember { mutableStateOf(currentDbEdit.tripNotes ?: "") }
+
+        val stateOptions = listOf("COMPLETED", "ACTIVE_BOUNCE", "ACTIVE_SHIPPER", "ACTIVE_LOADED", "ACTIVE_CONSIGNEE", "PAUSED_AT_HOME")
+
+        AlertDialog(
+            onDismissRequest = { editingDbLoad = null },
+            title = { Text("✏️ Edit SQLite Load Record") },
+            text = {
+                Box(modifier = Modifier.heightIn(max = 420.dp)) {
+                    LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        item {
+                            OutlinedTextField(
+                                value = editPro,
+                                onValueChange = { editPro = it.filter { char -> char.isDigit() } },
+                                label = { Text("PRO Number (Primary Key)") },
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+
+                        item {
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                OutlinedTextField(
+                                    value = editPay,
+                                    onValueChange = { editPay = it },
+                                    label = { Text("Gross Pay ($)") },
+                                    modifier = Modifier.weight(1f)
+                                )
+                                OutlinedTextField(
+                                    value = editPct,
+                                    onValueChange = { editPct = it },
+                                    label = { Text("Pay Split (%)") },
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                        }
+
+                        item {
+                            OutlinedTextField(
+                                value = editTrainerPay,
+                                onValueChange = { editTrainerPay = it },
+                                label = { Text("Trainer Pay Rate ($/wk)") },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+
+                        item {
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                OutlinedTextField(
+                                    value = editDispBounce,
+                                    onValueChange = { editDispBounce = it },
+                                    label = { Text("Bounce Miles") },
+                                    modifier = Modifier.weight(1f)
+                                )
+                                OutlinedTextField(
+                                    value = editDispLoaded,
+                                    onValueChange = { editDispLoaded = it },
+                                    label = { Text("Loaded Miles") },
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                        }
+
+                        item {
+                            OutlinedTextField(
+                                value = editShipper,
+                                onValueChange = { editShipper = it },
+                                label = { Text("Shipper Facility Name") },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+
+                        item {
+                            OutlinedTextField(
+                                value = editConsignee,
+                                onValueChange = { editConsignee = it },
+                                label = { Text("Consignee Facility Name") },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+
+                        item {
+                            ExposedDropdownMenuBox(
+                                expanded = stateDropdownExpanded,
+                                onExpandedChange = { stateDropdownExpanded = !stateDropdownExpanded }
+                            ) {
+                                OutlinedTextField(
+                                    value = editTripState,
+                                    onValueChange = {},
+                                    readOnly = true,
+                                    label = { Text("Trip State") },
+                                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = stateDropdownExpanded) },
+                                    modifier = Modifier.fillMaxWidth().menuAnchor(type = MenuAnchorType.PrimaryNotEditable, enabled = true)
+                                )
+                                ExposedDropdownMenu(
+                                    expanded = stateDropdownExpanded,
+                                    onDismissRequest = { stateDropdownExpanded = false }
+                                ) {
+                                    stateOptions.forEach { opt ->
+                                        DropdownMenuItem(
+                                            text = { Text(opt) },
+                                            onClick = {
+                                                editTripState = opt
+                                                stateDropdownExpanded = false
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        item {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Checkbox(checked = editIsTraining, onCheckedChange = { editIsTraining = it })
+                                Text("Active Training Week Load")
+                            }
+                        }
+
+                        item {
+                            OutlinedTextField(
+                                value = editNotes,
+                                onValueChange = { editNotes = it },
+                                label = { Text("Trip / Facility Notes") },
+                                minLines = 2,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val updated = currentDbEdit.copy(
+                            proNumber = editPro.trim(),
+                            loadPay = editPay.toDoubleOrNull() ?: currentDbEdit.loadPay,
+                            percentageRate = editPct.toDoubleOrNull() ?: currentDbEdit.percentageRate,
+                            trainerPayRate = editTrainerPay.toDoubleOrNull() ?: currentDbEdit.trainerPayRate,
+                            dispatchedBounceMiles = editDispBounce.toDoubleOrNull() ?: currentDbEdit.dispatchedBounceMiles,
+                            dispatchedLoadedMiles = editDispLoaded.toDoubleOrNull() ?: currentDbEdit.dispatchedLoadedMiles,
+                            shipperName = editShipper.ifBlank { null },
+                            consigneeName = editConsignee.ifBlank { null },
+                            tripState = editTripState,
+                            isTrainingWeek = editIsTraining,
+                            tripNotes = editNotes.ifBlank { null }
+                        )
+
+                        scope.launch(Dispatchers.IO) {
+                            if (currentDbEdit.proNumber != updated.proNumber) {
+                                db.loadDao().deleteLoad(currentDbEdit)
+                            }
+                            db.loadDao().insertLoad(updated)
+                            withContext(Dispatchers.Main) {
+                                Toast.makeText(ctx, "Updated PRO #${updated.proNumber} in SQLite!", Toast.LENGTH_SHORT).show()
+                                editingDbLoad = null
+                            }
+                        }
+                    }
+                ) {
+                    Text("💾 Save SQLite Changes")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { editingDbLoad = null }) { Text("Cancel") }
+            }
+        )
+    }
+
+    val loadToDelete = dbLoadToDelete
+    if (showDbDeleteConfirmation && loadToDelete != null) {
+        AlertDialog(
+            onDismissRequest = { showDbDeleteConfirmation = false },
+            title = { Text("🗑️ Delete SQLite Load Record?") },
+            text = { Text("Are you sure you want to permanently delete PRO #${loadToDelete.proNumber} from local SQLite database?") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        scope.launch(Dispatchers.IO) {
+                            db.loadDao().deleteLoad(loadToDelete)
+                            withContext(Dispatchers.Main) {
+                                Toast.makeText(ctx, "Deleted PRO #${loadToDelete.proNumber}!", Toast.LENGTH_SHORT).show()
+                                showDbDeleteConfirmation = false
+                            }
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) { Text("Delete Forever") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDbDeleteConfirmation = false }) { Text("Cancel") }
+            }
+        )
+    }
+
+    if (showClearBreadcrumbsConfirmation) {
+        AlertDialog(
+            onDismissRequest = { showClearBreadcrumbsConfirmation = false },
+            title = { Text("🧹 Clear All GPS Breadcrumbs?") },
+            text = { Text("⚠️ Are you sure you want to permanently delete all $breadcrumbCount GPS location breadcrumbs? This cannot be undone.") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        scope.launch(Dispatchers.IO) {
+                            db.loadDao().clearAllBreadcrumbs()
+                            withContext(Dispatchers.Main) {
+                                Toast.makeText(ctx, "All GPS breadcrumbs cleared!", Toast.LENGTH_SHORT).show()
+                                showClearBreadcrumbsConfirmation = false
+                            }
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) { Text("Delete Forever") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearBreadcrumbsConfirmation = false }) { Text("Cancel") }
             }
         )
     }
