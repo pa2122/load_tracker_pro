@@ -328,7 +328,10 @@ class MainActivity : ComponentActivity() {
                                     TrackingService.isGeofenceActive = active.consigneeLat != null
                                 }
 
-                                startService(Intent(this@MainActivity, TrackingService::class.java))
+                                ContextCompat.startForegroundService(
+                                    this@MainActivity,
+                                    Intent(this@MainActivity, TrackingService::class.java)
+                                )
                             }
                         }
                     }

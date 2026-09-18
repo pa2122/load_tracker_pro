@@ -251,7 +251,7 @@ private suspend fun submitTesterFeedback(
     try {
         val cleanRepo = repo.trim().removePrefix("https://github.com/").removeSuffix(".git")
         if (cleanRepo.isBlank() || token.trim().isBlank()) {
-            return@withContext Pair(false, "System feedback service is currently offline.")
+            return@withContext Pair(false, "Feedback service offline: No GitHub Token configured. Set one in Dev Notes settings.")
         }
         val url = URL("https://api.github.com/repos/$cleanRepo/issues")
         val conn = url.openConnection() as HttpURLConnection

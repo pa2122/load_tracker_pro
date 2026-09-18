@@ -193,8 +193,14 @@ fun LoadEntryScreen(
         val patterns = listOf(
             "M/d/yyyy h:mm:ss a",
             "M/d/yyyy h:mm a",
+            "M/d/yy h:mm:ss a",
+            "M/d/yy h:mm a",
             "MM/dd/yyyy HH:mm:ss",
-            "MM/dd/yyyy HH:mm"
+            "MM/dd/yyyy HH:mm",
+            "MM/dd/yy HH:mm:ss",
+            "MM/dd/yy HH:mm",
+            "yyyy-MM-dd HH:mm:ss",
+            "yyyy-MM-dd HH:mm"
         )
         for (pattern in patterns) {
             try {
@@ -240,16 +246,61 @@ fun LoadEntryScreen(
         var extractedLoaded: String? = null
         var extractedBounce: String? = null
 
-        val loadedRegex = Regex("""(?:loaded\s*miles|loaded\s*mi|load\s*miles|trip\s*miles|distance)\s*[:=\-\s]*(\d{1,4}(?:\.\d+)?)""", RegexOption.IGNORE_CASE)
+        val loadedRegex = Regex(
+            """(?:dispatched\s*loaded|disp\s*loaded|loaded\s*miles|loaded\s*mi|load\s*miles|loaded|ld\s*miles|ld\s*mi|trip\s*miles|total\s*miles|distance)\s*[:=\-\s]*(\d{1,3}(?:,\d{3})+|\d+)(?:\.(\d+))?""",
+            RegexOption.IGNORE_CASE
+        )
         val loadedMatch = loadedRegex.find(rawText)
         if (loadedMatch != null && loadedMatch.groupValues.size > 1) {
-            extractedLoaded = loadedMatch.groupValues[1]
+            val numPart = loadedMatch.groupValues[1].replace(",", "")
+            val decPart = if (loadedMatch.groupValues.size > 2 && loadedMatch.groupValues[2].isNotBlank()) "." + loadedMatch.groupValues[2] else ""
+            extractedLoaded = numPart + decPart
+        } else {
+            val loadedReverseRegex = Regex(
+                """(\d{1,3}(?:,\d{3})+|\d+)(?:\.(\d+))?\s*(?:loaded\s*miles|loaded\s*mi|loaded|load\s*miles|mi\s*loaded)\b""",
+                RegexOption.IGNORE_CASE
+            )
+            val revMatch = loadedReverseRegex.find(rawText)
+            if (revMatch != null && revMatch.groupValues.size > 1) {
+                val numPart = revMatch.groupValues[1].replace(",", "")
+                val decPart = if (revMatch.groupValues.size > 2 && revMatch.groupValues[2].isNotBlank()) "." + revMatch.groupValues[2] else ""
+                extractedLoaded = numPart + decPart
+            }
         }
 
-        val bounceRegex = Regex("""(?:bounce\s*miles|bounce\s*mi|bounce|deadhead\s*miles|deadhead|dh\s*miles|dh|empty)\s*[:=\-\s]*(\d{1,4}(?:\.\d+)?)""", RegexOption.IGNORE_CASE)
+        val bounceRegex = Regex(
+            """(?:dispatched\s*bounce|disp\s*bounce|bounce\s*miles|bounce\s*mi|bounce|deadhead\s*miles|deadhead|dh\s*miles|dh|empty)\s*[:=\-\s]*(\d{1,3}(?:,\d{3})+|\d+)(?:\.(\d+))?""",
+            RegexOption.IGNORE_CASE
+        )
         val bounceMatch = bounceRegex.find(rawText)
         if (bounceMatch != null && bounceMatch.groupValues.size > 1) {
-            extractedBounce = bounceMatch.groupValues[1]
+            val numPart = bounceMatch.groupValues[1].replace(",", "")
+            val decPart = if (bounceMatch.groupValues.size > 2 && bounceMatch.groupValues[2].isNotBlank()) "." + bounceMatch.groupValues[2] else ""
+            extractedBounce = numPart + decPart
+        } else {
+            val bounceReverseRegex = Regex(
+                """(\d{1,3}(?:,\d{3})+|\d+)(?:\.(\d+))?\s*(?:bounce\s*miles|bounce\s*mi|bounce|deadhead\s*miles|deadhead|dh\s*miles|mi\s*bounce|mi\s*deadhead)\b""",
+                RegexOption.IGNORE_CASE
+            )
+            val revMatch = bounceReverseRegex.find(rawText)
+            if (revMatch != null && revMatch.groupValues.size > 1) {
+                val numPart = revMatch.groupValues[1].replace(",", "")
+                val decPart = if (revMatch.groupValues.size > 2 && revMatch.groupValues[2].isNotBlank()) "." + revMatch.groupValues[2] else ""
+                extractedBounce = numPart + decPart
+            }
+        }
+
+        // Generic fallback for Loaded Miles if still missing
+        if (extractedLoaded == null) {
+            val genericMilesRegex = Regex("""\b(\d{3,5})\s*(?:miles|mi)\b""", RegexOption.IGNORE_CASE)
+            val genericMatches = genericMilesRegex.findAll(rawText)
+            for (match in genericMatches) {
+                val valStr = match.groupValues[1]
+                if (valStr != extractedBounce) {
+                    extractedLoaded = valStr
+                    break
+                }
+            }
         }
 
         if (extractedLoaded != null) dLoaded = extractedLoaded

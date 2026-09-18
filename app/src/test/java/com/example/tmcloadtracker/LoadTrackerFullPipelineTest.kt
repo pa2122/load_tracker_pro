@@ -134,4 +134,39 @@ class LoadTrackerFullPipelineTest {
         assertTrue("Should detect existing PRO number as duplicate", isDuplicate)
         assertFalse("Should recognize new PRO number as unique", isUniqueDuplicate)
     }
+
+    @Test
+    fun test6_OcrExtraction_ParsesFourDigitAndFormattedLoadedMiles() {
+        fun extractLoadedMiles(rawText: String): String? {
+            val loadedRegex = Regex(
+                """(?:dispatched\s*loaded|disp\s*loaded|loaded\s*miles|loaded\s*mi|load\s*miles|loaded|ld\s*miles|ld\s*mi|trip\s*miles|total\s*miles|distance)\s*[:=\-\s]*(\d{1,3}(?:,\d{3})+|\d+)(?:\.(\d+))?""",
+                RegexOption.IGNORE_CASE
+            )
+            val loadedMatch = loadedRegex.find(rawText)
+            if (loadedMatch != null && loadedMatch.groupValues.size > 1) {
+                val numPart = loadedMatch.groupValues[1].replace(",", "")
+                val decPart = if (loadedMatch.groupValues.size > 2 && loadedMatch.groupValues[2].isNotBlank()) "." + loadedMatch.groupValues[2] else ""
+                return numPart + decPart
+            } else {
+                val loadedReverseRegex = Regex(
+                    """(\d{1,3}(?:,\d{3})+|\d+)(?:\.(\d+))?\s*(?:loaded\s*miles|loaded\s*mi|loaded|load\s*miles|mi\s*loaded)\b""",
+                    RegexOption.IGNORE_CASE
+                )
+                val revMatch = loadedReverseRegex.find(rawText)
+                if (revMatch != null && revMatch.groupValues.size > 1) {
+                    val numPart = revMatch.groupValues[1].replace(",", "")
+                    val decPart = if (revMatch.groupValues.size > 2 && revMatch.groupValues[2].isNotBlank()) "." + revMatch.groupValues[2] else ""
+                    return numPart + decPart
+                }
+            }
+            return null
+        }
+
+        assertEquals("1400", extractLoadedMiles("Loaded Miles: 1400"))
+        assertEquals("1400", extractLoadedMiles("Loaded Miles: 1,400"))
+        assertEquals("1400", extractLoadedMiles("Loaded: 1400"))
+        assertEquals("1400", extractLoadedMiles("Disp Loaded: 1400"))
+        assertEquals("1400.5", extractLoadedMiles("Dispatched Loaded: 1,400.5"))
+        assertEquals("1400", extractLoadedMiles("1400 Loaded Miles"))
+    }
 }
