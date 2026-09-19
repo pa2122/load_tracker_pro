@@ -232,7 +232,7 @@ class MainActivity : ComponentActivity() {
                     LaunchedEffect(currentDeviceId) {
                         withContext(Dispatchers.IO) {
                             try {
-                                val url = URL("https://raw.githubusercontent.com/pa2122/android_apps/master/authorized_devs.json")
+                                val url = URL("https://raw.githubusercontent.com/pa2122/load_tracker_pro/master/authorized_devs.json")
                                 val conn = url.openConnection() as HttpURLConnection
                                 conn.requestMethod = "GET"
                                 conn.connectTimeout = 5000
@@ -1344,7 +1344,7 @@ class MainActivity : ComponentActivity() {
                                             return@Button
                                         }
                                         isSubmitting = true
-                                        val repo = devPrefs.getString("gh_repo", "pa2122/android_apps") ?: "pa2122/android_apps"
+                                        val repo = devPrefs.getString("gh_repo", BuildConfig.DEFAULT_GITHUB_REPO) ?: BuildConfig.DEFAULT_GITHUB_REPO
                                         val token = devPrefs.getString("gh_token", "")?.ifBlank { BuildConfig.DEFAULT_GITHUB_TOKEN } ?: BuildConfig.DEFAULT_GITHUB_TOKEN
 
                                         scope.launch {

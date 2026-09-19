@@ -55,7 +55,7 @@ fun TesterFeedbackDialog(
 
     val savedToken = prefs.getString("gh_token", "") ?: ""
     val token = if (savedToken.isNotBlank()) savedToken else BuildConfig.DEFAULT_GITHUB_TOKEN
-    val repo = prefs.getString("gh_repo", "pa2122/android_apps") ?: "pa2122/android_apps"
+    val repo = prefs.getString("gh_repo", BuildConfig.DEFAULT_GITHUB_REPO) ?: BuildConfig.DEFAULT_GITHUB_REPO
 
     var selectedCategory by remember { mutableStateOf("bug") } // "bug", "enhancement", "feedback"
     var summaryText by remember { mutableStateOf("") }
