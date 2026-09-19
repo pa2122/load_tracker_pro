@@ -237,56 +237,38 @@ fun LoadEntryScreen(
         }
 
         // 3. Extract Dispatched Miles (Loaded Miles & Bounce/Deadhead Miles)
-        val numRegex = Regex("""\b\d{1,4}(?:\.\d+)?\b""")
+        val numRegex = Regex("""\b\d{1,4}(?:,\d{3})*(?:\.\d+)?\b""")
         var extractedLoaded: String? = null
         var extractedBounce: String? = null
 
-        // Line-by-line inspection
-        for (i in lines.indices) {
-            val line = lines[i]
-            val lower = line.lowercase(Locale.US)
-
-            // Look for Loaded Miles
-            if (extractedLoaded == null && (lower.contains("loaded miles") || lower.contains("loaded mi") || lower.contains("loaded") || lower.contains("load miles") || lower.contains("trip miles"))) {
-                val match = numRegex.find(line)
-                if (match != null) {
-                    extractedLoaded = match.value
-                } else if (i + 1 < lines.size) {
-                    val nextLineMatch = numRegex.find(lines[i + 1])
-                    if (nextLineMatch != null) {
-                        extractedLoaded = nextLineMatch.value
-                    }
-                }
-            }
-
-            // Look for Bounce / Deadhead Miles
-            if (extractedBounce == null && (lower.contains("bounce miles") || lower.contains("bounce mi") || lower.contains("bounce") || lower.contains("deadhead miles") || lower.contains("deadhead") || lower.contains("dh miles") || lower.contains("dh"))) {
-                val match = numRegex.find(line)
-                if (match != null) {
-                    extractedBounce = match.value
-                } else if (i + 1 < lines.size) {
-                    val nextLineMatch = numRegex.find(lines[i + 1])
-                    if (nextLineMatch != null) {
-                        extractedBounce = nextLineMatch.value
-                    }
-                }
-            }
+        // Direct regex check for Loaded Miles & Bounce Miles
+        val loadedRegex = Regex("""(?:loaded\s*miles|loaded\s*mi|load\s*miles)\s*[:=\-\s]*(\d{1,4}(?:,\d{3})*(?:\.\d+)?)""", RegexOption.IGNORE_CASE)
+        val loadedMatch = loadedRegex.find(rawText)
+        if (loadedMatch != null && loadedMatch.groupValues.size > 1) {
+            extractedLoaded = loadedMatch.groupValues[1].replace(",", "")
         }
 
-        // Regex fallbacks if line-by-line check didn't capture a value
-        if (extractedLoaded == null) {
-            val loadedRegex = Regex("""(?:loaded\s*miles|loaded\s*mi|loaded|load\s*miles|trip\s*miles|distance)\s*[:=\-\s]*(\d{1,4}(?:\.\d+)?)""", RegexOption.IGNORE_CASE)
-            val match = loadedRegex.find(rawText)
-            if (match != null && match.groupValues.size > 1) {
-                extractedLoaded = match.groupValues[1]
-            }
+        val bounceRegex = Regex("""(?:bounce\s*miles|bounce\s*mi|deadhead\s*miles|deadhead\s*mi|dh\s*miles)\s*[:=\-\s]*(\d{1,4}(?:,\d{3})*(?:\.\d+)?)""", RegexOption.IGNORE_CASE)
+        val bounceMatch = bounceRegex.find(rawText)
+        if (bounceMatch != null && bounceMatch.groupValues.size > 1) {
+            extractedBounce = bounceMatch.groupValues[1].replace(",", "")
         }
 
-        if (extractedBounce == null) {
-            val bounceRegex = Regex("""(?:bounce\s*miles|bounce\s*mi|bounce|deadhead\s*miles|deadhead|dh\s*miles|dh|empty)\s*[:=\-\s]*(\d{1,4}(?:\.\d+)?)""", RegexOption.IGNORE_CASE)
-            val match = bounceRegex.find(rawText)
-            if (match != null && match.groupValues.size > 1) {
-                extractedBounce = match.groupValues[1]
+        // Line-by-line inspection fallback
+        if (extractedLoaded == null || extractedBounce == null) {
+            for (i in lines.indices) {
+                val line = lines[i]
+                val lower = line.lowercase(Locale.US)
+
+                if (extractedLoaded == null && (lower.contains("loaded miles") || lower.contains("loaded mi") || lower.contains("loaded:"))) {
+                    val match = numRegex.find(line)
+                    if (match != null) extractedLoaded = match.value.replace(",", "")
+                }
+
+                if (extractedBounce == null && (lower.contains("bounce miles") || lower.contains("bounce mi") || lower.contains("deadhead miles") || lower.contains("dh miles"))) {
+                    val match = numRegex.find(line)
+                    if (match != null) extractedBounce = match.value.replace(",", "")
+                }
             }
         }
 

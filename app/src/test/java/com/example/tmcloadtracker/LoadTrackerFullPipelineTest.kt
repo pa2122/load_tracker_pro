@@ -134,4 +134,74 @@ class LoadTrackerFullPipelineTest {
         assertTrue("Should detect existing PRO number as duplicate", isDuplicate)
         assertFalse("Should recognize new PRO number as unique", isUniqueDuplicate)
     }
+
+    @Test
+    fun test6_UserScreenshot_ParsesSwanseaToFtStocktonScreenshot() {
+        val screenshotText = """
+            From: SYSTEM
+            Stop Type: Origin
+            NUCOR BUILDING SYSTEMS
+            200 WHETSTONE RD
+            SWANSEA, SC
+            B 9/14/2026 11:59:00 PM
+            Instructions: IF COD INSTRUCTIONS ON BOL TO FOLLOW UPON DELIVERY!! NO PETS!!/PPE, CLOSED TOE SHOES & PANTS A MUST! SIGN TOP COPY OF BOL AND LEAVE IN BOX.
+            Directions: I 26E,EX 115/HWY 321S,HWY 3 TR,TOP OF HILL RHS. , MAKE SURE YOU HAVE A DELIVERY APPT, 200 WHETSTONE RD, SWANSEA, SC 29160
+            Parking: PILOT I26 EX 115
+
+            Stop Type: Final Dropoff
+            HASKELL STEEL LLC
+            6000 TX-18
+            FT STOCKTON, TX
+            @ 9/16/2026 8:00:00 AM
+
+            Pro Number: 73367813
+            Stop Number 0 PO Number NBSSC PO Number 64932311
+            Stop Number 1 PO Number 64932311
+            Customer Number: @154935
+            Additional Load Notes: TR265126
+            Load Number: 64932311
+            Detention Free Time: 2 hours (Default) (Contact Detention 1.5 hours after arrival or Appt time if not Loaded/unloaded)
+            Stop Offs: 0
+            Commodity: IRON OR STEEL ARTICLES
+            Pieces: 1
+            Loaded Miles: 1409
+            Bounce Miles: 20
+            Hazmat: N
+            Blind Shipment: N
+            Over Dimensional: N
+            Door/Mill:
+            Out Of Route: 52167047 / 0.00%
+            Going Home: N
+            Gross: 4831.28
+            Load Weight: 2320
+            Tarp: NO
+            Trailer: 34942 Possible Trailer Swap
+            Accident Free Miles: 127034
+        """.trimIndent()
+
+        // 1. PRO Number (73367813)
+        val proRegex = Regex("""\b(?:PRO|Order|Load|Trip)\s*(?:Number|No|Num)?\s*#?\s*:?\s*(\d{4,12})""", RegexOption.IGNORE_CASE)
+        val proMatch = proRegex.find(screenshotText)
+        assertNotNull("PRO match should not be null", proMatch)
+        assertEquals("73367813", proMatch?.groupValues?.get(1))
+
+        // 2. Gross Pay ($4831.28)
+        val payRegex = Regex("""(?:Pay|Gross|Rate|Linehaul|Total|Amount)\D*?\$?\s*(\d{1,3}(?:,\d{3})+|\d+)(?:\.(\d{1,2}))?""", RegexOption.IGNORE_CASE)
+        val payMatch = payRegex.find(screenshotText)
+        assertNotNull("Gross pay match should not be null", payMatch)
+        val fullPayStr = "${payMatch?.groupValues?.get(1)}.${payMatch?.groupValues?.get(2)}"
+        assertEquals("4831.28", fullPayStr)
+
+        // 3. Loaded Miles (1409)
+        val loadedRegex = Regex("""(?:loaded\s*miles|loaded\s*mi)\s*[:=\-\s]*(\d{1,4}(?:,\d{3})*(?:\.\d+)?)""", RegexOption.IGNORE_CASE)
+        val loadedMatch = loadedRegex.find(screenshotText)
+        assertNotNull("Loaded miles match should not be null", loadedMatch)
+        assertEquals("1409", loadedMatch?.groupValues?.get(1))
+
+        // 4. Bounce Miles (20)
+        val bounceRegex = Regex("""(?:bounce\s*miles|bounce\s*mi)\s*[:=\-\s]*(\d{1,4}(?:,\d{3})*(?:\.\d+)?)""", RegexOption.IGNORE_CASE)
+        val bounceMatch = bounceRegex.find(screenshotText)
+        assertNotNull("Bounce miles match should not be null", bounceMatch)
+        assertEquals("20", bounceMatch?.groupValues?.get(1))
+    }
 }
