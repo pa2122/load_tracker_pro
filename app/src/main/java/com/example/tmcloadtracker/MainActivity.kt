@@ -88,6 +88,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.NavigationDrawerItem
 import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -826,6 +828,45 @@ class MainActivity : ComponentActivity() {
                                         }
                                     }
                                 )
+                            },
+                            bottomBar = {
+                                NavigationBar {
+                                    NavigationBarItem(
+                                        selected = currentScreen == "dashboard",
+                                        onClick = { currentScreen = "dashboard" },
+                                        icon = { Icon(painterResource(R.drawable.ic_semi_truck), contentDescription = "Dashboard", modifier = Modifier.size(22.dp)) },
+                                        label = { Text("Dashboard") }
+                                    )
+                                    NavigationBarItem(
+                                        selected = currentScreen == "route_map",
+                                        onClick = {
+                                            if (isProUser) {
+                                                tripForMap = null
+                                                currentScreen = "route_map"
+                                            } else {
+                                                showProUpgradeDialog = true
+                                            }
+                                        },
+                                        icon = { Icon(Icons.Default.LocationOn, contentDescription = "Live Map") },
+                                        label = { Text("Live Map") }
+                                    )
+                                    NavigationBarItem(
+                                        selected = currentScreen == "fuel_logger",
+                                        onClick = {
+                                            Toast.makeText(this@MainActivity, "⛽ Fuel Logger & IFTA Tracker coming in v2.0 update!", Toast.LENGTH_SHORT).show()
+                                        },
+                                        icon = { Icon(painterResource(R.drawable.ic_diesel_pump), contentDescription = "Fuel", modifier = Modifier.size(22.dp)) },
+                                        label = { Text("Fuel") }
+                                    )
+                                    NavigationBarItem(
+                                        selected = currentScreen == "ledger",
+                                        onClick = {
+                                            Toast.makeText(this@MainActivity, "📊 Settlement & P&L Ledger coming in v2.0 update!", Toast.LENGTH_SHORT).show()
+                                        },
+                                        icon = { Icon(painterResource(R.drawable.ic_pay_stub), contentDescription = "Ledger", modifier = Modifier.size(22.dp)) },
+                                        label = { Text("Ledger") }
+                                    )
+                                }
                             }
                         ) { innerPadding ->
                             Row(
