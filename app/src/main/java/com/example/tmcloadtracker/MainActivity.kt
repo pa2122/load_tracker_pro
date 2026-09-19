@@ -77,7 +77,11 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -203,6 +207,7 @@ class MainActivity : ComponentActivity() {
                     var showProUpgradeDialog by remember { mutableStateOf(value = false) }
                     var showReadmeDialog by remember { mutableStateOf(value = false) }
                     var isHistoricalEntry by remember { mutableStateOf(value = false) }
+                    var themeDropdownExpanded by remember { mutableStateOf(false) }
 
                     var isMapsCategoryExpanded by remember { mutableStateOf(true) }
                     var isDriverConfigCategoryExpanded by remember { mutableStateOf(false) }
@@ -515,6 +520,60 @@ class MainActivity : ComponentActivity() {
                                     }
 
                                     if (isDriverConfigCategoryExpanded) {
+                                        ExposedDropdownMenuBox(
+                                            expanded = themeDropdownExpanded,
+                                            onExpandedChange = { themeDropdownExpanded = !themeDropdownExpanded }
+                                        ) {
+                                            val currentThemeName = when (activeThemePreset) {
+                                                "cobalt_blue" -> "🔵 Cobalt Blue (Classic v1.x)"
+                                                "hi_vis_lime" -> "🟢 Hi-Vis Lime (Daytime)"
+                                                "night_vision_red" -> "🔴 Night Vision Red (2:00 AM)"
+                                                else -> "⚡ Safety Amber (Default v2.0)"
+                                            }
+                                            OutlinedTextField(
+                                                value = currentThemeName,
+                                                onValueChange = {},
+                                                readOnly = true,
+                                                label = { Text("🎨 App Theme & Colors") },
+                                                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = themeDropdownExpanded) },
+                                                colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
+                                                modifier = Modifier.fillMaxWidth().menuAnchor(type = MenuAnchorType.PrimaryNotEditable, enabled = true)
+                                            )
+                                            ExposedDropdownMenu(
+                                                expanded = themeDropdownExpanded,
+                                                onDismissRequest = { themeDropdownExpanded = false }
+                                            ) {
+                                                DropdownMenuItem(
+                                                    text = { Text("⚡ Safety Amber (Default v2.0)") },
+                                                    onClick = {
+                                                        devPrefs.edit().putString("theme_preset", "safety_amber").apply()
+                                                        themeDropdownExpanded = false
+                                                    }
+                                                )
+                                                DropdownMenuItem(
+                                                    text = { Text("🔵 Cobalt Blue (Classic v1.x)") },
+                                                    onClick = {
+                                                        devPrefs.edit().putString("theme_preset", "cobalt_blue").apply()
+                                                        themeDropdownExpanded = false
+                                                    }
+                                                )
+                                                DropdownMenuItem(
+                                                    text = { Text("🟢 Hi-Vis Lime (Daytime)") },
+                                                    onClick = {
+                                                        devPrefs.edit().putString("theme_preset", "hi_vis_lime").apply()
+                                                        themeDropdownExpanded = false
+                                                    }
+                                                )
+                                                DropdownMenuItem(
+                                                    text = { Text("🔴 Night Vision Red (2:00 AM)") },
+                                                    onClick = {
+                                                        devPrefs.edit().putString("theme_preset", "night_vision_red").apply()
+                                                        themeDropdownExpanded = false
+                                                    }
+                                                )
+                                            }
+                                        }
+
                                         OutlinedTextField(
                                             value = defPercent,
                                             onValueChange = { input ->
