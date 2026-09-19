@@ -32,3 +32,4 @@
 - **Branch `master`:** Stable v1.x production release.
 - **Branch `v2-redesign`:** Version 2.0 UI/UX redesign & Owner-Op features.
 - **Branch Verification:** Always check `git branch` and remind/confirm with the user which branch and version is active at the start of every session or task.
+- **Gradle Sync Rule:** Always execute `gradle_sync()` immediately after switching Git branches so Android Studio's IDE index, package IDs, and BuildConfig fields stay 100% synced.
