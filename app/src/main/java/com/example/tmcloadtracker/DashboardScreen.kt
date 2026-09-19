@@ -189,17 +189,19 @@ fun DashboardScreen(
 
                             val isAtHome = activeTrip.tripState == "PAUSED_AT_HOME"
 
+                            val actualBounce = if (liveBounceMiles > 0.0) maxOf(liveBounceMiles, activeTrip.bounceMilesEnd) else activeTrip.bounceMilesEnd
                             val bounceOorPct = if (activeTrip.isGoingHome || activeTrip.dispatchedBounceMiles <= 0.0) {
                                 0.0
                             } else {
-                                val extraBounce = maxOf(0.0, liveBounceMiles - activeTrip.dispatchedBounceMiles)
+                                val extraBounce = maxOf(0.0, actualBounce - activeTrip.dispatchedBounceMiles)
                                 (extraBounce / activeTrip.dispatchedBounceMiles) * 100.0
                             }
 
+                            val actualLoaded = if (liveLoadedMiles > 0.0) maxOf(liveLoadedMiles, activeTrip.loadedMilesEnd) else activeTrip.loadedMilesEnd
                             val loadedOorPct = if (activeTrip.isGoingHome || activeTrip.dispatchedLoadedMiles <= 0.0) {
                                 0.0
                             } else {
-                                val extraLoaded = maxOf(0.0, liveLoadedMiles - activeTrip.dispatchedLoadedMiles)
+                                val extraLoaded = maxOf(0.0, actualLoaded - activeTrip.dispatchedLoadedMiles)
                                 (extraLoaded / activeTrip.dispatchedLoadedMiles) * 100.0
                             }
 
@@ -1437,11 +1439,13 @@ fun DashboardScreen(
             confirmButton = {
                 Button(onClick = {
                     val newMiles = correctedMilesStr.toDoubleOrNull()
-                    if (newMiles != null) {
-                        if (activeTrip?.tripState == "ACTIVE_SHIPPER") {
+                    if (newMiles != null && activeTrip != null) {
+                        if (activeTrip.tripState == "ACTIVE_SHIPPER" || activeTrip.tripState == "ACTIVE_BOUNCE") {
                             TrackingService.totalBounceMilesTracked.value = newMiles
+                            onUpdateTripClick(activeTrip.copy(bounceMilesEnd = newMiles))
                         } else {
                             TrackingService.totalLoadedMilesTracked.value = newMiles
+                            onUpdateTripClick(activeTrip.copy(loadedMilesEnd = newMiles))
                         }
                     }
                     showMileageEditDialog = false
