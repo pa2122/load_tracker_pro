@@ -107,17 +107,39 @@ class TrackingService : Service() {
         }
     }
 
+    private var isLowPowerMode = false
+
+    fun configureLocationUpdates(force: Boolean = false) {
+        val shouldBeLowPower = (activeSegment == "Paused" || activeSegment == "PAUSED_AT_HOME")
+        if (!force && shouldBeLowPower == isLowPowerMode) return
+        isLowPowerMode = shouldBeLowPower
+
+        try {
+            fusedLocationClient.removeLocationUpdates(locationCallback)
+            val priority = if (isLowPowerMode) Priority.PRIORITY_BALANCED_POWER_ACCURACY else Priority.PRIORITY_HIGH_ACCURACY
+            val interval = if (isLowPowerMode) 60000L else 5000L
+            val minDistance = if (isLowPowerMode) 25f else 10f
+
+            val locationRequest = LocationRequest.Builder(priority, interval)
+                .setMinUpdateDistanceMeters(minDistance)
+                .build()
+
+            fusedLocationClient.requestLocationUpdates(
+                locationRequest,
+                locationCallback,
+                Looper.getMainLooper()
+            )
+        } catch (e: SecurityException) {
+            e.printStackTrace()
+        }
+    }
+
     override fun onCreate() {
         super.onCreate()
         restoreState(this)
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
         createNotificationChannel()
         updateNotification()
-
-        val locationRequest =
-            LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 5000)
-                .setMinUpdateDistanceMeters(10f)
-                .build()
 
         locationCallback = object : LocationCallback() {
             override fun onLocationResult(locationResult: LocationResult) {
@@ -149,13 +171,7 @@ class TrackingService : Service() {
             }
         }
 
-        try {
-            fusedLocationClient.requestLocationUpdates(
-                locationRequest,
-                locationCallback,
-                Looper.getMainLooper(),
-            )
-        } catch (_: SecurityException) {}
+        configureLocationUpdates(force = true)
     }
 
     private fun saveBreadcrumb(loc: Location) {
@@ -221,6 +237,7 @@ class TrackingService : Service() {
             activeSegment = "Paused"
             isGeofenceActive = false 
             updateNotification()
+            configureLocationUpdates()
 
             val pro = activeProNumber
             if (pro != null) {
@@ -242,6 +259,7 @@ class TrackingService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         updateNotification()
+        configureLocationUpdates()
         return START_STICKY
     }
 
