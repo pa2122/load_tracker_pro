@@ -881,9 +881,7 @@ class MainActivity : ComponentActivity() {
                                     )
                                     NavigationBarItem(
                                         selected = currentScreen == "ledger",
-                                        onClick = {
-                                            Toast.makeText(this@MainActivity, "📊 Settlement & P&L Ledger coming in v2.0 update!", Toast.LENGTH_SHORT).show()
-                                        },
+                                        onClick = { currentScreen = "ledger" },
                                         icon = { Icon(painterResource(R.drawable.ic_pay_stub), contentDescription = "Ledger", modifier = Modifier.size(22.dp)) },
                                         label = { Text("Ledger") }
                                     )
