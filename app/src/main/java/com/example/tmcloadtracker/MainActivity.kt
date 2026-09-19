@@ -186,9 +186,13 @@ class MainActivity : ComponentActivity() {
 
                     var isProUser by remember { mutableStateOf(value = true) }
 
+                    val devPrefs = remember { getSharedPreferences("dev_prefs", MODE_PRIVATE) }
+                    val initialExtraStopPay = remember { devPrefs.getString("extra_stop_pay", "0.0") ?: "0.0" }
+
                     var defPercent by remember { mutableStateOf(value = "31.0") }
                     var tarp8Pay by remember { mutableStateOf(value = "50.0") }
                     var tarp4Pay by remember { mutableStateOf(value = "30.0") }
+                    var extraStopPay by remember { mutableStateOf(value = initialExtraStopPay) }
                     var homeBase by remember { mutableStateOf(value = "15381 TX-198, Mabank, TX 75147") }
                     var homeRawPaste by remember { mutableStateOf(value = "15381 TX-198, Mabank, TX 75147") }
                     var homeLat by remember { mutableStateOf<Double?>(value = 32.3021) }
@@ -198,6 +202,7 @@ class MainActivity : ComponentActivity() {
                     var savedDefPercent by remember { mutableStateOf(value = "31.0") }
                     var savedTarp8Pay by remember { mutableStateOf(value = "50.0") }
                     var savedTarp4Pay by remember { mutableStateOf(value = "30.0") }
+                    var savedExtraStopPay by remember { mutableStateOf(value = initialExtraStopPay) }
                     var savedHomeRawPaste by remember { mutableStateOf(value = "15381 TX-198, Mabank, TX 75147") }
                     var savedIsTrainingActive by remember { mutableStateOf(value = false) }
                     var savedFlatTrainerPayRate by remember { mutableStateOf(value = "200.0") }
@@ -218,7 +223,6 @@ class MainActivity : ComponentActivity() {
                     var initialRxBytes by remember { mutableLongStateOf(value = TrafficStats.getUidRxBytes(Process.myUid())) }
                     var initialTxBytes by remember { mutableLongStateOf(value = TrafficStats.getUidTxBytes(Process.myUid())) }
 
-                    val devPrefs = remember { getSharedPreferences("dev_prefs", MODE_PRIVATE) }
                     var savedTraineeTier by remember { mutableStateOf(value = devPrefs.getString("trainee_tier", "inexperienced") ?: "inexperienced") }
                     var savedTrainingWeek by remember { mutableIntStateOf(value = devPrefs.getInt("training_week", 1)) }
                     var savedIsTmcBoostActive by remember { mutableStateOf(value = devPrefs.getBoolean("is_tmc_boost_active", true)) }
@@ -397,6 +401,7 @@ class MainActivity : ComponentActivity() {
                     val hasDrawerSettingsChanged = (defPercent != savedDefPercent) ||
                             (tarp8Pay != savedTarp8Pay) ||
                             (tarp4Pay != savedTarp4Pay) ||
+                            (extraStopPay != savedExtraStopPay) ||
                             (homeRawPaste != savedHomeRawPaste) ||
                             (isTrainingActive != savedIsTrainingActive) ||
                             (flatTrainerPayRate != savedFlatTrainerPayRate)
@@ -431,9 +436,11 @@ class MainActivity : ComponentActivity() {
                                                     savedDefPercent = defPercent
                                                     savedTarp8Pay = tarp8Pay
                                                     savedTarp4Pay = tarp4Pay
+                                                    savedExtraStopPay = extraStopPay
                                                     savedHomeRawPaste = homeRawPaste
                                                     savedIsTrainingActive = isTrainingActive
                                                     savedFlatTrainerPayRate = flatTrainerPayRate
+                                                    devPrefs.edit().putString("extra_stop_pay", extraStopPay).apply()
                                                     scope.launch { drawerState.close() }
                                                 }
                                             ) {
@@ -619,6 +626,20 @@ class MainActivity : ComponentActivity() {
                                                 tarp4Pay = input.filter { it.isDigit() || it == '.' }
                                             },
                                             label = { Text("4' Drop Tarp Pay ($)") },
+                                            singleLine = true,
+                                            keyboardOptions = KeyboardOptions(
+                                                keyboardType = KeyboardType.Number,
+                                                imeAction = ImeAction.Next
+                                            ),
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+
+                                        OutlinedTextField(
+                                            value = extraStopPay,
+                                            onValueChange = { input ->
+                                                extraStopPay = input.filter { it.isDigit() || it == '.' }
+                                            },
+                                            label = { Text("Extra Stop Pay ($)") },
                                             singleLine = true,
                                             keyboardOptions = KeyboardOptions(
                                                 keyboardType = KeyboardType.Number,
