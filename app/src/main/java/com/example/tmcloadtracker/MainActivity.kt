@@ -56,6 +56,9 @@ import androidx.compose.material.icons.filled.Done
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.foundation.clickable
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.LocationOn
 import dev.jeziellago.compose.markdowntext.MarkdownText
 import androidx.compose.material.icons.filled.Menu
@@ -181,6 +184,10 @@ class MainActivity : ComponentActivity() {
                     var showProUpgradeDialog by remember { mutableStateOf(value = false) }
                     var showReadmeDialog by remember { mutableStateOf(value = false) }
                     var isHistoricalEntry by remember { mutableStateOf(value = false) }
+
+                    var isMapsCategoryExpanded by remember { mutableStateOf(true) }
+                    var isDriverConfigCategoryExpanded by remember { mutableStateOf(false) }
+                    var isSupportCategoryExpanded by remember { mutableStateOf(false) }
 
                     var initialRxBytes by remember { mutableLongStateOf(value = TrafficStats.getUidRxBytes(Process.myUid())) }
                     var initialTxBytes by remember { mutableLongStateOf(value = TrafficStats.getUidTxBytes(Process.myUid())) }
@@ -414,250 +421,295 @@ class MainActivity : ComponentActivity() {
                                     }
 
                                     HorizontalDivider()
-                                    Text("📍 MAPS & FACILITY INSIGHTS", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-
-                                    NavigationDrawerItem(
-                                        label = { Text(if (isProUser) "🗺️ Global Route Heatmap" else "🗺️ Global Route Heatmap (Pro)") },
-                                        selected = currentScreen == "route_map",
-                                        onClick = {
-                                            scope.launch { drawerState.close() }
-                                            if (isProUser) {
-                                                tripForMap = null
-                                                currentScreen = "route_map"
-                                            } else {
-                                                showProUpgradeDialog = true
-                                            }
-                                        }
-                                    )
-
-                                    NavigationDrawerItem(
-                                        label = { Text(if (isProUser) "🏢 Facility Search & Gate Tips" else "🏢 Facility Search & Gate Tips (Pro)") },
-                                        selected = currentScreen == "facility_search",
-                                        onClick = {
-                                            scope.launch { drawerState.close() }
-                                            if (isProUser) {
-                                                currentScreen = "facility_search"
-                                            } else {
-                                                showProUpgradeDialog = true
-                                            }
-                                        }
-                                    )
-
-                                    val hasActiveTrip = savedLoads.any { it.tripState != "COMPLETED" && it.tripState != "NOT_STARTED" }
-                                    if (hasActiveTrip) {
-                                        NavigationDrawerItem(
-                                            label = { Text("➕ Add Historical Completed Load") },
-                                            selected = false,
-                                            onClick = {
-                                                scope.launch { drawerState.close() }
-                                                tripToEdit = null
-                                                isHistoricalEntry = true
-                                                currentScreen = "entry"
-                                            }
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable { isMapsCategoryExpanded = !isMapsCategoryExpanded },
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text("📍 MAPS & FACILITY INSIGHTS", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                                        Icon(
+                                            if (isMapsCategoryExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary
                                         )
                                     }
 
-                                    HorizontalDivider()
-                                    Text("⚙️ DRIVER & PAYROLL CONFIGURATIONS", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-
-                                    OutlinedTextField(
-                                        value = defPercent,
-                                        onValueChange = { input ->
-                                            val filtered =
-                                                input.filter { it.isDigit() || it == '.' }
-                                            if (filtered.isEmpty() || filtered == ".") defPercent =
-                                                filtered
-                                            else if (filtered.count { it == '.' } <= 1) {
-                                                val value = filtered.toDoubleOrNull()
-                                                if ((value != null) && (value >= 0.0) && (value <= 100.0)) {
-                                                    defPercent = filtered
+                                    if (isMapsCategoryExpanded) {
+                                        NavigationDrawerItem(
+                                            label = { Text(if (isProUser) "🗺️ Global Route Heatmap" else "🗺️ Global Route Heatmap (Pro)") },
+                                            selected = currentScreen == "route_map",
+                                            onClick = {
+                                                scope.launch { drawerState.close() }
+                                                if (isProUser) {
+                                                    tripForMap = null
+                                                    currentScreen = "route_map"
+                                                } else {
+                                                    showProUpgradeDialog = true
                                                 }
                                             }
-                                        },
-                                        label = { Text("Default Pay Rate (%)") },
-                                        singleLine = true,
-                                        keyboardOptions = KeyboardOptions(
-                                            keyboardType = KeyboardType.Number,
-                                            imeAction = ImeAction.Next
-                                        ),
-                                        modifier = Modifier.fillMaxWidth()
-                                    )
+                                        )
 
-                                    OutlinedTextField(
-                                        value = tarp8Pay,
-                                        onValueChange = { input ->
-                                            tarp8Pay = input.filter { it.isDigit() || it == '.' }
-                                        },
-                                        label = { Text("8' Drop Tarp Pay ($)") },
-                                        singleLine = true,
-                                        keyboardOptions = KeyboardOptions(
-                                            keyboardType = KeyboardType.Number,
-                                            imeAction = ImeAction.Next
-                                        ),
-                                        modifier = Modifier.fillMaxWidth()
-                                    )
-
-                                    OutlinedTextField(
-                                        value = tarp4Pay,
-                                        onValueChange = { input ->
-                                            tarp4Pay = input.filter { it.isDigit() || it == '.' }
-                                        },
-                                        label = { Text("4' Drop Tarp Pay ($)") },
-                                        singleLine = true,
-                                        keyboardOptions = KeyboardOptions(
-                                            keyboardType = KeyboardType.Number,
-                                            imeAction = ImeAction.Next
-                                        ),
-                                        modifier = Modifier.fillMaxWidth()
-                                    )
-
-                                    OutlinedTextField(
-                                        value = homeRawPaste,
-                                        onValueChange = {
-                                            homeRawPaste = it
-                                            isHomeVerified = false
-                                            homeLat = null
-                                            homeLong = null
-                                        },
-                                        label = { Text("Home Address (Paste)") },
-                                        modifier = Modifier.fillMaxWidth(),
-                                        minLines = 2
-                                    )
-
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.spacedBy(space = 8.dp)
-                                    ) {
-                                        Button(
-                                            onClick = { resolveHomeAddress(homeRawPaste) },
-                                            enabled = homeRawPaste.isNotBlank() && !isHomeVerified,
-                                            modifier = Modifier.weight(weight = 1f)
-                                        ) {
-                                            Text(if (isHomeVerified) "Verified ✅" else "Verify Address")
-                                        }
-
-                                        Button(
+                                        NavigationDrawerItem(
+                                            label = { Text(if (isProUser) "🏢 Facility Search & Gate Tips" else "🏢 Facility Search & Gate Tips (Pro)") },
+                                            selected = currentScreen == "facility_search",
                                             onClick = {
-                                                val lastLat = TrackingService.currentLatitude
-                                                val lastLong = TrackingService.currentLongitude
-                                                if (lastLat != null && lastLong != null) {
-                                                    homeLat = lastLat
-                                                    homeLong = lastLong
-                                                    isHomeVerified = true
+                                                scope.launch { drawerState.close() }
+                                                if (isProUser) {
+                                                    currentScreen = "facility_search"
+                                                } else {
+                                                    showProUpgradeDialog = true
                                                 }
-                                            },
-                                            colors = ButtonDefaults.buttonColors(
-                                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                                                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                                            ),
-                                            modifier = Modifier.weight(weight = 1f)
-                                        ) {
-                                            Icon(Icons.Default.LocationOn, contentDescription = null)
-                                            Spacer(Modifier.width(width = 4.dp))
-                                            Text("Pin Current")
+                                            }
+                                        )
+
+                                        val hasActiveTrip = savedLoads.any { it.tripState != "COMPLETED" && it.tripState != "NOT_STARTED" }
+                                        if (hasActiveTrip) {
+                                            NavigationDrawerItem(
+                                                label = { Text("➕ Add Historical Completed Load") },
+                                                selected = false,
+                                                onClick = {
+                                                    scope.launch { drawerState.close() }
+                                                    tripToEdit = null
+                                                    isHistoricalEntry = true
+                                                    currentScreen = "entry"
+                                                }
+                                            )
                                         }
                                     }
 
-                                    Text(
-                                        text = if (homeLat != null) "📍 Home Pinned" else "🏠 Home Not Set",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = if (homeLat != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
-                                    )
-
-                                    Surface(
-                                        color = if (isTrainingActive) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
-                                        shape = RoundedCornerShape(8.dp),
-                                        modifier = Modifier.fillMaxWidth()
+                                    HorizontalDivider()
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable { isDriverConfigCategoryExpanded = !isDriverConfigCategoryExpanded },
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Column(
-                                            modifier = Modifier.padding(10.dp),
-                                            verticalArrangement = Arrangement.spacedBy(4.dp)
-                                        ) {
-                                            Text(
-                                                text = if (isTrainingActive) "Trainer Status: ACTIVE 🟢" else "Trainer Status: INACTIVE 🔴",
-                                                style = MaterialTheme.typography.labelLarge,
-                                                fontWeight = FontWeight.Bold,
-                                                color = if (isTrainingActive) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                            if (isTrainingActive) {
-                                                val tierLabel = when (savedTraineeTier) {
-                                                    "inexperienced" -> "Inexperienced (Wk $savedTrainingWeek of 4)"
-                                                    "experienced" -> "Experienced (Wk $savedTrainingWeek of 2)"
-                                                    else -> "Custom Rate"
+                                        Text("⚙️ DRIVER & PAYROLL CONFIGURATIONS", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                                        Icon(
+                                            if (isDriverConfigCategoryExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+
+                                    if (isDriverConfigCategoryExpanded) {
+                                        OutlinedTextField(
+                                            value = defPercent,
+                                            onValueChange = { input ->
+                                                val filtered =
+                                                    input.filter { it.isDigit() || it == '.' }
+                                                if (filtered.isEmpty() || filtered == ".") defPercent =
+                                                    filtered
+                                                else if (filtered.count { it == '.' } <= 1) {
+                                                    val value = filtered.toDoubleOrNull()
+                                                    if ((value != null) && (value >= 0.0) && (value <= 100.0)) {
+                                                        defPercent = filtered
+                                                    }
                                                 }
-                                                Text(tierLabel, style = MaterialTheme.typography.bodySmall)
-                                                Text(
-                                                    "Added: +$${String.format(Locale.US, "%.2f", calculatedTrainerPay)}/wk",
-                                                    style = MaterialTheme.typography.labelMedium,
-                                                    fontWeight = FontWeight.Bold,
-                                                    color = MaterialTheme.colorScheme.primary
-                                                )
+                                            },
+                                            label = { Text("Default Pay Rate (%)") },
+                                            singleLine = true,
+                                            keyboardOptions = KeyboardOptions(
+                                                keyboardType = KeyboardType.Number,
+                                                imeAction = ImeAction.Next
+                                            ),
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+
+                                        OutlinedTextField(
+                                            value = tarp8Pay,
+                                            onValueChange = { input ->
+                                                tarp8Pay = input.filter { it.isDigit() || it == '.' }
+                                            },
+                                            label = { Text("8' Drop Tarp Pay ($)") },
+                                            singleLine = true,
+                                            keyboardOptions = KeyboardOptions(
+                                                keyboardType = KeyboardType.Number,
+                                                imeAction = ImeAction.Next
+                                            ),
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+
+                                        OutlinedTextField(
+                                            value = tarp4Pay,
+                                            onValueChange = { input ->
+                                                tarp4Pay = input.filter { it.isDigit() || it == '.' }
+                                            },
+                                            label = { Text("4' Drop Tarp Pay ($)") },
+                                            singleLine = true,
+                                            keyboardOptions = KeyboardOptions(
+                                                keyboardType = KeyboardType.Number,
+                                                imeAction = ImeAction.Next
+                                            ),
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+
+                                        OutlinedTextField(
+                                            value = homeRawPaste,
+                                            onValueChange = {
+                                                homeRawPaste = it
+                                                isHomeVerified = false
+                                                homeLat = null
+                                                homeLong = null
+                                            },
+                                            label = { Text("Home Address (Paste)") },
+                                            modifier = Modifier.fillMaxWidth(),
+                                            minLines = 2
+                                        )
+
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(space = 8.dp)
+                                        ) {
+                                            Button(
+                                                onClick = { resolveHomeAddress(homeRawPaste) },
+                                                enabled = homeRawPaste.isNotBlank() && !isHomeVerified,
+                                                modifier = Modifier.weight(weight = 1f)
+                                            ) {
+                                                Text(if (isHomeVerified) "Verified ✅" else "Verify Address")
                                             }
 
                                             Button(
                                                 onClick = {
-                                                    scope.launch { drawerState.close() }
-                                                    showTrainerSettingsDialog = true
+                                                    val lastLat = TrackingService.currentLatitude
+                                                    val lastLong = TrackingService.currentLongitude
+                                                    if (lastLat != null && lastLong != null) {
+                                                        homeLat = lastLat
+                                                        homeLong = lastLong
+                                                        isHomeVerified = true
+                                                    }
                                                 },
                                                 colors = ButtonDefaults.buttonColors(
-                                                    containerColor = MaterialTheme.colorScheme.secondary,
-                                                    contentColor = MaterialTheme.colorScheme.onSecondary
+                                                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer
                                                 ),
-                                                modifier = Modifier.fillMaxWidth()
+                                                modifier = Modifier.weight(weight = 1f)
                                             ) {
-                                                Text("⚙️ Configure Trainer Pay")
+                                                Icon(Icons.Default.LocationOn, contentDescription = null)
+                                                Spacer(Modifier.width(width = 4.dp))
+                                                Text("Pin Current")
                                             }
                                         }
-                                    }
 
-                                    NavigationDrawerItem(
-                                        label = { Text("📖 Driver's Reference Manual") },
-                                        selected = false,
-                                        onClick = {
-                                            scope.launch { drawerState.close() }
-                                            triggerHelpView.value = true
+                                        Text(
+                                            text = if (homeLat != null) "📍 Home Pinned" else "🏠 Home Not Set",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = if (homeLat != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+                                        )
+
+                                        Surface(
+                                            color = if (isTrainingActive) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+                                            shape = RoundedCornerShape(8.dp),
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Column(
+                                                modifier = Modifier.padding(10.dp),
+                                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                                            ) {
+                                                Text(
+                                                    text = if (isTrainingActive) "Trainer Status: ACTIVE 🟢" else "Trainer Status: INACTIVE 🔴",
+                                                    style = MaterialTheme.typography.labelLarge,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = if (isTrainingActive) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                                if (isTrainingActive) {
+                                                    val tierLabel = when (savedTraineeTier) {
+                                                        "inexperienced" -> "Inexperienced (Wk $savedTrainingWeek of 4)"
+                                                        "experienced" -> "Experienced (Wk $savedTrainingWeek of 2)"
+                                                        else -> "Custom Rate"
+                                                    }
+                                                    Text(tierLabel, style = MaterialTheme.typography.bodySmall)
+                                                    Text(
+                                                        "Added: +$${String.format(Locale.US, "%.2f", calculatedTrainerPay)}/wk",
+                                                        style = MaterialTheme.typography.labelMedium,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = MaterialTheme.colorScheme.primary
+                                                    )
+                                                }
+
+                                                Button(
+                                                    onClick = {
+                                                        scope.launch { drawerState.close() }
+                                                        showTrainerSettingsDialog = true
+                                                    },
+                                                    colors = ButtonDefaults.buttonColors(
+                                                        containerColor = MaterialTheme.colorScheme.secondary,
+                                                        contentColor = MaterialTheme.colorScheme.onSecondary
+                                                    ),
+                                                    modifier = Modifier.fillMaxWidth()
+                                                ) {
+                                                    Text("⚙️ Configure Trainer Pay")
+                                                }
+                                            }
                                         }
-                                    )
 
-                                    NavigationDrawerItem(
-                                        label = { Text("📄 App Technical Specs (README)") },
-                                        selected = false,
-                                        onClick = {
-                                            scope.launch { drawerState.close() }
-                                            showReadmeDialog = true
-                                        }
-                                    )
-
-                                    NavigationDrawerItem(
-                                        label = { Text("📊 Export Payload History (CSV)") },
-                                        selected = false,
-                                        onClick = {
-                                            scope.launch { drawerState.close() }
-                                            exportToCsv()
-                                        }
-                                    )
-
-                                    HorizontalDivider()
-                                    Text("🛠️ SUPPORT & DEV OPTIONS", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-
-                                    NavigationDrawerItem(
-                                        label = { Text("🐛 Report Bug / Driver Feedback") },
-                                        selected = false,
-                                        onClick = {
-                                            scope.launch { drawerState.close() }
-                                            showTesterFeedbackDialog = true
-                                        }
-                                    )
-
-                                    if (isDeviceAuthorized || BuildConfig.DEBUG) {
                                         NavigationDrawerItem(
-                                            label = { Text("⚙️ Developer Options & SQLite DB Inspector") },
-                                            selected = currentScreen == "dev_notes",
+                                            label = { Text("📖 Driver's Reference Manual") },
+                                            selected = false,
                                             onClick = {
                                                 scope.launch { drawerState.close() }
-                                                currentScreen = "dev_notes"
+                                                triggerHelpView.value = true
                                             }
                                         )
+
+                                        NavigationDrawerItem(
+                                            label = { Text("📄 App Technical Specs (README)") },
+                                            selected = false,
+                                            onClick = {
+                                                scope.launch { drawerState.close() }
+                                                showReadmeDialog = true
+                                            }
+                                        )
+
+                                        NavigationDrawerItem(
+                                            label = { Text("📊 Export Payload History (CSV)") },
+                                            selected = false,
+                                            onClick = {
+                                                scope.launch { drawerState.close() }
+                                                exportToCsv()
+                                            }
+                                        )
+                                    }
+
+                                    HorizontalDivider()
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable { isSupportCategoryExpanded = !isSupportCategoryExpanded },
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text("🛠️ SUPPORT & DEV OPTIONS", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                                        Icon(
+                                            if (isSupportCategoryExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+
+                                    if (isSupportCategoryExpanded) {
+                                        NavigationDrawerItem(
+                                            label = { Text("🐛 Report Bug / Driver Feedback") },
+                                            selected = false,
+                                            onClick = {
+                                                scope.launch { drawerState.close() }
+                                                showTesterFeedbackDialog = true
+                                            }
+                                        )
+
+                                        if (isDeviceAuthorized || BuildConfig.DEBUG) {
+                                            NavigationDrawerItem(
+                                                label = { Text("⚙️ Developer Options & SQLite DB Inspector") },
+                                                selected = currentScreen == "dev_notes",
+                                                onClick = {
+                                                    scope.launch { drawerState.close() }
+                                                    currentScreen = "dev_notes"
+                                                }
+                                            )
+                                        }
                                     } else {
                                         Spacer(modifier = Modifier.weight(weight = 1f))
                                         Button(
