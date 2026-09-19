@@ -160,6 +160,7 @@ class MainActivity : ComponentActivity() {
                     var defPercent by remember { mutableStateOf(value = "31.0") }
                     var tarp8Pay by remember { mutableStateOf(value = "50.0") }
                     var tarp4Pay by remember { mutableStateOf(value = "30.0") }
+                    var extraStopPay by remember { mutableStateOf(value = "0.0") }
                     var homeBase by remember { mutableStateOf(value = "15381 TX-198, Mabank, TX 75147") }
                     var homeRawPaste by remember { mutableStateOf(value = "15381 TX-198, Mabank, TX 75147") }
                     var homeLat by remember { mutableStateOf<Double?>(value = 32.3021) }
@@ -169,6 +170,7 @@ class MainActivity : ComponentActivity() {
                     var savedDefPercent by remember { mutableStateOf(value = "31.0") }
                     var savedTarp8Pay by remember { mutableStateOf(value = "50.0") }
                     var savedTarp4Pay by remember { mutableStateOf(value = "30.0") }
+                    var savedExtraStopPay by remember { mutableStateOf(value = "0.0") }
                     var savedHomeRawPaste by remember { mutableStateOf(value = "15381 TX-198, Mabank, TX 75147") }
                     var savedIsTrainingActive by remember { mutableStateOf(value = false) }
                     var savedFlatTrainerPayRate by remember { mutableStateOf(value = "200.0") }
@@ -363,6 +365,7 @@ class MainActivity : ComponentActivity() {
                     val hasDrawerSettingsChanged = (defPercent != savedDefPercent) ||
                             (tarp8Pay != savedTarp8Pay) ||
                             (tarp4Pay != savedTarp4Pay) ||
+                            (extraStopPay != savedExtraStopPay) ||
                             (homeRawPaste != savedHomeRawPaste) ||
                             (isTrainingActive != savedIsTrainingActive) ||
                             (flatTrainerPayRate != savedFlatTrainerPayRate)
@@ -396,9 +399,11 @@ class MainActivity : ComponentActivity() {
                                                     savedDefPercent = defPercent
                                                     savedTarp8Pay = tarp8Pay
                                                     savedTarp4Pay = tarp4Pay
+                                                    savedExtraStopPay = extraStopPay
                                                     savedHomeRawPaste = homeRawPaste
                                                     savedIsTrainingActive = isTrainingActive
                                                     savedFlatTrainerPayRate = flatTrainerPayRate
+                                                    devPrefs.edit().putString("extra_stop_pay", extraStopPay).apply()
                                                     scope.launch { drawerState.close() }
                                                 }
                                             ) {
@@ -454,6 +459,20 @@ class MainActivity : ComponentActivity() {
                                             tarp4Pay = input.filter { it.isDigit() || it == '.' }
                                         },
                                         label = { Text("4' Drop Tarp Pay ($)") },
+                                        singleLine = true,
+                                        keyboardOptions = KeyboardOptions(
+                                            keyboardType = KeyboardType.Number,
+                                            imeAction = ImeAction.Next
+                                        ),
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+
+                                    OutlinedTextField(
+                                        value = extraStopPay,
+                                        onValueChange = { input ->
+                                            extraStopPay = input.filter { it.isDigit() || it == '.' }
+                                        },
+                                        label = { Text("Extra Stop Pay ($)") },
                                         singleLine = true,
                                         keyboardOptions = KeyboardOptions(
                                             keyboardType = KeyboardType.Number,
