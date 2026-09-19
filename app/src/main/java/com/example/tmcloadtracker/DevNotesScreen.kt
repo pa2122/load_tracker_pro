@@ -303,6 +303,63 @@ fun DevNotesScreen(
                         color = MaterialTheme.colorScheme.secondary
                     )
 
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text("🎨 v2.0 App Theme & Color Palette", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                            var activeTheme by remember { mutableStateOf(prefs.getString("theme_preset", "safety_amber") ?: "safety_amber") }
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                FilterChip(
+                                    selected = activeTheme == "safety_amber",
+                                    onClick = {
+                                        activeTheme = "safety_amber"
+                                        prefs.edit().putString("theme_preset", "safety_amber").apply()
+                                        Toast.makeText(ctx, "Theme set to Safety Amber!", Toast.LENGTH_SHORT).show()
+                                    },
+                                    label = { Text("⚡ Safety Amber") }
+                                )
+                                FilterChip(
+                                    selected = activeTheme == "cobalt_blue",
+                                    onClick = {
+                                        activeTheme = "cobalt_blue"
+                                        prefs.edit().putString("theme_preset", "cobalt_blue").apply()
+                                        Toast.makeText(ctx, "Theme set to Cobalt Blue!", Toast.LENGTH_SHORT).show()
+                                    },
+                                    label = { Text("🔵 Cobalt Blue") }
+                                )
+                            }
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                FilterChip(
+                                    selected = activeTheme == "hi_vis_lime",
+                                    onClick = {
+                                        activeTheme = "hi_vis_lime"
+                                        prefs.edit().putString("theme_preset", "hi_vis_lime").apply()
+                                        Toast.makeText(ctx, "Theme set to Hi-Vis Lime!", Toast.LENGTH_SHORT).show()
+                                    },
+                                    label = { Text("🟢 Hi-Vis Lime") }
+                                )
+                                FilterChip(
+                                    selected = activeTheme == "night_vision_red",
+                                    onClick = {
+                                        activeTheme = "night_vision_red"
+                                        prefs.edit().putString("theme_preset", "night_vision_red").apply()
+                                        Toast.makeText(ctx, "Theme set to Night Vision Red!", Toast.LENGTH_SHORT).show()
+                                    },
+                                    label = { Text("🔴 Night Vision") }
+                                )
+                            }
+                        }
+                    }
+
                     OutlinedTextField(
                         value = notesText,
                         onValueChange = { notesText = it },

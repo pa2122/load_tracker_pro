@@ -2,6 +2,7 @@ package com.example.tmcloadtracker
 
 import android.Manifest
 import android.content.Intent
+import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.location.Geocoder
 import android.os.Build
@@ -91,6 +92,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberDrawerState
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -132,7 +134,24 @@ class MainActivity : ComponentActivity() {
         checkAndRequestPermissions()
 
         setContent {
-            LoadTrackerProTheme {
+            val devPrefs = remember { getSharedPreferences("dev_prefs", MODE_PRIVATE) }
+            var activeThemePreset by remember {
+                mutableStateOf(devPrefs.getString("theme_preset", "safety_amber") ?: "safety_amber")
+            }
+
+            DisposableEffect(devPrefs) {
+                val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+                    if (key == "theme_preset") {
+                        activeThemePreset = devPrefs.getString("theme_preset", "safety_amber") ?: "safety_amber"
+                    }
+                }
+                devPrefs.registerOnSharedPreferenceChangeListener(listener)
+                onDispose {
+                    devPrefs.unregisterOnSharedPreferenceChangeListener(listener)
+                }
+            }
+
+            LoadTrackerProTheme(themePreset = activeThemePreset) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background,
