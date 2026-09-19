@@ -269,17 +269,17 @@ fun FuelLoggerScreen(
 
     if (showAddFuelDialog) {
         var inputGallons by remember { mutableStateOf("") }
-        var inputCost by remember { mutableStateOf("") }
+        var inputPpg by remember { mutableStateOf("") }
         var inputState by remember { mutableStateOf("TX") }
         var inputStation by remember { mutableStateOf("Love's") }
         var inputOdometer by remember { mutableStateOf("") }
 
         var stationDropdownExpanded by remember { mutableStateOf(false) }
-        val stationOptions = listOf("Love's", "Pilot Flying J", "TA / Petro", "Buc-ee's", "Speedway", "Kwik Trip", "Other")
+        val stationOptions = listOf("Love's", "Pilot Flying J", "TA / Petro", "Speedway", "Kwik Trip", "Other")
 
         val galVal = inputGallons.toDoubleOrNull() ?: 0.0
-        val costVal = inputCost.toDoubleOrNull() ?: 0.0
-        val computedPpg = if (galVal > 0) costVal / galVal else 0.0
+        val ppgVal = inputPpg.toDoubleOrNull() ?: 0.0
+        val computedTotalCost = galVal * ppgVal
 
         AlertDialog(
             onDismissRequest = { showAddFuelDialog = false },
@@ -296,16 +296,16 @@ fun FuelLoggerScreen(
                             modifier = Modifier.weight(1f)
                         )
                         OutlinedTextField(
-                            value = inputCost,
-                            onValueChange = { inputCost = it },
-                            label = { Text("Total Cost ($)") },
+                            value = inputPpg,
+                            onValueChange = { inputPpg = it },
+                            label = { Text("Price / Gal ($)") },
                             singleLine = true,
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Next),
                             modifier = Modifier.weight(1f)
                         )
                     }
 
-                    Text("Computed Price / Gallon: $${String.format(Locale.US, "%.3f", computedPpg)}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                    Text("Computed Total Cost: $${String.format(Locale.US, "%.2f", computedTotalCost)}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
 
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedTextField(
@@ -360,15 +360,16 @@ fun FuelLoggerScreen(
                 Button(
                     onClick = {
                         val gal = inputGallons.toDoubleOrNull()
-                        val cost = inputCost.toDoubleOrNull()
+                        val ppg = inputPpg.toDoubleOrNull()
                         val odo = inputOdometer.toDoubleOrNull()
 
-                        if (gal != null && cost != null && odo != null && inputState.isNotBlank()) {
+                        if (gal != null && ppg != null && odo != null && inputState.isNotBlank()) {
+                            val totalCostCalc = gal * ppg
                             val newEntry = FuelEntry(
                                 timestamp = System.currentTimeMillis(),
                                 gallons = gal,
-                                totalCost = cost,
-                                pricePerGallon = if (gal > 0) cost / gal else 0.0,
+                                totalCost = totalCostCalc,
+                                pricePerGallon = ppg,
                                 state = inputState.trim().uppercase(Locale.US),
                                 stationName = inputStation,
                                 odometer = odo
@@ -382,7 +383,7 @@ fun FuelLoggerScreen(
                                 }
                             }
                         } else {
-                            Toast.makeText(ctx, "Please enter valid Gallons, Cost, State, and Odometer.", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(ctx, "Please enter valid Gallons, Price/Gal, State, and Odometer.", Toast.LENGTH_SHORT).show()
                         }
                     }
                 ) { Text("Save Fuel Stop") }
