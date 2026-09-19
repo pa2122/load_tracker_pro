@@ -16,37 +16,44 @@ import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
 private val DarkColorScheme = darkColorScheme(
-    primary = CobaltBlue,
-    secondary = SkyBlue,
-    tertiary = SlateGrey,
-    background = SlateNavy,
-    surface = SlateGrey,
-    onPrimary = CloudWhite,
-    onSecondary = SlateNavy,
+    primary = SafetyAmber,
+    onPrimary = MidnightSteel,
+    primaryContainer = CharcoalCard,
+    onPrimaryContainer = SafetyAmber,
+    secondary = AmberGold,
+    onSecondary = MidnightSteel,
+    secondaryContainer = CharcoalCard,
+    onSecondaryContainer = CloudWhite,
+    tertiary = EmeraldGreen,
     onTertiary = CloudWhite,
+    background = MidnightSteel,
     onBackground = CloudWhite,
+    surface = CharcoalCard,
     onSurface = CloudWhite,
-    error = ErrorRed,
+    surfaceVariant = CharcoalCard,
+    onSurfaceVariant = CloudWhite,
+    error = CrimsonRed,
     onError = CloudWhite
 )
 
 private val LightColorScheme = lightColorScheme(
-    primary = CobaltBlue,
-    secondary = SlateGrey,
-    tertiary = SkyBlue,
+    primary = MidnightSteel,
+    onPrimary = CloudWhite,
+    secondary = SafetyAmber,
+    onSecondary = MidnightSteel,
+    tertiary = EmeraldGreen,
     background = CloudWhite,
     surface = CloudWhite,
-    onPrimary = CloudWhite,
-    onSecondary = CloudWhite,
-    onTertiary = SlateNavy,
-    onBackground = SlateNavy,
-    onSurface = SlateNavy
+    onPrimaryContainer = MidnightSteel,
+    onSecondaryContainer = MidnightSteel,
+    onTertiary = MidnightSteel,
+    onBackground = MidnightSteel,
+    onSurface = MidnightSteel
 )
 
 @Composable
 fun LoadTrackerProTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
-    // Dynamic color is available on Android 12+
+    darkTheme: Boolean = true, // Default to v2.0 High-Contrast Night/Day Driver Theme
     dynamicColor: Boolean = false,
     content: @Composable () -> Unit
 ) {
