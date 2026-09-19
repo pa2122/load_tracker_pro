@@ -27,3 +27,8 @@
 ## 5. 🗂️ Project Separation
 - This repository (`load_tracker_pro`) is dedicated to the core dispatch, payroll, and auditing flatbed application.
 - Commercial LVR navigation features (Google Routes API) belong in the separate `TruckRoutePro` repository. Do not mix code or feature branches between the two.
+
+## 6. 🌿 Git Branching & Version Tracking
+- **Branch `master`:** Stable v1.x production release.
+- **Branch `v2-redesign`:** Version 2.0 UI/UX redesign & Owner-Op features.
+- **Branch Verification:** Always check `git branch` and remind/confirm with the user which branch and version is active at the start of every session or task.
