@@ -57,6 +57,8 @@ android {
 
     buildTypes {
         debug {
+            applicationIdSuffix = ".v2"
+            resValue("string", "app_name", "Load Tracker v2 🚀")
             signingConfig = signingConfigs.getByName("sharedDebug")
         }
         release {
