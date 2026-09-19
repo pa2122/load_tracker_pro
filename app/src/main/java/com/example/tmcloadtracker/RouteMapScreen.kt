@@ -90,8 +90,8 @@ fun RouteMapScreen(
                         if (path.isNotEmpty()) {
                             Polyline(
                                 points = path,
-                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
-                                width = 8f,
+                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.85f),
+                                width = 14f,
                             )
                         }
                     }
