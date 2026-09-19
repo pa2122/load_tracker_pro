@@ -1154,6 +1154,13 @@ class MainActivity : ComponentActivity() {
                                             )
                                         }
 
+                                        "ledger" -> {
+                                            LedgerScreen(
+                                                viewModel = viewModel,
+                                                onBack = { currentScreen = "dashboard" }
+                                            )
+                                        }
+
                                         "route_map" -> {
                                             BackHandler(enabled = true) {
                                                 currentScreen = "dashboard"
