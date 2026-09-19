@@ -873,9 +873,7 @@ class MainActivity : ComponentActivity() {
                                     )
                                     NavigationBarItem(
                                         selected = currentScreen == "fuel_logger",
-                                        onClick = {
-                                            Toast.makeText(this@MainActivity, "⛽ Fuel Logger & IFTA Tracker coming in v2.0 update!", Toast.LENGTH_SHORT).show()
-                                        },
+                                        onClick = { currentScreen = "fuel_logger" },
                                         icon = { Icon(painterResource(R.drawable.ic_diesel_pump), contentDescription = "Fuel", modifier = Modifier.size(22.dp)) },
                                         label = { Text("Fuel") }
                                     )
@@ -1155,6 +1153,12 @@ class MainActivity : ComponentActivity() {
                                         "ledger" -> {
                                             LedgerScreen(
                                                 viewModel = viewModel,
+                                                onBack = { currentScreen = "dashboard" }
+                                            )
+                                        }
+
+                                        "fuel_logger" -> {
+                                            FuelLoggerScreen(
                                                 onBack = { currentScreen = "dashboard" }
                                             )
                                         }

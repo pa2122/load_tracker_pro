@@ -40,6 +40,19 @@ interface LoadDao {
     @Query("SELECT COUNT(*) FROM trip_breadcrumbs")
     fun getBreadcrumbCount(): Flow<Int>
 
+    // ⛽ Fuel & IFTA Logger Queries
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertFuelEntry(entry: FuelEntry)
+
+    @Query("SELECT * FROM fuel_entries ORDER BY timestamp DESC")
+    fun getAllFuelEntries(): Flow<List<FuelEntry>>
+
+    @Delete
+    suspend fun deleteFuelEntry(entry: FuelEntry)
+
+    @Query("DELETE FROM fuel_entries")
+    suspend fun clearAllFuelEntries()
+
     @Query("""
         SELECT DISTINCT shipperName FROM trucking_loads 
         WHERE shipperName IS NOT NULL AND LOWER(shipperName) NOT IN ('origin', 'pickup', 'shipper', '')

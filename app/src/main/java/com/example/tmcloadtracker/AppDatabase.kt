@@ -7,7 +7,7 @@ import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
-@Database(entities = [CurrentLoad::class, TripBreadcrumb::class], version = 10, exportSchema = true)
+@Database(entities = [CurrentLoad::class, TripBreadcrumb::class, FuelEntry::class], version = 11, exportSchema = true)
 abstract class AppDatabase : RoomDatabase() {
 
     abstract fun loadDao(): LoadDao
@@ -89,6 +89,23 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_10_11 = object : Migration(10, 11) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS fuel_entries (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        timestamp INTEGER NOT NULL,
+                        gallons REAL NOT NULL,
+                        totalCost REAL NOT NULL,
+                        pricePerGallon REAL NOT NULL,
+                        state TEXT NOT NULL,
+                        stationName TEXT NOT NULL,
+                        odometer REAL NOT NULL
+                    )
+                """.trimIndent())
+            }
+        }
+
         // Safe singleton factory constructor to control access to your data file
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
@@ -97,7 +114,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "tmc_loads_local.db" // The actual tiny file written to your phone's hardware
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11)
                     .fallbackToDestructiveMigration(dropAllTables = true)
                     .build()
                 INSTANCE = instance
