@@ -78,6 +78,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalDrawerSheet
+import androidx.compose.material3.NavigationDrawerItem
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -385,8 +386,9 @@ class MainActivity : ComponentActivity() {
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Text(
-                                            "Configurations",
+                                            "🚛 Load Tracker Pro v2.0",
                                             style = MaterialTheme.typography.titleLarge,
+                                            fontWeight = FontWeight.Bold,
                                             color = MaterialTheme.colorScheme.primary
                                         )
 
@@ -410,6 +412,53 @@ class MainActivity : ComponentActivity() {
                                             }
                                         }
                                     }
+
+                                    HorizontalDivider()
+                                    Text("📍 MAPS & FACILITY INSIGHTS", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+
+                                    NavigationDrawerItem(
+                                        label = { Text(if (isProUser) "🗺️ Global Route Heatmap" else "🗺️ Global Route Heatmap (Pro)") },
+                                        selected = currentScreen == "route_map",
+                                        onClick = {
+                                            scope.launch { drawerState.close() }
+                                            if (isProUser) {
+                                                tripForMap = null
+                                                currentScreen = "route_map"
+                                            } else {
+                                                showProUpgradeDialog = true
+                                            }
+                                        }
+                                    )
+
+                                    NavigationDrawerItem(
+                                        label = { Text(if (isProUser) "🏢 Facility Search & Gate Tips" else "🏢 Facility Search & Gate Tips (Pro)") },
+                                        selected = currentScreen == "facility_search",
+                                        onClick = {
+                                            scope.launch { drawerState.close() }
+                                            if (isProUser) {
+                                                currentScreen = "facility_search"
+                                            } else {
+                                                showProUpgradeDialog = true
+                                            }
+                                        }
+                                    )
+
+                                    val hasActiveTrip = savedLoads.any { it.tripState != "COMPLETED" && it.tripState != "NOT_STARTED" }
+                                    if (hasActiveTrip) {
+                                        NavigationDrawerItem(
+                                            label = { Text("➕ Add Historical Completed Load") },
+                                            selected = false,
+                                            onClick = {
+                                                scope.launch { drawerState.close() }
+                                                tripToEdit = null
+                                                isHistoricalEntry = true
+                                                currentScreen = "entry"
+                                            }
+                                        )
+                                    }
+
+                                    HorizontalDivider()
+                                    Text("⚙️ DRIVER & PAYROLL CONFIGURATIONS", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
 
                                     OutlinedTextField(
                                         value = defPercent,
@@ -515,8 +564,6 @@ class MainActivity : ComponentActivity() {
                                         color = if (homeLat != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
                                     )
 
-                                    HorizontalDivider()
-                                    Text("🎓 Trainer Incentive Settings", style = MaterialTheme.typography.titleSmall)
                                     Surface(
                                         color = if (isTrainingActive) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
                                         shape = RoundedCornerShape(8.dp),
@@ -527,7 +574,7 @@ class MainActivity : ComponentActivity() {
                                             verticalArrangement = Arrangement.spacedBy(4.dp)
                                         ) {
                                             Text(
-                                                text = if (isTrainingActive) "Status: ACTIVE 🟢" else "Status: INACTIVE 🔴",
+                                                text = if (isTrainingActive) "Trainer Status: ACTIVE 🟢" else "Trainer Status: INACTIVE 🔴",
                                                 style = MaterialTheme.typography.labelLarge,
                                                 fontWeight = FontWeight.Bold,
                                                 color = if (isTrainingActive) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
@@ -563,143 +610,54 @@ class MainActivity : ComponentActivity() {
                                         }
                                     }
 
-                                    HorizontalDivider()
-                                    Button(
-                                        onClick = {
-                                            scope.launch { drawerState.close() }
-                                            if (isProUser) {
-                                                currentScreen = "facility_search"
-                                            } else {
-                                                showProUpgradeDialog = true
-                                            }
-                                        },
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                                        ),
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
-                                        Text(if (isProUser) "Review Facility Insights" else "Review Facility Insights (Pro)")
-                                    }
-
-                                    HorizontalDivider()
-                                    Button(
-                                        onClick = {
-                                            scope.launch { drawerState.close() }
-                                            if (isProUser) {
-                                                tripForMap = null
-                                                currentScreen = "route_map"
-                                            } else {
-                                                showProUpgradeDialog = true
-                                            }
-                                        },
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                                        ),
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
-                                        Text(if (isProUser) "View Global Route Heatmap" else "Global Route Heatmap (Pro)")
-                                    }
-
-                                    HorizontalDivider()
-                                    Button(
-                                        onClick = {
-                                            scope.launch { drawerState.close() }
-                                            exportToCsv()
-                                        },
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = MaterialTheme.colorScheme.tertiary
-                                        ),
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
-                                        Text("Export Payload History (CSV)")
-                                    }
-
-                                    HorizontalDivider()
-                                    Button(
-                                        onClick = {
-                                            scope.launch { drawerState.close() }
-                                            showTesterFeedbackDialog = true
-                                        },
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                                        ),
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
-                                        Icon(Icons.Default.Edit, contentDescription = null)
-                                        Spacer(modifier = Modifier.width(width = 6.dp))
-                                        Text("🐛 Report Bug / Feedback")
-                                    }
-
-                                    HorizontalDivider()
-                                    Button(
+                                    NavigationDrawerItem(
+                                        label = { Text("📖 Driver's Reference Manual") },
+                                        selected = false,
                                         onClick = {
                                             scope.launch { drawerState.close() }
                                             triggerHelpView.value = true
-                                        },
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = MaterialTheme.colorScheme.secondary
-                                        ),
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
-                                        Text("Open Driver's Guide")
-                                    }
+                                        }
+                                    )
 
-                                    HorizontalDivider()
-                                    Button(
+                                    NavigationDrawerItem(
+                                        label = { Text("📄 App Technical Specs (README)") },
+                                        selected = false,
                                         onClick = {
                                             scope.launch { drawerState.close() }
                                             showReadmeDialog = true
-                                        },
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                                        ),
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
-                                        Icon(Icons.Default.Info, contentDescription = null)
-                                        Spacer(modifier = Modifier.width(width = 6.dp))
-                                        Text("📖 App Technical Specs (README)")
-                                    }
-
-                                    val hasActiveTrip = savedLoads.any { it.tripState != "COMPLETED" && it.tripState != "NOT_STARTED" }
-                                    if (hasActiveTrip) {
-                                        HorizontalDivider()
-                                        Button(
-                                            onClick = {
-                                                scope.launch { drawerState.close() }
-                                                tripToEdit = null
-                                                isHistoricalEntry = true
-                                                currentScreen = "entry"
-                                            },
-                                            colors = ButtonDefaults.buttonColors(
-                                                containerColor = MaterialTheme.colorScheme.primary,
-                                                contentColor = MaterialTheme.colorScheme.onPrimary
-                                            ),
-                                            modifier = Modifier.fillMaxWidth()
-                                        ) {
-                                            Icon(Icons.Default.Add, contentDescription = null)
-                                            Spacer(modifier = Modifier.width(width = 6.dp))
-                                            Text("➕ Add Historical Completed Load")
                                         }
-                                    }
+                                    )
+
+                                    NavigationDrawerItem(
+                                        label = { Text("📊 Export Payload History (CSV)") },
+                                        selected = false,
+                                        onClick = {
+                                            scope.launch { drawerState.close() }
+                                            exportToCsv()
+                                        }
+                                    )
+
+                                    HorizontalDivider()
+                                    Text("🛠️ SUPPORT & DEV OPTIONS", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+
+                                    NavigationDrawerItem(
+                                        label = { Text("🐛 Report Bug / Driver Feedback") },
+                                        selected = false,
+                                        onClick = {
+                                            scope.launch { drawerState.close() }
+                                            showTesterFeedbackDialog = true
+                                        }
+                                    )
 
                                     if (isDeviceAuthorized || BuildConfig.DEBUG) {
-                                        Spacer(modifier = Modifier.weight(weight = 1f))
-                                        Button(
-                                            onClick = { showDevOptionsDialog = true },
-                                            colors = ButtonDefaults.buttonColors(
-                                                containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                                                contentColor = MaterialTheme.colorScheme.onSurfaceVariant
-                                            ),
-                                            modifier = Modifier.fillMaxWidth()
-                                        ) {
-                                            Icon(Icons.Default.Build, contentDescription = null)
-                                            Spacer(modifier = Modifier.width(width = 6.dp))
-                                            Text("🛠️ Developer Options")
-                                        }
+                                        NavigationDrawerItem(
+                                            label = { Text("⚙️ Developer Options & SQLite DB Inspector") },
+                                            selected = currentScreen == "dev_notes",
+                                            onClick = {
+                                                scope.launch { drawerState.close() }
+                                                currentScreen = "dev_notes"
+                                            }
+                                        )
                                     } else {
                                         Spacer(modifier = Modifier.weight(weight = 1f))
                                         Button(
