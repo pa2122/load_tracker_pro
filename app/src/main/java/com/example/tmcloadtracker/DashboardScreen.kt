@@ -392,6 +392,16 @@ fun DashboardScreen(
                                             }
                                         }
 
+                                        OutlinedButton(
+                                            onClick = {
+                                                mileageEditInput = String.format(Locale.US, "%.1f", if (liveBounceMiles > 0) liveBounceMiles else activeTrip.bounceMilesEnd)
+                                                showMileageEditDialog = true
+                                            },
+                                            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+                                        ) {
+                                            Text("✏️ Adjust Bounce Miles")
+                                        }
+
                                         Button(
                                             onClick = {
                                                 TrackingService.activeSegment = "Loaded"
@@ -472,6 +482,18 @@ fun DashboardScreen(
                                                         )
                                                     }
                                                 }
+                                            }
+                                        }
+
+                                        if (activeTrip.tripState == "ACTIVE_CONSIGNEE") {
+                                            OutlinedButton(
+                                                onClick = {
+                                                    mileageEditInput = String.format(Locale.US, "%.1f", if (liveLoadedMiles > 0) liveLoadedMiles else activeTrip.loadedMilesEnd)
+                                                    showMileageEditDialog = true
+                                                },
+                                                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+                                            ) {
+                                                Text("✏️ Adjust Loaded Miles")
                                             }
                                         }
 
