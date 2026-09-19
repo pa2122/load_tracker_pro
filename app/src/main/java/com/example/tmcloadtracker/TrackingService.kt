@@ -4,6 +4,7 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.location.Location
@@ -56,6 +57,45 @@ class TrackingService : Service() {
         var currentLatitude: Double? = null
         var currentLongitude: Double? = null
 
+        fun saveState(context: Context) {
+            val prefs = context.getSharedPreferences("tracking_service_prefs", MODE_PRIVATE)
+            prefs.edit().apply {
+                putString("activeProNumber", activeProNumber)
+                putString("activeSegment", activeSegment)
+                putFloat("homeLat", homeLat?.toFloat() ?: -999f)
+                putFloat("homeLong", homeLong?.toFloat() ?: -999f)
+                putFloat("targetLat", targetLat?.toFloat() ?: -999f)
+                putFloat("targetLong", targetLong?.toFloat() ?: -999f)
+                putString("targetName", targetName)
+                putBoolean("isGeofenceActive", isGeofenceActive)
+                apply()
+            }
+        }
+
+        fun restoreState(context: Context) {
+            val prefs = context.getSharedPreferences("tracking_service_prefs", MODE_PRIVATE)
+            if (activeProNumber == null) {
+                activeProNumber = prefs.getString("activeProNumber", null)
+            }
+            val savedSegment = prefs.getString("activeSegment", null)
+            if (savedSegment != null) activeSegment = savedSegment
+
+            val hLat = prefs.getFloat("homeLat", -999f)
+            if (hLat != -999f) homeLat = hLat.toDouble()
+            val hLong = prefs.getFloat("homeLong", -999f)
+            if (hLong != -999f) homeLong = hLong.toDouble()
+
+            val tLat = prefs.getFloat("targetLat", -999f)
+            if (tLat != -999f) targetLat = tLat.toDouble()
+            val tLong = prefs.getFloat("targetLong", -999f)
+            if (tLong != -999f) targetLong = tLong.toDouble()
+
+            val tName = prefs.getString("targetName", null)
+            if (tName != null) targetName = tName
+
+            isGeofenceActive = prefs.getBoolean("isGeofenceActive", isGeofenceActive)
+        }
+
         fun resetTrackingState() {
             totalBounceMilesTracked.value = 0.0
             totalLoadedMilesTracked.value = 0.0
@@ -69,8 +109,10 @@ class TrackingService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        restoreState(this)
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
         createNotificationChannel()
+        updateNotification()
 
         val locationRequest =
             LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 5000)
@@ -204,6 +246,7 @@ class TrackingService : Service() {
     }
 
     private fun updateNotification() {
+        saveState(this)
         val miles = if (activeSegment == "Bounce") totalBounceMilesTracked.value else totalLoadedMilesTracked.value
         
         val hudTitle = when (activeSegment) {

@@ -113,7 +113,9 @@ fun DevNotesScreen(
 
     // Tab 2: GitHub Issues Sync
     val savedToken = prefs.getString("gh_token", "") ?: ""
-    var githubRepo by remember { mutableStateOf(prefs.getString("gh_repo", "pa2122/android_apps") ?: "pa2122/android_apps") }
+    var githubRepo by remember { 
+        mutableStateOf(prefs.getString("gh_repo", BuildConfig.DEFAULT_GITHUB_REPO) ?: BuildConfig.DEFAULT_GITHUB_REPO) 
+    }
     var githubToken by remember {
         mutableStateOf(
             savedToken.ifBlank { BuildConfig.DEFAULT_GITHUB_TOKEN }
@@ -1160,7 +1162,7 @@ private suspend fun fetchGitHubIssues(
     token: String
 ): Pair<List<GitHubIssue>, String> = withContext(Dispatchers.IO) {
     try {
-        val cleanRepo = repo.trim().removePrefix("https://github.com/").removeSuffix(".git")
+        val cleanRepo = repo.trim().removePrefix("https://github.com/").removeSuffix(".git").removeSuffix("/")
         if (cleanRepo.isBlank()) return@withContext Pair(emptyList(), "Repo name cannot be blank.")
 
         val url = URL("https://api.github.com/repos/$cleanRepo/issues?state=all&per_page=30")
@@ -1242,7 +1244,7 @@ private suspend fun testGitHubConnection(
     token: String
 ): Pair<Boolean, String> = withContext(Dispatchers.IO) {
     try {
-        val cleanRepo = repo.trim().removePrefix("https://github.com/").removeSuffix(".git")
+        val cleanRepo = repo.trim().removePrefix("https://github.com/").removeSuffix(".git").removeSuffix("/")
         if (cleanRepo.isBlank() || token.trim().isBlank()) {
             return@withContext Pair(false, "Repo and Token cannot be blank.")
         }
@@ -1275,13 +1277,13 @@ private suspend fun createGitHubIssue(
     labels: List<String>
 ): Pair<Boolean, String> = withContext(Dispatchers.IO) {
     try {
-        val cleanRepo = repo.trim().removePrefix("https://github.com/").removeSuffix(".git")
+        val cleanRepo = repo.trim().removePrefix("https://github.com/").removeSuffix(".git").removeSuffix("/")
         val url = URL("https://api.github.com/repos/$cleanRepo/issues")
         val conn = url.openConnection() as HttpURLConnection
         conn.requestMethod = "POST"
         conn.setRequestProperty("Authorization", "Bearer ${token.trim()}")
         conn.setRequestProperty("Accept", "application/vnd.github+json")
-        conn.setRequestProperty("Content-Type", "application/json; utf-8")
+        conn.setRequestProperty("Content-Type", "application/json; charset=utf-8")
         conn.setRequestProperty("User-Agent", "LoadTrackerPro")
         conn.doOutput = true
 
