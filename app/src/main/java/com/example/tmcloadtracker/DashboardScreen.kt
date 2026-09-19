@@ -330,7 +330,8 @@ fun DashboardScreen(
                                         val apptType = activeTrip.pickupApptType
                                         val apptText = activeTrip.pickupApptText
 
-                                        val clockStartTs = if (apptType == "BEFORE" || apptTs == null) {
+                                        val isBeforeWindow = apptType.equals("BEFORE", ignoreCase = true) || apptType.equals("B", ignoreCase = true) || apptType?.contains("before", ignoreCase = true) == true
+                                        val clockStartTs = if (isBeforeWindow || apptTs == null) {
                                             arrivalTs
                                         } else {
                                             if (arrivalTs < apptTs) apptTs else arrivalTs
@@ -422,7 +423,8 @@ fun DashboardScreen(
                                             val apptType = activeTrip.consigneeApptType
                                             val apptText = activeTrip.consigneeApptText
 
-                                            val clockStartTs = if (apptType == "BEFORE" || apptTs == null) {
+                                            val isBeforeWindow = apptType.equals("BEFORE", ignoreCase = true) || apptType.equals("B", ignoreCase = true) || apptType?.contains("before", ignoreCase = true) == true
+                                            val clockStartTs = if (isBeforeWindow || apptTs == null) {
                                                 arrivalTs
                                             } else {
                                                 if (arrivalTs < apptTs) apptTs else arrivalTs
