@@ -260,6 +260,9 @@ class MainActivity : ComponentActivity() {
 
                     LaunchedEffect(Unit) {
                         resolveHomeAddress("15381 TX-198, Mabank, TX 75147")
+                        withContext(Dispatchers.IO) {
+                            performAutoBackup(applicationContext)
+                        }
                     }
 
                     var isTrainingActive by remember { mutableStateOf(value = false) }

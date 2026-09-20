@@ -1283,6 +1283,27 @@ fun restoreDatabaseFromUri(context: Context, uri: Uri) {
     }
 }
 
+fun performAutoBackup(context: Context) {
+    try {
+        val docDir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS), "TMCLoadTracker")
+        if (!docDir.exists()) {
+            docDir.mkdirs()
+        }
+        docDir.setReadable(true, false)
+        docDir.setWritable(true, false)
+
+        val dbFile = context.getDatabasePath("tmc_loads_local.db")
+        if (dbFile.exists()) {
+            val autoBackupFile = File(docDir, "v1_live_backup.db")
+            dbFile.copyTo(autoBackupFile, overwrite = true)
+            autoBackupFile.setReadable(true, false)
+            autoBackupFile.setWritable(true, false)
+        }
+    } catch (_: Exception) {
+        // Silent background auto-backup
+    }
+}
+
 private suspend fun fetchGitHubIssues(
     repo: String,
     token: String
