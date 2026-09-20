@@ -24,11 +24,11 @@
     <!-- Translucent Speed Lines -->
     <path android:fillColor="#1A3B82F6" android:pathData="M-10,20 L118,-34 L118,-14 L-10,40 Z" />
     <path android:fillColor="#153B82F6" android:pathData="M-10,50 L118,-4 L118,16 L-10,70 Z" />
-    <path android:fillColor="#1AF59E0B" android:pathData="M-10,80 L118,26 L118,46 L-10,100 Z" />
+    <path android:fillColor="#40FF6B00" android:pathData="M-10,80 L118,26 L118,46 L-10,100 Z" />
 
-    <!-- LAYER 1: Outermost White Shell Border (100% Scale) -->
+    <!-- LAYER 1: Outermost Safety Orange Shell Border (100% Scale) -->
     <path
-        android:fillColor="#F8FAFC"
+        android:fillColor="#FF6B00"
         android:pathData="M54,14 Q42,20 30,18 C22,16 18,14 16,13.5 C10,38 16,67 32,79 C40,86 48,89 54,89 C60,89 68,86 76,79 C90,67 96,38 92,13.5 C90,14 86,16 78,18 Q66,20 54,14 Z" />
 
     <!-- LAYER 2: Inner Black Accent Outline (Scaled 95%) -->
@@ -59,7 +59,7 @@
 
     <!-- Amber Gold Revenue Dollar Sign ($) Inside Pin Core -->
     <path
-        android:fillColor="#F59E0B"
+        android:fillColor="#FF6B00"
         android:pathData="M55.5,49 L52.5,49 L52.5,50.7 C50.5,51.1 49,52.3 49,54.3 C49,56.7 51.2,57.3 53.2,57.8 C55,58.3 56,58.8 56,59.7 C56,60.6 54.8,61.2 53.5,61.2 C51.8,61.2 50.2,60.3 49.5,59.3 L47.8,60.7 C48.8,62.2 50.5,63.2 52.5,63.6 L52.5,65.3 L55.5,65.3 L55.5,63.6 C57.8,63.2 59.2,61.7 59.2,59.5 C59.2,56.9 56.8,56.3 54.8,55.8 C53,55.3 52.2,54.8 52.2,54 C52.2,53.2 53.2,52.6 54.5,52.6 C55.9,52.6 57.2,53.4 58,54.2 L59.6,52.7 C58.5,51.5 57.1,50.8 55.5,50.5 L55.5,49 Z" />
 
 </vector>
