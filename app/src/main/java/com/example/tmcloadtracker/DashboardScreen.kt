@@ -95,26 +95,23 @@ fun DashboardScreen(
     var showMileageEditDialog by remember { mutableStateOf(false) }
     var mileageEditInput by remember { mutableStateOf("") }
 
-    Scaffold { innerPadding ->
-        Box(
+    Box(
+        modifier = Modifier.fillMaxSize()
+    ) {
+        LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(paddingValues = innerPadding)
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(space = 12.dp)
         ) {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(all = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(space = 16.dp)
-            ) {
-                item {
-                    Text("Load Tracker Pro", style = MaterialTheme.typography.headlineMedium)
-                    Text(
-                        "Current Payroll Week Running Totals",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.secondary
-                    )
-                }
+            item {
+                Text(
+                    "Current Payroll Week Running Totals",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
 
                 item {
                     Card(
@@ -639,8 +636,9 @@ fun DashboardScreen(
                     }
                 }
             }
+        }
 
-            if (showCompletionDialog && selectedTripData != null) {
+        if (showCompletionDialog && selectedTripData != null) {
                 val trip = selectedTripData!!
                 val baseGross = trip.loadPay
                 val splitVal = trip.percentageRate
@@ -913,8 +911,6 @@ fun DashboardScreen(
                     }
                 )
             }
-        }
-    }
 
     if (showWeeklyBreakdownDialog) {
         AlertDialog(

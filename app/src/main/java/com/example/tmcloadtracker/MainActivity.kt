@@ -865,10 +865,20 @@ class MainActivity : ComponentActivity() {
                         val configuration = LocalConfiguration.current
                         val isTablet = configuration.screenWidthDp >= 600
 
+                        val currentScreenTitle = when (currentScreen) {
+                            "dashboard" -> "Load Tracker Pro"
+                            "route_map" -> "Live Route Map"
+                            "fuel_logger" -> "Fuel & IFTA Logger"
+                            "ledger" -> "Pay Ledger"
+                            "facility_search" -> "Facility Directory"
+                            "entry" -> "Load Entry"
+                            else -> "Load Tracker Pro"
+                        }
+
                         Scaffold(
                             topBar = {
                                 TopAppBar(
-                                    title = { Text("Load Tracker Pro") },
+                                    title = { Text(currentScreenTitle) },
                                     navigationIcon = {
                                         IconButton(onClick = { scope.launch { drawerState.open() } }) {
                                             Icon(

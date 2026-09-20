@@ -142,14 +142,16 @@ fun RouteMapScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text(if (load != null) "Route: PRO #${load.proNumber}" else "Historical Route Heatmap") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+            if (load != null) {
+                TopAppBar(
+                    title = { Text("Route: PRO #${load.proNumber}") },
+                    navigationIcon = {
+                        IconButton(onClick = onBack) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        }
                     }
-                }
-            )
+                )
+            }
         }
     ) { innerPadding ->
         Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
