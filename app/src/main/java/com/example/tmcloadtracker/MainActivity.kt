@@ -268,6 +268,12 @@ class MainActivity : ComponentActivity() {
                         }
                     }
 
+                    LaunchedEffect(Unit) {
+                        withContext(Dispatchers.IO) {
+                            performAutoBackup(applicationContext)
+                        }
+                    }
+
                     LaunchedEffect(isProUser) {
                         TrackingService.isProUser = isProUser
                     }

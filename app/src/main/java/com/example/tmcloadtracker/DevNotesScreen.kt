@@ -1297,6 +1297,27 @@ fun restoreDatabaseFromUri(context: Context, uri: Uri) {
     }
 }
 
+fun performAutoBackup(context: Context) {
+    try {
+        val docDir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS), "TMCLoadTracker")
+        if (!docDir.exists()) {
+            docDir.mkdirs()
+        }
+        docDir.setReadable(true, false)
+        docDir.setWritable(true, false)
+
+        val dbFile = context.getDatabasePath("tmc_loads_local.db")
+        if (dbFile.exists()) {
+            val autoBackupFile = File(docDir, "v1_live_backup.db")
+            dbFile.copyTo(autoBackupFile, overwrite = true)
+            autoBackupFile.setReadable(true, false)
+            autoBackupFile.setWritable(true, false)
+        }
+    } catch (_: Exception) {
+        // Silent background auto-backup
+    }
+}
+
 fun syncDatabaseFromV1(context: Context) {
     try {
         val db = AppDatabase.getDatabase(context)
@@ -1308,24 +1329,26 @@ fun syncDatabaseFromV1(context: Context) {
         context.getDatabasePath("tmc_loads_local.db-shm").delete()
 
         val docDir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS), "TMCLoadTracker")
+        val liveBackup = File(docDir, "v1_live_backup.db")
         val backupFiles = docDir.listFiles { _, name -> name.startsWith("tmc_loads_backup_") && name.endsWith(".db") }
             ?.sortedByDescending { it.lastModified() }
 
         val sourceFile = when {
+            liveBackup.exists() -> liveBackup
             backupFiles != null && backupFiles.isNotEmpty() -> backupFiles.first()
             File("/data/data/com.example.tmcloadtracker/databases/tmc_loads_local.db").exists() -> File("/data/data/com.example.tmcloadtracker/databases/tmc_loads_local.db")
             else -> null
         }
 
         if (sourceFile == null || !sourceFile.exists()) {
-            Toast.makeText(context, "No v1.x backup found in Documents/TMCLoadTracker. Please tap 'Export .db' in v1.x first!", Toast.LENGTH_LONG).show()
+            Toast.makeText(context, "No v1.x data found to sync.", Toast.LENGTH_LONG).show()
             return
         }
 
         val targetDbFile = context.getDatabasePath("tmc_loads_local.db")
         sourceFile.copyTo(targetDbFile, overwrite = true)
 
-        Toast.makeText(context, "🟢 Synced from ${sourceFile.name}! Relaunching...", Toast.LENGTH_LONG).show()
+        Toast.makeText(context, "🟢 Synced from v1.x! Relaunching...", Toast.LENGTH_LONG).show()
 
         val intent = context.packageManager.getLaunchIntentForPackage(context.packageName)
         if (intent != null) {
