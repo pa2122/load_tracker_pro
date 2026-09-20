@@ -1278,12 +1278,9 @@ fun restoreDatabaseFromUri(context: Context, uri: Uri) {
         context.getDatabasePath("tmc_loads_local.db-wal").delete()
         context.getDatabasePath("tmc_loads_local.db-shm").delete()
 
-        val docDir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS), "TMCLoadTracker")
-        if (!docDir.exists()) docDir.mkdirs()
-        val sharedDbFile = File(docDir, "tmc_loads_shared.db")
-
+        val dbFile = context.getDatabasePath("tmc_loads_local.db")
         context.contentResolver.openInputStream(uri)?.use { inputStream ->
-            FileOutputStream(sharedDbFile).use { outputStream ->
+            FileOutputStream(dbFile).use { outputStream ->
                 inputStream.copyTo(outputStream)
             }
         }
