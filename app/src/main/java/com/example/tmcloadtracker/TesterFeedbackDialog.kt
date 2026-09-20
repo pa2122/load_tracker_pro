@@ -200,12 +200,13 @@ fun TesterFeedbackDialog(
                                 *Submitted via Load Tracker Pro In-App Feedback Tool (v${BuildConfig.VERSION_NAME})*
                             """.trimIndent()
 
+                            val appVer = if (BuildConfig.VERSION_NAME.startsWith("2")) "v2.0" else "v1.x"
                             val (success, message) = submitTesterFeedback(
                                 repo = repo,
                                 token = token,
-                                title = "[$categoryName] ${summaryText.trim()}",
+                                title = "[$appVer] [$categoryName] ${summaryText.trim()}",
                                 body = formattedBody,
-                                labels = listOf(selectedCategory)
+                                labels = listOf(selectedCategory, appVer)
                             )
                             isSubmitting = false
                             if (success) {
