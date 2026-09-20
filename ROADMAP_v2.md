@@ -75,3 +75,4 @@ All v2.0 tasks are assigned to GitHub Milestone **`v2.0 Owner-Op & Monetization 
 - **#24:** Implement Google Play Billing & Feature Gating
 - **#25:** Integrate Google Play Billing Library (`billing-ktx`)
 - **#44:** Quick Fuel Logger & State Mileage Tracker for IFTA Analytics
+- **#63:** Form 2290 HVUT Renewal Tracker & 5,000-Mile Exemption Counter
