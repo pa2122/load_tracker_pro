@@ -9,6 +9,7 @@ import kotlin.system.exitProcess
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import java.io.FileOutputStream
 import androidx.compose.foundation.clickable
@@ -675,56 +676,63 @@ fun DevNotesScreen(
                             Text("💾 1-Tap SQLite Database Backup & Restore", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer)
                             Text("Export your phone's real database to Google Drive / Files or restore a backup .db file.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onPrimaryContainer)
 
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                Button(
-                                    onClick = { performLocalBackup(ctx) },
-                                    modifier = Modifier.weight(1f)
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
-                                    Icon(Icons.Default.Done, contentDescription = null, modifier = Modifier.size(16.dp))
-                                    Spacer(modifier = Modifier.width(2.dp))
-                                    Text("Backup", style = MaterialTheme.typography.labelSmall)
+                                    Button(
+                                        onClick = { performLocalBackup(ctx) },
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Icon(Icons.Default.Done, contentDescription = null, modifier = Modifier.size(18.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text("Backup")
+                                    }
+
+                                    Button(
+                                        onClick = { exportDatabaseBackup(ctx) },
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                                        ),
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(18.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text("Share")
+                                    }
                                 }
 
-                                Button(
-                                    onClick = { exportDatabaseBackup(ctx) },
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                                    ),
-                                    modifier = Modifier.weight(1f)
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
-                                    Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(16.dp))
-                                    Spacer(modifier = Modifier.width(2.dp))
-                                    Text("Share", style = MaterialTheme.typography.labelSmall)
-                                }
+                                    Button(
+                                        onClick = { dbPickerLauncher.launch("*/*") },
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = MaterialTheme.colorScheme.secondary,
+                                            contentColor = MaterialTheme.colorScheme.onSecondary
+                                        ),
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text("Restore")
+                                    }
 
-                                Button(
-                                    onClick = { dbPickerLauncher.launch("*/*") },
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = MaterialTheme.colorScheme.secondary,
-                                        contentColor = MaterialTheme.colorScheme.onSecondary
-                                    ),
-                                    modifier = Modifier.weight(1f)
-                                ) {
-                                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
-                                    Spacer(modifier = Modifier.width(2.dp))
-                                    Text("Restore", style = MaterialTheme.typography.labelSmall)
-                                }
-
-                                Button(
-                                    onClick = { syncDatabaseFromV1(ctx) },
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = MaterialTheme.colorScheme.tertiary,
-                                        contentColor = MaterialTheme.colorScheme.onTertiary
-                                    ),
-                                    modifier = Modifier.weight(1f)
-                                ) {
-                                    Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
-                                    Spacer(modifier = Modifier.width(2.dp))
-                                    Text("Sync v1", style = MaterialTheme.typography.labelSmall)
+                                    Button(
+                                        onClick = { syncDatabaseFromV1(ctx, dbPickerLauncher) },
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = MaterialTheme.colorScheme.tertiary,
+                                            contentColor = MaterialTheme.colorScheme.onTertiary
+                                        ),
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text("Sync v1")
+                                    }
                                 }
                             }
                         }
@@ -1342,7 +1350,10 @@ fun performLocalBackup(context: Context, showToast: Boolean = true) {
     }
 }
 
-fun syncDatabaseFromV1(context: Context) {
+fun syncDatabaseFromV1(
+    context: Context,
+    launcher: ActivityResultLauncher<String>? = null
+) {
     try {
         val db = AppDatabase.getDatabase(context)
         if (db.isOpen) {
@@ -1365,7 +1376,12 @@ fun syncDatabaseFromV1(context: Context) {
         }
 
         if (sourceFile == null || !sourceFile.exists()) {
-            Toast.makeText(context, "No v1.x data found to sync.", Toast.LENGTH_LONG).show()
+            if (launcher != null) {
+                Toast.makeText(context, "Select v1_live_backup.db from Documents/TMCLoadTracker", Toast.LENGTH_LONG).show()
+                launcher.launch("*/*")
+            } else {
+                Toast.makeText(context, "No v1.x data found to sync.", Toast.LENGTH_LONG).show()
+            }
             return
         }
 
@@ -1383,7 +1399,12 @@ fun syncDatabaseFromV1(context: Context) {
         Process.killProcess(Process.myPid())
         exitProcess(0)
     } catch (e: Exception) {
-        Toast.makeText(context, "Sync failed: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
+        if (launcher != null) {
+            Toast.makeText(context, "Select v1_live_backup.db from Documents/TMCLoadTracker", Toast.LENGTH_LONG).show()
+            launcher.launch("*/*")
+        } else {
+            Toast.makeText(context, "Sync failed: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
+        }
     }
 }
 
