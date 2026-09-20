@@ -108,56 +108,13 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
-        private fun getSharedDatabasePath(context: Context): String {
-            return try {
-                val docDir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS), "TMCLoadTracker")
-                if (!docDir.exists()) {
-                    docDir.mkdirs()
-                }
-                docDir.setReadable(true, false)
-                docDir.setWritable(true, false)
-
-                val sharedDb = File(docDir, "tmc_loads_shared.db")
-                val oldMediaDb = File(context.getExternalFilesDir(null)?.parentFile?.parentFile?.parentFile, "media/com.example.tmcloadtracker/tmc_loads_shared.db")
-                val oldAppDb = context.getDatabasePath("tmc_loads_local.db")
-
-                if (!sharedDb.exists()) {
-                    if (oldMediaDb.exists()) {
-                        oldMediaDb.copyTo(sharedDb, overwrite = true)
-                    } else if (oldAppDb.exists()) {
-                        oldAppDb.copyTo(sharedDb, overwrite = true)
-                    }
-                }
-
-                if (sharedDb.exists()) {
-                    sharedDb.setReadable(true, false)
-                    sharedDb.setWritable(true, false)
-                }
-
-                val walFile = File(docDir, "tmc_loads_shared.db-wal")
-                val shmFile = File(docDir, "tmc_loads_shared.db-shm")
-                if (walFile.exists()) {
-                    walFile.setReadable(true, false)
-                    walFile.setWritable(true, false)
-                }
-                if (shmFile.exists()) {
-                    shmFile.setReadable(true, false)
-                    shmFile.setWritable(true, false)
-                }
-
-                sharedDb.absolutePath
-            } catch (_: Exception) {
-                "tmc_loads_local.db"
-            }
-        }
-
         // Safe singleton factory constructor to control access to your data file
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
                     context.applicationContext,
                     AppDatabase::class.java,
-                    getSharedDatabasePath(context)
+                    "tmc_loads_local.db"
                 )
                     .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11)
                     .fallbackToDestructiveMigration(dropAllTables = true)

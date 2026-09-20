@@ -677,15 +677,15 @@ fun DevNotesScreen(
 
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
                                 Button(
                                     onClick = { exportDatabaseBackup(ctx) },
                                     modifier = Modifier.weight(1f)
                                 ) {
                                     Icon(Icons.Default.Share, contentDescription = null)
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text("Export .db")
+                                    Spacer(modifier = Modifier.width(2.dp))
+                                    Text("Export", style = MaterialTheme.typography.labelMedium)
                                 }
 
                                 Button(
@@ -697,8 +697,21 @@ fun DevNotesScreen(
                                     modifier = Modifier.weight(1f)
                                 ) {
                                     Icon(Icons.Default.Add, contentDescription = null)
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text("Restore .db")
+                                    Spacer(modifier = Modifier.width(2.dp))
+                                    Text("Restore", style = MaterialTheme.typography.labelMedium)
+                                }
+
+                                Button(
+                                    onClick = { syncDatabaseFromV1(ctx) },
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = MaterialTheme.colorScheme.tertiary,
+                                        contentColor = MaterialTheme.colorScheme.onTertiary
+                                    ),
+                                    modifier = Modifier.weight(1.1f)
+                                ) {
+                                    Icon(Icons.Default.Refresh, contentDescription = null)
+                                    Spacer(modifier = Modifier.width(2.dp))
+                                    Text("Sync v1", style = MaterialTheme.typography.labelMedium)
                                 }
                             }
                         }
@@ -1281,6 +1294,49 @@ fun restoreDatabaseFromUri(context: Context, uri: Uri) {
         exitProcess(0)
     } catch (e: Exception) {
         Toast.makeText(context, "Restore failed: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
+    }
+}
+
+fun syncDatabaseFromV1(context: Context) {
+    try {
+        val db = AppDatabase.getDatabase(context)
+        if (db.isOpen) {
+            db.close()
+        }
+
+        context.getDatabasePath("tmc_loads_local.db-wal").delete()
+        context.getDatabasePath("tmc_loads_local.db-shm").delete()
+
+        val docDir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS), "TMCLoadTracker")
+        val backupFiles = docDir.listFiles { _, name -> name.startsWith("tmc_loads_backup_") && name.endsWith(".db") }
+            ?.sortedByDescending { it.lastModified() }
+
+        val sourceFile = when {
+            backupFiles != null && backupFiles.isNotEmpty() -> backupFiles.first()
+            File("/data/data/com.example.tmcloadtracker/databases/tmc_loads_local.db").exists() -> File("/data/data/com.example.tmcloadtracker/databases/tmc_loads_local.db")
+            else -> null
+        }
+
+        if (sourceFile == null || !sourceFile.exists()) {
+            Toast.makeText(context, "No v1.x backup found in Documents/TMCLoadTracker. Please tap 'Export .db' in v1.x first!", Toast.LENGTH_LONG).show()
+            return
+        }
+
+        val targetDbFile = context.getDatabasePath("tmc_loads_local.db")
+        sourceFile.copyTo(targetDbFile, overwrite = true)
+
+        Toast.makeText(context, "🟢 Synced from ${sourceFile.name}! Relaunching...", Toast.LENGTH_LONG).show()
+
+        val intent = context.packageManager.getLaunchIntentForPackage(context.packageName)
+        if (intent != null) {
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+            context.startActivity(intent)
+        }
+
+        Process.killProcess(Process.myPid())
+        exitProcess(0)
+    } catch (e: Exception) {
+        Toast.makeText(context, "Sync failed: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
     }
 }
 
