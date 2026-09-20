@@ -213,7 +213,7 @@ fun LedgerScreen(
                                         horizontalArrangement = Arrangement.SpaceBetween,
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Text("⚡ Settled: $dateStr", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                                        Text("Settled: $dateStr", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                                         Text("$${String.format(Locale.US, "%.2f", dayTakeHome)} Net", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                                     }
                                     Text("Gross Revenue: $${String.format(Locale.US, "%.2f", dayGross)} (${loadsInGroup.size} Load${if (loadsInGroup.size > 1) "s" else ""})", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
@@ -283,7 +283,7 @@ fun LedgerScreen(
                                         horizontalArrangement = Arrangement.SpaceBetween,
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Text("📅 Week Ending $fridayStr", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                                        Text("Week Ending $fridayStr", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                                         Text("Est. Net: $${String.format(Locale.US, "%.2f", weekTakeHome)}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                                     }
                                     Text("Gross Revenue: $${String.format(Locale.US, "%.2f", weekGross)} (${loadsInGroup.size} Load${if (loadsInGroup.size > 1) "s" else ""})", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
