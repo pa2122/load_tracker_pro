@@ -677,15 +677,28 @@ fun DevNotesScreen(
 
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
                                 Button(
-                                    onClick = { exportDatabaseBackup(ctx) },
+                                    onClick = { performLocalBackup(ctx) },
                                     modifier = Modifier.weight(1f)
                                 ) {
-                                    Icon(Icons.Default.Share, contentDescription = null)
+                                    Icon(Icons.Default.Done, contentDescription = null, modifier = Modifier.size(16.dp))
                                     Spacer(modifier = Modifier.width(2.dp))
-                                    Text("Export", style = MaterialTheme.typography.labelMedium)
+                                    Text("Backup", style = MaterialTheme.typography.labelSmall)
+                                }
+
+                                Button(
+                                    onClick = { exportDatabaseBackup(ctx) },
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                                    ),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(2.dp))
+                                    Text("Share", style = MaterialTheme.typography.labelSmall)
                                 }
 
                                 Button(
@@ -696,9 +709,9 @@ fun DevNotesScreen(
                                     ),
                                     modifier = Modifier.weight(1f)
                                 ) {
-                                    Icon(Icons.Default.Add, contentDescription = null)
+                                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
                                     Spacer(modifier = Modifier.width(2.dp))
-                                    Text("Restore", style = MaterialTheme.typography.labelMedium)
+                                    Text("Restore", style = MaterialTheme.typography.labelSmall)
                                 }
 
                                 Button(
@@ -707,11 +720,11 @@ fun DevNotesScreen(
                                         containerColor = MaterialTheme.colorScheme.tertiary,
                                         contentColor = MaterialTheme.colorScheme.onTertiary
                                     ),
-                                    modifier = Modifier.weight(1.1f)
+                                    modifier = Modifier.weight(1f)
                                 ) {
-                                    Icon(Icons.Default.Refresh, contentDescription = null)
+                                    Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
                                     Spacer(modifier = Modifier.width(2.dp))
-                                    Text("Sync v1", style = MaterialTheme.typography.labelMedium)
+                                    Text("Sync v1", style = MaterialTheme.typography.labelSmall)
                                 }
                             }
                         }
@@ -1298,6 +1311,10 @@ fun restoreDatabaseFromUri(context: Context, uri: Uri) {
 }
 
 fun performAutoBackup(context: Context) {
+    performLocalBackup(context, showToast = false)
+}
+
+fun performLocalBackup(context: Context, showToast: Boolean = true) {
     try {
         val docDir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS), "TMCLoadTracker")
         if (!docDir.exists()) {
@@ -1312,9 +1329,16 @@ fun performAutoBackup(context: Context) {
             dbFile.copyTo(autoBackupFile, overwrite = true)
             autoBackupFile.setReadable(true, false)
             autoBackupFile.setWritable(true, false)
+            if (showToast) {
+                Toast.makeText(context, "🟢 Backup saved to Documents/TMCLoadTracker!", Toast.LENGTH_LONG).show()
+            }
+        } else if (showToast) {
+            Toast.makeText(context, "No database file found to backup.", Toast.LENGTH_SHORT).show()
         }
-    } catch (_: Exception) {
-        // Silent background auto-backup
+    } catch (e: Exception) {
+        if (showToast) {
+            Toast.makeText(context, "Backup failed: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
+        }
     }
 }
 
