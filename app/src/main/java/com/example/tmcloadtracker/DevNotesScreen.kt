@@ -2,8 +2,12 @@ package com.example.tmcloadtracker
 
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import java.io.FileOutputStream
 import androidx.compose.foundation.clickable
 import dev.jeziellago.compose.markdowntext.MarkdownText
 import androidx.compose.foundation.layout.Arrangement
@@ -26,6 +30,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Done
@@ -83,6 +88,8 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 data class GitHubIssue(
@@ -151,6 +158,14 @@ fun DevNotesScreen(
     var dbLoadToDelete by remember { mutableStateOf<CurrentLoad?>(null) }
     var showClearBreadcrumbsConfirmation by remember { mutableStateOf(false) }
     var stateDropdownExpanded by remember { mutableStateOf(false) }
+
+    val dbPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            restoreDatabaseFromUri(ctx, uri)
+        }
+    }
 
     fun loadIssues() {
         if (githubRepo.isNotBlank()) {
@@ -643,6 +658,47 @@ fun DevNotesScreen(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.secondary
                     )
+
+                    // 💾 Database Backup & Restore Card
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text("💾 1-Tap SQLite Database Backup & Restore", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                            Text("Export your phone's real database to Google Drive / Files or restore a backup .db file.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onPrimaryContainer)
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Button(
+                                    onClick = { exportDatabaseBackup(ctx) },
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Icon(Icons.Default.Share, contentDescription = null)
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Export .db")
+                                }
+
+                                Button(
+                                    onClick = { dbPickerLauncher.launch("*/*") },
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = MaterialTheme.colorScheme.secondary,
+                                        contentColor = MaterialTheme.colorScheme.onSecondary
+                                    ),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Icon(Icons.Default.Add, contentDescription = null)
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Restore .db")
+                                }
+                            }
+                        }
+                    }
 
                     // Table Selection Filter Chips
                     Row(
@@ -1154,6 +1210,49 @@ fun DevNotesScreen(
                 TextButton(onClick = { showClearBreadcrumbsConfirmation = false }) { Text("Cancel") }
             }
         )
+    }
+}
+
+fun exportDatabaseBackup(context: Context) {
+    try {
+        val db = AppDatabase.getDatabase(context)
+        db.openHelper.writableDatabase.query("PRAGMA wal_checkpoint(FULL)").close()
+
+        val dbFile = context.getDatabasePath("tmc_loads_local.db")
+        if (!dbFile.exists()) {
+            Toast.makeText(context, "No database file found to backup.", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val timestampStr = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"))
+        val backupFile = File(context.filesDir, "tmc_loads_backup_$timestampStr.db")
+        dbFile.copyTo(backupFile, overwrite = true)
+
+        val contentUri = FileProvider.getUriForFile(context, "${context.packageName}.provider", backupFile)
+        val shareIntent = Intent(Intent.ACTION_SEND).apply {
+            type = "application/octet-stream"
+            putExtra(Intent.EXTRA_SUBJECT, "TMCLoadTracker Database Backup ($timestampStr)")
+            putExtra(Intent.EXTRA_TEXT, "Attached is your TMCLoadTracker SQLite database backup file.")
+            putExtra(Intent.EXTRA_STREAM, contentUri)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        context.startActivity(Intent.createChooser(shareIntent, "Export SQLite Database Backup"))
+    } catch (e: Exception) {
+        Toast.makeText(context, "Backup failed: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
+    }
+}
+
+fun restoreDatabaseFromUri(context: Context, uri: Uri) {
+    try {
+        val dbFile = context.getDatabasePath("tmc_loads_local.db")
+        context.contentResolver.openInputStream(uri)?.use { inputStream ->
+            FileOutputStream(dbFile).use { outputStream ->
+                inputStream.copyTo(outputStream)
+            }
+        }
+        Toast.makeText(context, "🟢 Database Restored Successfully! Please restart app.", Toast.LENGTH_LONG).show()
+    } catch (e: Exception) {
+        Toast.makeText(context, "Restore failed: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
     }
 }
 
