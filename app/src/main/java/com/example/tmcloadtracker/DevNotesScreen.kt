@@ -1244,13 +1244,28 @@ fun exportDatabaseBackup(context: Context) {
 
 fun restoreDatabaseFromUri(context: Context, uri: Uri) {
     try {
+        val db = AppDatabase.getDatabase(context)
+        if (db.isOpen) {
+            db.close()
+        }
+
+        context.getDatabasePath("tmc_loads_local.db-wal").delete()
+        context.getDatabasePath("tmc_loads_local.db-shm").delete()
+
         val dbFile = context.getDatabasePath("tmc_loads_local.db")
         context.contentResolver.openInputStream(uri)?.use { inputStream ->
             FileOutputStream(dbFile).use { outputStream ->
                 inputStream.copyTo(outputStream)
             }
         }
-        Toast.makeText(context, "🟢 Database Restored Successfully! Please restart app.", Toast.LENGTH_LONG).show()
+
+        Toast.makeText(context, "🟢 Database Restored! Relaunching app...", Toast.LENGTH_LONG).show()
+
+        val intent = context.packageManager.getLaunchIntentForPackage(context.packageName)
+        if (intent != null) {
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+            context.startActivity(intent)
+        }
     } catch (e: Exception) {
         Toast.makeText(context, "Restore failed: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
     }
