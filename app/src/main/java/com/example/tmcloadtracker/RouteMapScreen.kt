@@ -3,6 +3,7 @@ package com.example.tmcloadtracker
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -41,6 +43,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -67,9 +70,11 @@ fun RouteMapScreen(
     val db = remember { AppDatabase.getDatabase(ctx) }
 
     var selectedMapType by remember { mutableStateOf(MapType.NORMAL) }
+    var selectedTimeFilter by remember { mutableStateOf("All Time") }
     var selectedFacilityLoad by remember { mutableStateOf<CurrentLoad?>(load) }
     var isShipperSelected by remember { mutableStateOf(true) }
 
+    val allLoads by db.loadDao().getAllLoads().collectAsState(initial = emptyList())
     val fuelEntries by db.loadDao().getAllFuelEntries().collectAsState(initial = emptyList())
 
     val breadcrumbsFlow = remember(load?.proNumber) {
@@ -80,10 +85,22 @@ fun RouteMapScreen(
         }
     }
     val breadcrumbs by breadcrumbsFlow.collectAsState(initial = emptyList())
-    
-    val paths = remember(breadcrumbs) {
-        breadcrumbs.groupBy { it.proNumber }.values.map { tripPoints ->
-            tripPoints.map { LatLng(it.latitude, it.longitude) }
+
+    // Group breadcrumbs by PRO number into separate route paths
+    val pathsWithAge = remember(breadcrumbs, selectedTimeFilter) {
+        val grouped = breadcrumbs.groupBy { it.proNumber }
+        val sortedKeys = grouped.keys.toList()
+        grouped.entries.mapIndexed { index, entry ->
+            val points = entry.value.map { LatLng(it.latitude, it.longitude) }
+            val recencyRatio = if (sortedKeys.size > 1) index.toFloat() / (sortedKeys.size - 1) else 1.0f
+            
+            // Recency Color Gradient: Recent = Cyan (#00E5FF), Older = Deep Blue/Purple
+            val routeColor = when {
+                recencyRatio >= 0.7f -> Color(0xFF00E5FF) // Newest: Bright Cyan
+                recencyRatio >= 0.4f -> Color(0xFF3D5AFE) // Mid: Royal Blue
+                else -> Color(0xFF651FFF)                 // Older: Deep Purple
+            }
+            Pair(points, routeColor)
         }
     }
 
@@ -98,7 +115,11 @@ fun RouteMapScreen(
         position = CameraPosition.fromLatLngZoom(center, if (load != null) 7f else 4f)
     }
 
-    val hasMapContent = (paths.isNotEmpty()) || (load != null) || (homeLocation != null) || (fuelEntries.isNotEmpty())
+    val displayLoads = remember(load, allLoads) {
+        if (load != null) listOf(load) else allLoads
+    }
+
+    val hasMapContent = (pathsWithAge.isNotEmpty()) || (displayLoads.isNotEmpty()) || (homeLocation != null) || (fuelEntries.isNotEmpty())
 
     Scaffold(
         topBar = {
@@ -123,26 +144,28 @@ fun RouteMapScreen(
                     cameraPositionState = cameraPositionState,
                     properties = MapProperties(mapType = selectedMapType)
                 ) {
-                    paths.forEach { path: List<LatLng> ->
+                    // Render Recency Gradient Route Lines
+                    pathsWithAge.forEach { (path, color) ->
                         if (path.isNotEmpty()) {
                             Polyline(
                                 points = path,
-                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.85f),
-                                width = 14f,
+                                color = color,
+                                width = 12f
                             )
                         }
                     }
 
-                    if (load != null) {
-                        load.shipperLat?.let { lat ->
-                            load.shipperLong?.let { lng ->
+                    // Render Shipper and Consignee Pins for all loads
+                    displayLoads.forEach { item ->
+                        item.shipperLat?.let { lat ->
+                            item.shipperLong?.let { lng ->
                                 Marker(
                                     state = MarkerState(position = LatLng(lat, lng)),
-                                    title = "Shipper: ${load.shipperName ?: "Start"}",
-                                    snippet = "Tap for facility gate info",
+                                    title = "Shipper: ${item.shipperName ?: "Start"}",
+                                    snippet = "Tap for gate & contact info",
                                     icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN),
                                     onClick = {
-                                        selectedFacilityLoad = load
+                                        selectedFacilityLoad = item
                                         isShipperSelected = true
                                         true
                                     }
@@ -150,15 +173,15 @@ fun RouteMapScreen(
                             }
                         }
 
-                        load.consigneeLat?.let { lat ->
-                            load.consigneeLong?.let { lng ->
+                        item.consigneeLat?.let { lat ->
+                            item.consigneeLong?.let { lng ->
                                 Marker(
                                     state = MarkerState(position = LatLng(lat, lng)),
-                                    title = "Consignee: ${load.consigneeName ?: "End"}",
-                                    snippet = "Tap for facility gate info",
+                                    title = "Consignee: ${item.consigneeName ?: "End"}",
+                                    snippet = "Tap for gate & contact info",
                                     icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_RED),
                                     onClick = {
-                                        selectedFacilityLoad = load
+                                        selectedFacilityLoad = item
                                         isShipperSelected = false
                                         true
                                     }
@@ -187,31 +210,55 @@ fun RouteMapScreen(
                     }
                 }
 
-                // 1. Floating Map Style Switcher (Normal vs Satellite vs Hybrid)
-                Surface(
-                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
-                    shape = RoundedCornerShape(20.dp),
-                    modifier = Modifier.align(Alignment.TopEnd).padding(12.dp)
+                // 1. Floating Map Controls (Style + Recency Legend Bar)
+                Column(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(12.dp),
+                    horizontalAlignment = Alignment.End,
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    Surface(
+                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
+                        shape = RoundedCornerShape(20.dp)
                     ) {
-                        FilterChip(
-                            selected = selectedMapType == MapType.NORMAL,
-                            onClick = { selectedMapType = MapType.NORMAL },
-                            label = { Text("Map") }
-                        )
-                        FilterChip(
-                            selected = selectedMapType == MapType.SATELLITE,
-                            onClick = { selectedMapType = MapType.SATELLITE },
-                            label = { Text("Satellite") }
-                        )
-                        FilterChip(
-                            selected = selectedMapType == MapType.HYBRID,
-                            onClick = { selectedMapType = MapType.HYBRID },
-                            label = { Text("Hybrid") }
-                        )
+                        Row(
+                            modifier = Modifier
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                                .horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            FilterChip(
+                                selected = selectedMapType == MapType.NORMAL,
+                                onClick = { selectedMapType = MapType.NORMAL },
+                                label = { Text("Map") }
+                            )
+                            FilterChip(
+                                selected = selectedMapType == MapType.SATELLITE,
+                                onClick = { selectedMapType = MapType.SATELLITE },
+                                label = { Text("Satellite") }
+                            )
+                            FilterChip(
+                                selected = selectedMapType == MapType.HYBRID,
+                                onClick = { selectedMapType = MapType.HYBRID },
+                                label = { Text("Hybrid") }
+                            )
+                        }
+                    }
+
+                    Surface(
+                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("Recency:", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                            Text("🔵 Newest", style = MaterialTheme.typography.labelSmall, color = Color(0xFF00E5FF))
+                            Text("🟣 Older", style = MaterialTheme.typography.labelSmall, color = Color(0xFF651FFF))
+                        }
                     }
                 }
 
@@ -259,7 +306,7 @@ fun RouteMapScreen(
                                 }
                             }
 
-                            Text(facName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                            Text("PRO #${activeFacLoad.proNumber} — $facName", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
 
                             if (notesText.isNotBlank()) {
                                 Surface(
@@ -281,7 +328,6 @@ fun RouteMapScreen(
                             ) {
                                 Button(
                                     onClick = {
-                                        // Extract phone number or launch phone dialer
                                         val keywordRegex = Regex("""(?:call|contact|poc|phone|tel)\b.{0,20}?\(?\b(\d{3})\)?[-.\s]?(\d{3})[-.\s]?(\d{4})\b""", RegexOption.IGNORE_CASE)
                                         val match = keywordRegex.find(notesText)
                                         val phoneNum = if (match != null) "${match.groupValues[1]}${match.groupValues[2]}${match.groupValues[3]}" else ""
