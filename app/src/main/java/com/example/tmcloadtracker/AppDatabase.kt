@@ -6,6 +6,7 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import java.io.File
 
 @Database(entities = [CurrentLoad::class, TripBreadcrumb::class], version = 10, exportSchema = true)
 abstract class AppDatabase : RoomDatabase() {
@@ -89,13 +90,33 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        private fun getSharedDatabasePath(context: Context): String {
+            return try {
+                val mediaDir =
+                    File(context.getExternalFilesDir(null)?.parentFile?.parentFile?.parentFile, "media/com.example.tmcloadtracker")
+                if (!mediaDir.exists()) {
+                    mediaDir.mkdirs()
+                }
+                val sharedDb = File(mediaDir, "tmc_loads_shared.db")
+                val oldDb = context.getDatabasePath("tmc_loads_local.db")
+
+                if (!sharedDb.exists() && oldDb.exists()) {
+                    oldDb.copyTo(sharedDb, overwrite = true)
+                }
+
+                sharedDb.absolutePath
+            } catch (_: Exception) {
+                "tmc_loads_local.db"
+            }
+        }
+
         // Safe singleton factory constructor to control access to your data file
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
                     context.applicationContext,
                     AppDatabase::class.java,
-                    "tmc_loads_local.db" // The actual tiny file written to your phone's hardware
+                    getSharedDatabasePath(context)
                 )
                     .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10)
                     .fallbackToDestructiveMigration(dropAllTables = true)
