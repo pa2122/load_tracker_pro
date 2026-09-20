@@ -3,6 +3,7 @@ package com.example.tmcloadtracker
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Environment
 import android.os.Process
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
@@ -1220,7 +1221,10 @@ fun exportDatabaseBackup(context: Context) {
         val db = AppDatabase.getDatabase(context)
         db.openHelper.writableDatabase.query("PRAGMA wal_checkpoint(FULL)").close()
 
-        val dbFile = context.getDatabasePath("tmc_loads_local.db")
+        val docDir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS), "TMCLoadTracker")
+        val sharedDbFile = File(docDir, "tmc_loads_shared.db")
+        val dbFile = if (sharedDbFile.exists()) sharedDbFile else context.getDatabasePath("tmc_loads_local.db")
+
         if (!dbFile.exists()) {
             Toast.makeText(context, "No database file found to backup.", Toast.LENGTH_SHORT).show()
             return
@@ -1254,9 +1258,12 @@ fun restoreDatabaseFromUri(context: Context, uri: Uri) {
         context.getDatabasePath("tmc_loads_local.db-wal").delete()
         context.getDatabasePath("tmc_loads_local.db-shm").delete()
 
-        val dbFile = context.getDatabasePath("tmc_loads_local.db")
+        val docDir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS), "TMCLoadTracker")
+        if (!docDir.exists()) docDir.mkdirs()
+        val sharedDbFile = File(docDir, "tmc_loads_shared.db")
+
         context.contentResolver.openInputStream(uri)?.use { inputStream ->
-            FileOutputStream(dbFile).use { outputStream ->
+            FileOutputStream(sharedDbFile).use { outputStream ->
                 inputStream.copyTo(outputStream)
             }
         }
