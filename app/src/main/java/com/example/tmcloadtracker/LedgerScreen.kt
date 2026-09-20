@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -210,10 +211,10 @@ fun LedgerScreen(
                                 Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Text("Settled: $dateStr", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                                        Spacer(modifier = Modifier.weight(1f))
                                         Text("$${String.format(Locale.US, "%.2f", dayTakeHome)} Net", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                                     }
                                     Text("Gross Revenue: $${String.format(Locale.US, "%.2f", dayGross)} (${loadsInGroup.size} Load${if (loadsInGroup.size > 1) "s" else ""})", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
@@ -280,10 +281,10 @@ fun LedgerScreen(
                                 Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Text("Week Ending $fridayStr", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                                        Spacer(modifier = Modifier.weight(1f))
                                         Text("Est. Net: $${String.format(Locale.US, "%.2f", weekTakeHome)}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                                     }
                                     Text("Gross Revenue: $${String.format(Locale.US, "%.2f", weekGross)} (${loadsInGroup.size} Load${if (loadsInGroup.size > 1) "s" else ""})", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
