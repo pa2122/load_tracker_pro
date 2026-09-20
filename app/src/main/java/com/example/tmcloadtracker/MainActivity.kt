@@ -235,10 +235,14 @@ class MainActivity : ComponentActivity() {
                         }
                     }
 
-                    var isDeviceAuthorized by remember {
+                    var isDevOverrideUnlocked by remember {
+                        mutableStateOf(value = devPrefs.getBoolean("is_dev_override_unlocked", true))
+                    }
+
+                    var isDeviceAuthorized by remember(isDevOverrideUnlocked) {
                         val savedAuthorizedDevices = devPrefs.getStringSet("authorized_devices", emptySet()) ?: emptySet()
                         mutableStateOf(
-                            BuildConfig.DEBUG || savedAuthorizedDevices.contains(currentDeviceId)
+                            BuildConfig.DEBUG || isDevOverrideUnlocked || savedAuthorizedDevices.contains(currentDeviceId)
                         )
                     }
                     var newTesterDeviceId by remember { mutableStateOf(value = "") }
@@ -1452,6 +1456,34 @@ class MainActivity : ComponentActivity() {
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.secondary
                                     )
+
+                                    // 🔓 Dev Access Override Switch Card
+                                    Card(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        colors = CardDefaults.cardColors(
+                                            containerColor = if (isDevOverrideUnlocked) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant
+                                        )
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(12.dp).fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Column(modifier = Modifier.weight(1f)) {
+                                                Text("🔓 Dev Access Override", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                                                Text("Instant 1-tap unlock for testing", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
+                                            }
+                                            Switch(
+                                                checked = isDevOverrideUnlocked,
+                                                onCheckedChange = { checked ->
+                                                    isDevOverrideUnlocked = checked
+                                                    isDeviceAuthorized = checked || BuildConfig.DEBUG
+                                                    devPrefs.edit().putBoolean("is_dev_override_unlocked", checked).apply()
+                                                    Toast.makeText(this@MainActivity, if (checked) "Developer Options Unlocked! 🔓" else "Dev Options Locked 🔒", Toast.LENGTH_SHORT).show()
+                                                }
+                                            )
+                                        }
+                                    }
 
                                     Card(
                                         modifier = Modifier.fillMaxWidth(),
