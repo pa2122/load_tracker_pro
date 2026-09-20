@@ -213,11 +213,18 @@ fun LedgerScreen(
                                         modifier = Modifier.fillMaxWidth(),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Text("Settled: $dateStr", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                                        Text("Settled $dateStr", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                                         Spacer(modifier = Modifier.weight(1f))
-                                        Text("$${String.format(Locale.US, "%.2f", dayTakeHome)} Net", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                                        Text("${loadsInGroup.size} Load${if (loadsInGroup.size > 1) "s" else ""}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
                                     }
-                                    Text("Gross Revenue: $${String.format(Locale.US, "%.2f", dayGross)} (${loadsInGroup.size} Load${if (loadsInGroup.size > 1) "s" else ""})", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text("Gross: $${String.format(Locale.US, "%.2f", dayGross)}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
+                                        Spacer(modifier = Modifier.weight(1f))
+                                        Text("Net: $${String.format(Locale.US, "%.2f", dayTakeHome)}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                                    }
 
                                     loadsInGroup.forEach { load ->
                                         HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
@@ -285,9 +292,16 @@ fun LedgerScreen(
                                     ) {
                                         Text("Week Ending $fridayStr", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                                         Spacer(modifier = Modifier.weight(1f))
+                                        Text("${loadsInGroup.size} Load${if (loadsInGroup.size > 1) "s" else ""}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
+                                    }
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text("Gross: $${String.format(Locale.US, "%.2f", weekGross)}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
+                                        Spacer(modifier = Modifier.weight(1f))
                                         Text("Est. Net: $${String.format(Locale.US, "%.2f", weekTakeHome)}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                                     }
-                                    Text("Gross Revenue: $${String.format(Locale.US, "%.2f", weekGross)} (${loadsInGroup.size} Load${if (loadsInGroup.size > 1) "s" else ""})", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
 
                                     loadsInGroup.forEach { load ->
                                         HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
