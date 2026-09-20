@@ -217,6 +217,7 @@ class MainActivity : ComponentActivity() {
                     var themeDropdownExpanded by remember { mutableStateOf(false) }
 
                     var isMapsCategoryExpanded by remember { mutableStateOf(true) }
+                    var isAppSettingsCategoryExpanded by remember { mutableStateOf(false) }
                     var isDriverConfigCategoryExpanded by remember { mutableStateOf(false) }
                     var isSupportCategoryExpanded by remember { mutableStateOf(false) }
 
@@ -520,19 +521,19 @@ class MainActivity : ComponentActivity() {
                                     Row(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .clickable { isDriverConfigCategoryExpanded = !isDriverConfigCategoryExpanded },
+                                            .clickable { isAppSettingsCategoryExpanded = !isAppSettingsCategoryExpanded },
                                         horizontalArrangement = Arrangement.SpaceBetween,
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Text("⚙️ DRIVER & PAYROLL CONFIGURATIONS", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, modifier = Modifier.weight(1f))
+                                        Text("⚙️ APP SETTINGS", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, modifier = Modifier.weight(1f))
                                         Icon(
-                                            if (isDriverConfigCategoryExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                            if (isAppSettingsCategoryExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
                                             contentDescription = null,
                                             tint = MaterialTheme.colorScheme.primary
                                         )
                                     }
 
-                                    if (isDriverConfigCategoryExpanded) {
+                                    if (isAppSettingsCategoryExpanded) {
                                         ExposedDropdownMenuBox(
                                             expanded = themeDropdownExpanded,
                                             onExpandedChange = { themeDropdownExpanded = !themeDropdownExpanded }
@@ -586,7 +587,25 @@ class MainActivity : ComponentActivity() {
                                                 )
                                             }
                                         }
+                                    }
 
+                                    HorizontalDivider()
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable { isDriverConfigCategoryExpanded = !isDriverConfigCategoryExpanded },
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text("💵 DRIVER & PAYROLL CONFIGURATIONS", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, modifier = Modifier.weight(1f))
+                                        Icon(
+                                            if (isDriverConfigCategoryExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+
+                                    if (isDriverConfigCategoryExpanded) {
                                         OutlinedTextField(
                                             value = defPercent,
                                             onValueChange = { input ->
