@@ -3,6 +3,7 @@ package com.example.tmcloadtracker
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Process
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -91,6 +92,7 @@ import java.net.URL
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import kotlin.system.exitProcess
 
 data class GitHubIssue(
     val number: Int,
@@ -1266,6 +1268,9 @@ fun restoreDatabaseFromUri(context: Context, uri: Uri) {
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
             context.startActivity(intent)
         }
+
+        Process.killProcess(Process.myPid())
+        exitProcess(0)
     } catch (e: Exception) {
         Toast.makeText(context, "Restore failed: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
     }
