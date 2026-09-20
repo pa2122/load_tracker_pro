@@ -1,6 +1,7 @@
 package com.example.tmcloadtracker
 
 import android.content.Context
+import android.os.Environment
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
@@ -109,16 +110,20 @@ abstract class AppDatabase : RoomDatabase() {
 
         private fun getSharedDatabasePath(context: Context): String {
             return try {
-                val mediaDir =
-                    File(context.getExternalFilesDir(null)?.parentFile?.parentFile?.parentFile, "media/com.example.tmcloadtracker")
-                if (!mediaDir.exists()) {
-                    mediaDir.mkdirs()
+                val docDir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS), "TMCLoadTracker")
+                if (!docDir.exists()) {
+                    docDir.mkdirs()
                 }
-                val sharedDb = File(mediaDir, "tmc_loads_shared.db")
-                val oldDb = context.getDatabasePath("tmc_loads_local.db")
+                val sharedDb = File(docDir, "tmc_loads_shared.db")
+                val oldMediaDb = File(context.getExternalFilesDir(null)?.parentFile?.parentFile?.parentFile, "media/com.example.tmcloadtracker/tmc_loads_shared.db")
+                val oldAppDb = context.getDatabasePath("tmc_loads_local.db")
 
-                if (!sharedDb.exists() && oldDb.exists()) {
-                    oldDb.copyTo(sharedDb, overwrite = true)
+                if (!sharedDb.exists()) {
+                    if (oldMediaDb.exists()) {
+                        oldMediaDb.copyTo(sharedDb, overwrite = true)
+                    } else if (oldAppDb.exists()) {
+                        oldAppDb.copyTo(sharedDb, overwrite = true)
+                    }
                 }
 
                 sharedDb.absolutePath
