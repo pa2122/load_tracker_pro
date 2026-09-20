@@ -5,12 +5,13 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
 
-    <!-- ADAPTIVE LAUNCHER FOREGROUND (SCALED 65% TO FIT ANDROID 66dp SAFE MASKING ZONE) -->
+    <!-- ADAPTIVE LAUNCHER FOREGROUND (SCALED 65% TO FIT ANDROID 66dp SAFE MASKING ZONE & CENTERED VERTICALLY) -->
     <group
         android:pivotX="54"
         android:pivotY="54"
         android:scaleX="0.65"
-        android:scaleY="0.65">
+        android:scaleY="0.65"
+        android:translateY="3.5">
 
         <!-- LAYER 1: Outermost Safety Orange Shell Border (100% Base Path) -->
         <path
