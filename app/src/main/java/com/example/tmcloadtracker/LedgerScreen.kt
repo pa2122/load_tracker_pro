@@ -214,18 +214,33 @@ fun LedgerScreen(
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Text("⚡ Settled: $dateStr", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                                        Text("$${String.format(Locale.US, "%.2f", dayTakeHome)} Take-Home", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                                        Text("$${String.format(Locale.US, "%.2f", dayTakeHome)} Net", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                                     }
                                     Text("Gross Revenue: $${String.format(Locale.US, "%.2f", dayGross)} (${loadsInGroup.size} Load${if (loadsInGroup.size > 1) "s" else ""})", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
 
                                     loadsInGroup.forEach { load ->
                                         HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-                                        Row(
+                                        Column(
                                             modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.SpaceBetween
+                                            verticalArrangement = Arrangement.spacedBy(2.dp)
                                         ) {
-                                            Text("PRO #${load.proNumber} (${load.shipperName?.lines()?.firstOrNull() ?: "Shipper"})", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
-                                            Text("$${String.format(Locale.US, "%.2f", load.loadPay)}", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Text("PRO #${load.proNumber}", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                                                Text("$${String.format(Locale.US, "%.2f", load.loadPay)}", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                                            }
+                                            val sName = load.shipperName?.lines()?.firstOrNull()?.trim()
+                                            val cName = load.consigneeName?.lines()?.firstOrNull()?.trim()
+                                            if (!sName.isNullOrBlank() || !cName.isNullOrBlank()) {
+                                                Text(
+                                                    "• ${sName ?: "Shipper"} ➔ ${cName ?: "Consignee"}",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.secondary
+                                                )
+                                            }
                                         }
                                     }
                                 }
@@ -268,19 +283,34 @@ fun LedgerScreen(
                                         horizontalArrangement = Arrangement.SpaceBetween,
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Text("📅 Week Ending Friday: $fridayStr", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                                        Text("$${String.format(Locale.US, "%.2f", weekTakeHome)}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                                        Text("📅 Week Ending $fridayStr", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                                        Text("Est. Net: $${String.format(Locale.US, "%.2f", weekTakeHome)}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                                     }
                                     Text("Gross Revenue: $${String.format(Locale.US, "%.2f", weekGross)} (${loadsInGroup.size} Load${if (loadsInGroup.size > 1) "s" else ""})", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
 
                                     loadsInGroup.forEach { load ->
                                         HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-                                        Row(
+                                        Column(
                                             modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.SpaceBetween
+                                            verticalArrangement = Arrangement.spacedBy(2.dp)
                                         ) {
-                                            Text("PRO #${load.proNumber} (${load.shipperName?.lines()?.firstOrNull() ?: "Shipper"})", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
-                                            Text("$${String.format(Locale.US, "%.2f", load.loadPay)}", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Text("PRO #${load.proNumber}", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                                                Text("$${String.format(Locale.US, "%.2f", load.loadPay)}", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                                            }
+                                            val sName = load.shipperName?.lines()?.firstOrNull()?.trim()
+                                            val cName = load.consigneeName?.lines()?.firstOrNull()?.trim()
+                                            if (!sName.isNullOrBlank() || !cName.isNullOrBlank()) {
+                                                Text(
+                                                    "• ${sName ?: "Shipper"} ➔ ${cName ?: "Consignee"}",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.secondary
+                                                )
+                                            }
                                         }
                                     }
                                 }
