@@ -114,6 +114,9 @@ abstract class AppDatabase : RoomDatabase() {
                 if (!docDir.exists()) {
                     docDir.mkdirs()
                 }
+                docDir.setReadable(true, false)
+                docDir.setWritable(true, false)
+
                 val sharedDb = File(docDir, "tmc_loads_shared.db")
                 val oldMediaDb = File(context.getExternalFilesDir(null)?.parentFile?.parentFile?.parentFile, "media/com.example.tmcloadtracker/tmc_loads_shared.db")
                 val oldAppDb = context.getDatabasePath("tmc_loads_local.db")
@@ -124,6 +127,22 @@ abstract class AppDatabase : RoomDatabase() {
                     } else if (oldAppDb.exists()) {
                         oldAppDb.copyTo(sharedDb, overwrite = true)
                     }
+                }
+
+                if (sharedDb.exists()) {
+                    sharedDb.setReadable(true, false)
+                    sharedDb.setWritable(true, false)
+                }
+
+                val walFile = File(docDir, "tmc_loads_shared.db-wal")
+                val shmFile = File(docDir, "tmc_loads_shared.db-shm")
+                if (walFile.exists()) {
+                    walFile.setReadable(true, false)
+                    walFile.setWritable(true, false)
+                }
+                if (shmFile.exists()) {
+                    shmFile.setReadable(true, false)
+                    shmFile.setWritable(true, false)
                 }
 
                 sharedDb.absolutePath
