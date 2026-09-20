@@ -67,28 +67,24 @@ fun FacilitySearchScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text(selectedName.ifBlank { "Facility Insights" }) },
-                navigationIcon = {
-                    IconButton(onClick = {
-                        if (selectedName.isNotBlank()) {
-                            viewModel.selectFacility("")
-                        } else {
-                            onBack()
+            if (selectedName.isNotBlank()) {
+                TopAppBar(
+                    title = { Text(selectedName) },
+                    navigationIcon = {
+                        IconButton(onClick = { viewModel.selectFacility("") }) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                         }
-                    }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
-                }
-            )
+                )
+            }
         }
     ) { innerPadding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             if (selectedName.isBlank()) {
                 Text("Review historical notes for shippers and receivers.", style = MaterialTheme.typography.bodyMedium)

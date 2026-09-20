@@ -85,23 +85,11 @@ fun LedgerScreen(
 
     val netRpm = if (totalMiles > 0) totalTakeHome / totalMiles else 0.0
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("📊 Settlement & P&L Ledger") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                }
-            )
-        }
-    ) { innerPadding ->
+    Box(modifier = Modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding)
-                .padding(16.dp),
+                .padding(horizontal = 16.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             // 1. Settlement Cycle Mode Switcher
