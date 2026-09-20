@@ -77,23 +77,39 @@ fun RouteMapScreen(
     val allLoads by db.loadDao().getAllLoads().collectAsState(initial = emptyList())
     val fuelEntries by db.loadDao().getAllFuelEntries().collectAsState(initial = emptyList())
 
-    val breadcrumbsFlow = remember(load?.proNumber) {
+    val rawBreadcrumbsFlow = remember(load?.proNumber) {
         if (load != null) {
             viewModel.getBreadcrumbs(load.proNumber)
         } else {
             viewModel.allBreadcrumbs
         }
     }
-    val breadcrumbs by breadcrumbsFlow.collectAsState(initial = emptyList())
+    val rawBreadcrumbs by rawBreadcrumbsFlow.collectAsState(initial = emptyList())
 
-    // Group breadcrumbs by PRO number into separate route paths
-    val pathsWithAge = remember(breadcrumbs, selectedTimeFilter) {
-        val grouped = breadcrumbs.groupBy { it.proNumber }
+    // Calculate cutoff timestamp for time filtering
+    val now = System.currentTimeMillis()
+    val filterCutoff = remember(selectedTimeFilter, now) {
+        when (selectedTimeFilter) {
+            "This Week" -> now - (7L * 24 * 60 * 60 * 1000)
+            "This Month" -> now - (30L * 24 * 60 * 60 * 1000)
+            else -> 0L
+        }
+    }
+
+    // Filter breadcrumbs based on selected timeframe
+    val filteredBreadcrumbs = remember(rawBreadcrumbs, filterCutoff) {
+        if (filterCutoff == 0L) rawBreadcrumbs
+        else rawBreadcrumbs.filter { it.timestamp >= filterCutoff }
+    }
+
+    // Group breadcrumbs by PRO number into separate route paths with recency gradient
+    val pathsWithAge = remember(filteredBreadcrumbs) {
+        val grouped = filteredBreadcrumbs.groupBy { it.proNumber }
         val sortedKeys = grouped.keys.toList()
         grouped.entries.mapIndexed { index, entry ->
             val points = entry.value.map { LatLng(it.latitude, it.longitude) }
             val recencyRatio = if (sortedKeys.size > 1) index.toFloat() / (sortedKeys.size - 1) else 1.0f
-            
+
             // Recency Color Gradient: Recent = Cyan (#00E5FF), Older = Deep Blue/Purple
             val routeColor = when {
                 recencyRatio >= 0.7f -> Color(0xFF00E5FF) // Newest: Bright Cyan
@@ -102,6 +118,13 @@ fun RouteMapScreen(
             }
             Pair(points, routeColor)
         }
+    }
+
+    // Filter loads according to the selected time filter
+    val displayLoads = remember(load, allLoads, filterCutoff) {
+        val list = if (load != null) listOf(load) else allLoads
+        if (filterCutoff == 0L) list
+        else list.filter { (it.pickupApptTimestamp ?: 0) >= filterCutoff || (it.deliveryTimestamp ?: 0) >= filterCutoff }
     }
 
     val cameraPositionState = rememberCameraPositionState(key = load?.proNumber) {
@@ -113,10 +136,6 @@ fun RouteMapScreen(
             LatLng(39.8283, -98.5795)
         }
         position = CameraPosition.fromLatLngZoom(center, if (load != null) 7f else 4f)
-    }
-
-    val displayLoads = remember(load, allLoads) {
-        if (load != null) listOf(load) else allLoads
     }
 
     val hasMapContent = (pathsWithAge.isNotEmpty()) || (displayLoads.isNotEmpty()) || (homeLocation != null) || (fuelEntries.isNotEmpty())
@@ -136,7 +155,7 @@ fun RouteMapScreen(
         Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
             if (!hasMapContent) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("No GPS data or route history recorded yet.", color = MaterialTheme.colorScheme.secondary)
+                    Text("No GPS data or route history recorded for selected filter.", color = MaterialTheme.colorScheme.secondary)
                 }
             } else {
                 GoogleMap(
@@ -155,7 +174,7 @@ fun RouteMapScreen(
                         }
                     }
 
-                    // Render Shipper and Consignee Pins for all loads
+                    // Render Shipper and Consignee Pins for filtered loads
                     displayLoads.forEach { item ->
                         item.shipperLat?.let { lat ->
                             item.shipperLong?.let { lng ->
@@ -210,54 +229,66 @@ fun RouteMapScreen(
                     }
                 }
 
-                // 1. Floating Map Controls (Style + Recency Legend Bar)
-                Column(
+                // 1. Top Controls: Time Filter (Left) & Map Type Switcher (Right)
+                Row(
                     modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(12.dp),
-                    horizontalAlignment = Alignment.End,
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                        .fillMaxWidth()
+                        .align(Alignment.TopCenter)
+                        .padding(horizontal = 8.dp, vertical = 6.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.Top
                 ) {
+                    // Time Filter Chips (All Time, This Month, This Week)
+                    Surface(
+                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
+                        shape = RoundedCornerShape(20.dp),
+                        modifier = Modifier.weight(1f, fill = false)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                                .horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            FilterChip(
+                                selected = selectedTimeFilter == "All Time",
+                                onClick = { selectedTimeFilter = "All Time" },
+                                label = { Text("All Time", style = MaterialTheme.typography.labelSmall) }
+                            )
+                            FilterChip(
+                                selected = selectedTimeFilter == "This Month",
+                                onClick = { selectedTimeFilter = "This Month" },
+                                label = { Text("This Month", style = MaterialTheme.typography.labelSmall) }
+                            )
+                            FilterChip(
+                                selected = selectedTimeFilter == "This Week",
+                                onClick = { selectedTimeFilter = "This Week" },
+                                label = { Text("This Week", style = MaterialTheme.typography.labelSmall) }
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.width(6.dp))
+
+                    // Map Style Switcher (Map vs Hybrid)
                     Surface(
                         color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
                         shape = RoundedCornerShape(20.dp)
                     ) {
                         Row(
-                            modifier = Modifier
-                                .padding(horizontal = 8.dp, vertical = 4.dp)
-                                .horizontalScroll(rememberScrollState()),
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                             horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
                             FilterChip(
                                 selected = selectedMapType == MapType.NORMAL,
                                 onClick = { selectedMapType = MapType.NORMAL },
-                                label = { Text("Map") }
-                            )
-                            FilterChip(
-                                selected = selectedMapType == MapType.SATELLITE,
-                                onClick = { selectedMapType = MapType.SATELLITE },
-                                label = { Text("Satellite") }
+                                label = { Text("Map", style = MaterialTheme.typography.labelSmall) }
                             )
                             FilterChip(
                                 selected = selectedMapType == MapType.HYBRID,
                                 onClick = { selectedMapType = MapType.HYBRID },
-                                label = { Text("Hybrid") }
+                                label = { Text("Hybrid", style = MaterialTheme.typography.labelSmall) }
                             )
-                        }
-                    }
-
-                    Surface(
-                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text("Recency:", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
-                            Text("🔵 Newest", style = MaterialTheme.typography.labelSmall, color = Color(0xFF00E5FF))
-                            Text("🟣 Older", style = MaterialTheme.typography.labelSmall, color = Color(0xFF651FFF))
                         }
                     }
                 }
@@ -275,13 +306,13 @@ fun RouteMapScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .align(Alignment.BottomCenter)
-                            .padding(16.dp),
+                            .padding(12.dp),
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
                         elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
                     ) {
                         Column(
-                            modifier = Modifier.padding(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                            modifier = Modifier.padding(14.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
