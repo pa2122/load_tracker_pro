@@ -1,0 +1,45 @@
+name: Automated Build & Release Pipeline
+
+on:
+  push:
+    branches:
+      - master
+      - v2-redesign
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository Code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: 'gradle'
+
+      - name: Grant Execute Permission for Gradlew
+        run: chmod +x gradlew
+
+      - name: Run Unit Test Suite (14 Tests)
+        run: ./gradlew testDebugUnitTest
+
+      - name: Build Signed Release App Bundle (v1 & v2)
+        run: |
+          ./gradlew bundleV1Release
+          ./gradlew bundleV2Release
+
+      - name: Upload v1.x Release App Bundle Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-v1-release-aab
+          path: app/build/outputs/bundle/v1Release/app-v1-release.aab
+
+      - name: Upload v2.0 Release App Bundle Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-v2-release-aab
+          path: app/build/outputs/bundle/v2Release/app-v2-release.aab
