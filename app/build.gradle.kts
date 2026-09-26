@@ -7,12 +7,32 @@ plugins {
     id("kotlin-kapt")
 }
 
+val versionPropsFile = rootProject.file("version.properties")
+val versionProps = Properties()
+
+tasks.register("incrementVersionBuild") {
+    doLast {
+        if (versionPropsFile.exists()) {
+            versionProps.load(versionPropsFile.inputStream())
+            val currentBuild = versionProps.getProperty("VERSION_BUILD", "1").toInt()
+            val nextBuild = currentBuild + 1
+            versionProps.setProperty("VERSION_BUILD", nextBuild.toString())
+            versionProps.store(versionPropsFile.writer(), "Auto-incremented by Gradle build")
+            println("🚀 Auto-incremented VERSION_BUILD to $nextBuild in version.properties")
+        }
+    }
+}
+
+tasks.matching { it.name.startsWith("bundle") || it.name.startsWith("assemble") }.configureEach {
+    if (name.contains("Release")) {
+        dependsOn("incrementVersionBuild")
+    }
+}
+
 android {
     namespace = "com.example.tmcloadtracker"
     compileSdk = 36
 
-    val versionPropsFile = rootProject.file("version.properties")
-    val versionProps = Properties()
     if (versionPropsFile.exists()) {
         versionProps.load(versionPropsFile.inputStream())
     }
