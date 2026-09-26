@@ -398,12 +398,11 @@ fun DashboardScreen(
 
                                         OutlinedButton(
                                             onClick = {
-                                                mileageEditInput = String.format(Locale.US, "%.1f", if (liveBounceMiles > 0) liveBounceMiles else activeTrip.bounceMilesEnd)
                                                 showMileageEditDialog = true
                                             },
                                             modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
                                         ) {
-                                            Text("✏️ Adjust Bounce Miles")
+                                            Text("✏️ Adjust Leg Miles (Bounce & Loaded)")
                                         }
 
                                         Button(
@@ -490,16 +489,13 @@ fun DashboardScreen(
                                             }
                                         }
 
-                                        if (activeTrip.tripState == "ACTIVE_CONSIGNEE") {
-                                            OutlinedButton(
-                                                onClick = {
-                                                    mileageEditInput = String.format(Locale.US, "%.1f", if (liveLoadedMiles > 0) liveLoadedMiles else activeTrip.loadedMilesEnd)
-                                                    showMileageEditDialog = true
-                                                },
-                                                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
-                                            ) {
-                                                Text("✏️ Adjust Loaded Miles")
-                                            }
+                                        OutlinedButton(
+                                            onClick = {
+                                                showMileageEditDialog = true
+                                            },
+                                            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+                                        ) {
+                                            Text("✏️ Adjust Leg Miles (Bounce & Loaded)")
                                         }
 
                                         Button(
@@ -1421,17 +1417,34 @@ fun DashboardScreen(
     }
 
     if (showMileageEditDialog) {
-        var correctedMilesStr by remember { mutableStateOf(mileageEditInput) }
+        val initialBounce = if (liveBounceMiles > 0) liveBounceMiles else (activeTrip?.bounceMilesEnd ?: 0.0)
+        val initialLoaded = if (liveLoadedMiles > 0) liveLoadedMiles else (activeTrip?.loadedMilesEnd ?: 0.0)
+
+        var inputBounceStr by remember { mutableStateOf(if (initialBounce > 0) String.format(Locale.US, "%.1f", initialBounce) else "") }
+        var inputLoadedStr by remember { mutableStateOf(if (initialLoaded > 0) String.format(Locale.US, "%.1f", initialLoaded) else "") }
+
+        val context = LocalContext.current
+
         AlertDialog(
             onDismissRequest = { showMileageEditDialog = false },
-            title = { Text("✏️ Correct Leg Mileage") },
+            title = { Text("✏️ Adjust Tracked Leg Mileage") },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Enter the correct total miles for this leg:")
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("Enter or correct total miles for Bounce and/or Loaded legs:")
+                    
                     OutlinedTextField(
-                        value = correctedMilesStr,
-                        onValueChange = { correctedMilesStr = it },
-                        label = { Text("Corrected Miles") },
+                        value = inputBounceStr,
+                        onValueChange = { inputBounceStr = it },
+                        label = { Text("Tracked Bounce Miles") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                    )
+
+                    OutlinedTextField(
+                        value = inputLoadedStr,
+                        onValueChange = { inputLoadedStr = it },
+                        label = { Text("Tracked Loaded Miles") },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
@@ -1440,15 +1453,24 @@ fun DashboardScreen(
             },
             confirmButton = {
                 Button(onClick = {
-                    val newMiles = correctedMilesStr.toDoubleOrNull()
-                    if (newMiles != null && activeTrip != null) {
-                        if (activeTrip.tripState == "ACTIVE_SHIPPER" || activeTrip.tripState == "ACTIVE_BOUNCE") {
-                            TrackingService.totalBounceMilesTracked.value = newMiles
-                            onUpdateTripClick(activeTrip.copy(bounceMilesEnd = newMiles))
-                        } else {
-                            TrackingService.totalLoadedMilesTracked.value = newMiles
-                            onUpdateTripClick(activeTrip.copy(loadedMilesEnd = newMiles))
+                    val newBounce = inputBounceStr.toDoubleOrNull()
+                    val newLoaded = inputLoadedStr.toDoubleOrNull()
+
+                    if (activeTrip != null) {
+                        if (newBounce != null) {
+                            TrackingService.totalBounceMilesTracked.value = newBounce
                         }
+                        if (newLoaded != null) {
+                            TrackingService.totalLoadedMilesTracked.value = newLoaded
+                        }
+                        TrackingService.saveState(context)
+
+                        onUpdateTripClick(
+                            activeTrip.copy(
+                                bounceMilesEnd = newBounce ?: activeTrip.bounceMilesEnd,
+                                loadedMilesEnd = newLoaded ?: activeTrip.loadedMilesEnd
+                            )
+                        )
                     }
                     showMileageEditDialog = false
                 }) { Text("Save Corrected Miles") }

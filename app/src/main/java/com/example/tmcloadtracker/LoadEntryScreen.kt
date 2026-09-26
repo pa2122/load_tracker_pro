@@ -115,9 +115,9 @@ fun LoadEntryScreen(
     var tripNotes by remember { mutableStateOf(value = editingLoad?.tripNotes ?: "") }
     var isManualEntry by remember { mutableStateOf(value = false) }
 
-    var manualActBounce by remember { mutableStateOf(value = "") }
-    var manualActLoaded by remember { mutableStateOf(value = "") }
-    var matchDispatched by remember { mutableStateOf(value = true) }
+    var manualActBounce by remember { mutableStateOf(editingLoad?.bounceMilesEnd?.let { if (it > 0) String.format(Locale.US, "%.1f", it) else "" } ?: "") }
+    var manualActLoaded by remember { mutableStateOf(editingLoad?.loadedMilesEnd?.let { if (it > 0) String.format(Locale.US, "%.1f", it) else "" } ?: "") }
+    var matchDispatched by remember { mutableStateOf(editingLoad == null || (editingLoad.bounceMilesEnd == 0.0 && editingLoad.loadedMilesEnd == 0.0)) }
 
     var showDatePicker by remember { mutableStateOf(value = false) }
     var showProPaywallDialog by remember { mutableStateOf(value = false) }
@@ -843,14 +843,17 @@ fun LoadEntryScreen(
                     )
                     processSave(manualData)
                 } else {
+                    val actB = if (matchDispatched) 0.0 else (manualActBounce.toDoubleOrNull() ?: 0.0)
+                    val actL = if (matchDispatched) 0.0 else (manualActLoaded.toDoubleOrNull() ?: 0.0)
+
                     val draftData = CurrentLoad(
                         proNumber = proNum.trim(),
                         dispatchedBounceMiles = dispB,
                         dispatchedLoadedMiles = dispL,
                         bounceMilesStart = 0.0,
-                        bounceMilesEnd = 0.0,
+                        bounceMilesEnd = actB,
                         loadedMilesStart = 0.0,
-                        loadedMilesEnd = 0.0,
+                        loadedMilesEnd = actL,
                         percentageRate = ratePct.toDoubleOrNull() ?: initialPercentage.toDoubleOrNull() ?: 31.0,
                         loadPay = loadPay.toDoubleOrNull() ?: 0.0,
                         tarpType = tChar,
@@ -859,7 +862,7 @@ fun LoadEntryScreen(
                         isTrainingWeek = isTrainingWeek,
                         trainerPayRate = resolvedTrainerRate,
                         pickupTimestamp = System.currentTimeMillis(),
-                        tripState = "ACTIVE_BOUNCE",
+                        tripState = editingLoad?.tripState ?: "ACTIVE_BOUNCE",
                         tripNotes = tripNotes.ifBlank { null },
                         shipperName = if (sRawPaste.isNotBlank()) sRawPaste.trim() else sName,
                         shipperLat = sLat,
@@ -874,13 +877,20 @@ fun LoadEntryScreen(
                         consigneeApptTimestamp = cApptTimestamp,
                         consigneeApptType = cApptType
                     )
-                    TrackingService.resetTrackingState(ctx)
-                    TrackingService.activeProNumber = proNum.trim()
-                    TrackingService.targetLat = sLat
-                    TrackingService.targetLong = sLong
-                    TrackingService.targetName = sName
-                    TrackingService.isGeofenceActive = true
-                    ContextCompat.startForegroundService(ctx, Intent(ctx, TrackingService::class.java))
+
+                    if (editingLoad == null) {
+                        TrackingService.resetTrackingState(ctx)
+                        TrackingService.activeProNumber = proNum.trim()
+                        TrackingService.targetLat = sLat
+                        TrackingService.targetLong = sLong
+                        TrackingService.targetName = sName
+                        TrackingService.isGeofenceActive = true
+                        ContextCompat.startForegroundService(ctx, Intent(ctx, TrackingService::class.java))
+                    } else {
+                        if (actB > 0) TrackingService.totalBounceMilesTracked.value = actB
+                        if (actL > 0) TrackingService.totalLoadedMilesTracked.value = actL
+                        TrackingService.saveState(ctx)
+                    }
                     processSave(draftData)
                 }
             },
