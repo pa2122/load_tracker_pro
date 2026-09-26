@@ -34,7 +34,7 @@ android {
     val vCode = vBuild
 
     defaultConfig {
-        applicationId = "com.example.tmcloadtracker"
+        applicationId = "com.loadtracker.pro"
         minSdk = 27
         targetSdk = 35
         versionCode = vCode
