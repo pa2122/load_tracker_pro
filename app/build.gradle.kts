@@ -9,7 +9,7 @@ plugins {
 
 android {
     namespace = "com.example.tmcloadtracker"
-    compileSdk = 35
+    compileSdk = 36
 
     val versionPropsFile = rootProject.file("version.properties")
     val versionProps = Properties()
@@ -36,7 +36,7 @@ android {
     defaultConfig {
         applicationId = "com.loadtracker.pro"
         minSdk = 27
-        targetSdk = 35
+        targetSdk = 36
         versionCode = vCode
         versionName = vName
 
@@ -53,6 +53,12 @@ android {
             keyAlias = "androiddebugkey"
             keyPassword = "android"
         }
+        create("release") {
+            storeFile = file("release.keystore")
+            storePassword = "loadtrackerpass"
+            keyAlias = "loadtracker_key"
+            keyPassword = "loadtrackerpass"
+        }
     }
 
     buildTypes {
@@ -60,6 +66,7 @@ android {
             signingConfig = signingConfigs.getByName("sharedDebug")
         }
         release {
+            signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
