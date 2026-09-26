@@ -34,7 +34,6 @@ android {
     val vCode = vBuild
 
     defaultConfig {
-        applicationId = "com.loadtracker.pro"
         minSdk = 27
         targetSdk = 36
         versionCode = vCode
@@ -44,6 +43,22 @@ android {
         buildConfigField("String", "DEFAULT_GITHUB_REPO", "\"$defaultGithubRepo\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    flavorDimensions += "version"
+
+    productFlavors {
+        create("v1") {
+            dimension = "version"
+            applicationId = "com.loadtracker.pro"
+            versionName = "1.10.0"
+        }
+        create("v2") {
+            dimension = "version"
+            applicationId = "com.loadtracker.pro.v2"
+            versionName = "2.0.0"
+            resValue("string", "app_name", "Load Tracker v2 🚀")
+        }
     }
 
     signingConfigs {
