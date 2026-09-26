@@ -314,6 +314,7 @@ fun DashboardScreen(
                                         Button(
                                             onClick = {
                                                 TrackingService.activeSegment = "Paused"
+                                                TrackingService.distanceSinceDeparted = 0.0
                                                 onUpdateTripClick(
                                                     activeTrip.copy(
                                                         tripState = "ACTIVE_SHIPPER",
@@ -504,6 +505,7 @@ fun DashboardScreen(
                                         Button(
                                             onClick = {
                                                 TrackingService.isGeofenceActive = false
+                                                TrackingService.distanceSinceDeparted = 0.0
                                                 selectedTripData = activeTrip.copy(
                                                     tripState = "COMPLETED",
                                                     loadedMilesEnd = liveLoadedMiles,

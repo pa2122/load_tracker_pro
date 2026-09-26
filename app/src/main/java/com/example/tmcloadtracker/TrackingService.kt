@@ -52,7 +52,9 @@ class TrackingService : Service() {
         var targetLong: Double? = null
         var targetName: String? = null
         var isGeofenceActive = false
+        var isGoingHome = false
         var isProUser = true
+        var distanceSinceDeparted = 0.0
 
         var currentLatitude: Double? = null
         var currentLongitude: Double? = null
@@ -68,6 +70,10 @@ class TrackingService : Service() {
                 putFloat("targetLong", targetLong?.toFloat() ?: -999f)
                 putString("targetName", targetName)
                 putBoolean("isGeofenceActive", isGeofenceActive)
+                putBoolean("isGoingHome", isGoingHome)
+                putFloat("bounceMiles", totalBounceMilesTracked.value.toFloat())
+                putFloat("loadedMiles", totalLoadedMilesTracked.value.toFloat())
+                putFloat("distanceSinceDeparted", distanceSinceDeparted.toFloat())
                 apply()
             }
         }
@@ -94,16 +100,31 @@ class TrackingService : Service() {
             if (tName != null) targetName = tName
 
             isGeofenceActive = prefs.getBoolean("isGeofenceActive", isGeofenceActive)
+            isGoingHome = prefs.getBoolean("isGoingHome", isGoingHome)
+            distanceSinceDeparted = prefs.getFloat("distanceSinceDeparted", 0f).toDouble()
+
+            // Restore Tracked Miles
+            if (totalBounceMilesTracked.value == 0.0) {
+                totalBounceMilesTracked.value = prefs.getFloat("bounceMiles", 0f).toDouble()
+            }
+            if (totalLoadedMilesTracked.value == 0.0) {
+                totalLoadedMilesTracked.value = prefs.getFloat("loadedMiles", 0f).toDouble()
+            }
         }
 
-        fun resetTrackingState() {
+        fun resetTrackingState(context: Context) {
             totalBounceMilesTracked.value = 0.0
             totalLoadedMilesTracked.value = 0.0
             activeSegment = "Bounce"
             activeProNumber = null
             isGeofenceActive = false
+            isGoingHome = false
+            distanceSinceDeparted = 0.0
             currentLatitude = null
             currentLongitude = null
+            
+            // Wipe from SharedPreferences
+            context.getSharedPreferences("tracking_service_prefs", MODE_PRIVATE).edit().clear().apply()
         }
     }
 
@@ -150,6 +171,7 @@ class TrackingService : Service() {
                     if (lastLocation != null) {
                         val distanceMeters = lastLocation!!.distanceTo(location)
                         val milesDriven = distanceMeters * 0.000621371
+                        distanceSinceDeparted += milesDriven
 
                         if (activeSegment == "Bounce") {
                             totalBounceMilesTracked.value += milesDriven
@@ -194,8 +216,10 @@ class TrackingService : Service() {
     }
 
     private fun checkGeofence(currentLocation: Location) {
+        if (distanceSinceDeparted < 1.0) return
+
         // 1. Check for Home Arrival if on a "Going Home" load
-        if (homeLat != null && homeLong != null) {
+        if (isGoingHome && homeLat != null && homeLong != null) {
             val homeLoc = Location("").apply {
                 latitude = homeLat!!
                 longitude = homeLong!!
@@ -305,7 +329,7 @@ class TrackingService : Service() {
         super.onDestroy()
         fusedLocationClient.removeLocationUpdates(locationCallback)
         lastLocation = null
-        resetTrackingState()
+        resetTrackingState(this)
     }
 
     override fun onBind(intent: Intent?): IBinder? = null

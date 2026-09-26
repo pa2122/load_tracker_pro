@@ -874,7 +874,7 @@ fun LoadEntryScreen(
                         consigneeApptTimestamp = cApptTimestamp,
                         consigneeApptType = cApptType
                     )
-                    TrackingService.resetTrackingState()
+                    TrackingService.resetTrackingState(ctx)
                     TrackingService.activeProNumber = proNum.trim()
                     TrackingService.targetLat = sLat
                     TrackingService.targetLong = sLong
