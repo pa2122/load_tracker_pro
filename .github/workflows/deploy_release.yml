@@ -43,3 +43,23 @@ jobs:
         with:
           name: app-v2-release-aab
           path: app/build/outputs/bundle/v2Release/app-v2-release.aab
+
+      - name: Create Automated GitHub Release
+        uses: softprops/action-gh-release@v2
+        if: github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/')
+        with:
+          tag_name: "release-${{ github.sha }}"
+          name: "Load Tracker Pro Release (${{ github.ref_name }})"
+          body: |
+            ## 🚀 Load Tracker Pro Automated Release
+
+            ### 📦 Attached Production App Bundles:
+            - **v1.x Release Bundle (`com.loadtracker.pro`):** `app-v1-release.aab`
+            - **v2.0 Release Bundle (`com.loadtracker.pro.v2`):** `app-v2-release.aab`
+
+            *Automated build verified by 14 unit test suites.*
+          files: |
+            app/build/outputs/bundle/v1Release/app-v1-release.aab
+            app/build/outputs/bundle/v2Release/app-v2-release.aab
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
