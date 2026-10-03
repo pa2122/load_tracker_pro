@@ -14,5 +14,6 @@ data class FuelEntry(
     val stationName: String,
     val odometer: Double,
     val defGallons: Double = 0.0,
-    val defCost: Double = 0.0
+    val defCost: Double = 0.0,
+    val receiptPhotoUri: String? = null
 )
