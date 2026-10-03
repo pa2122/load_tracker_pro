@@ -964,12 +964,26 @@ fun LoadEntryScreen(
             text = { Text("PRO #${pendingDuplicateLoad?.proNumber} already exists in your records. Would you like to update the existing record with these new details?") },
             confirmButton = {
                 Button(onClick = {
-                    onSaveClick(pendingDuplicateLoad!!)
+                    val data = pendingDuplicateLoad!!
+                    if (!data.tripState.startsWith("COMPLETED")) {
+                        TrackingService.resetTrackingState()
+                        TrackingService.activeProNumber = data.proNumber
+                        TrackingService.targetLat = data.shipperLat
+                        TrackingService.targetLong = data.shipperLong
+                        TrackingService.targetName = data.shipperName
+                        TrackingService.isGeofenceActive = true
+                        ContextCompat.startForegroundService(ctx, Intent(ctx, TrackingService::class.java))
+                    }
+                    onSaveClick(data)
                     showDuplicateWarningDialog = false
+                    pendingDuplicateLoad = null
                 }) { Text("Yes, Update") }
             },
             dismissButton = {
-                TextButton(onClick = { showDuplicateWarningDialog = false }) { Text("Cancel") }
+                TextButton(onClick = {
+                    showDuplicateWarningDialog = false
+                    pendingDuplicateLoad = null
+                }) { Text("Cancel") }
             }
         )
     }
