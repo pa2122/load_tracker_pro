@@ -45,13 +45,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import dev.jeziellago.compose.markdowntext.MarkdownText
 import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneId
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -75,6 +78,7 @@ fun DashboardScreen(
     onDismissHelpDialog: () -> Unit,
 ) {
     val activeTrip = pastLoads.find { it.tripState != "COMPLETED" }
+    val ctx = LocalContext.current
     val currentTargetFriday = getPayPeriodDate(System.currentTimeMillis())
     val completedLoads = pastLoads.asSequence()
         .filter { (it.tripState == "COMPLETED") && (getPayPeriodDate(it.pickupTimestamp) == currentTargetFriday) }
@@ -332,7 +336,7 @@ fun DashboardScreen(
                                         val apptType = activeTrip.pickupApptType
                                         val apptText = activeTrip.pickupApptText
 
-                                        val isBeforeWindow = apptType.equals("BEFORE", ignoreCase = true) || apptType.equals("B", ignoreCase = true) || apptType?.contains("before", ignoreCase = true) == true
+                                        val isBeforeWindow = apptType?.contains("before", ignoreCase = true) == true || apptType?.contains("fcfs", ignoreCase = true) == true || apptType?.equals("B", ignoreCase = true) == true
                                         val clockStartTs = if (isBeforeWindow || apptTs == null) {
                                             arrivalTs
                                         } else {
@@ -346,6 +350,8 @@ fun DashboardScreen(
                                         val totalDockStr = "${totalDockMins / 60}h ${totalDockMins % 60}m"
                                         val is1Point5HrAlert = clockMins >= 90L
                                         val billableMins = maxOf(0L, clockMins - 120L)
+                                        val timeFormatter = DateTimeFormatter.ofPattern("h:mm a", Locale.US)
+                                        val arrivalTimeStr = Instant.ofEpochMilli(arrivalTs).atZone(ZoneId.systemDefault()).format(timeFormatter)
 
                                         Surface(
                                             color = MaterialTheme.colorScheme.surfaceVariant,
@@ -363,6 +369,12 @@ fun DashboardScreen(
                                                     Text("⏱️ Facility Dock Time:", style = MaterialTheme.typography.titleSmall)
                                                     Text(totalDockStr, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
                                                 }
+
+                                                Text(
+                                                    "Dock Check-In: $arrivalTimeStr${if (isBeforeWindow) " (BEFORE / FCFS Window)" else ""}",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
 
                                                 if (!apptText.isNullOrBlank()) {
                                                     Text("Appt Schedule: $apptText", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
@@ -391,6 +403,28 @@ fun DashboardScreen(
                                                         style = MaterialTheme.typography.bodySmall,
                                                         color = MaterialTheme.colorScheme.primary
                                                     )
+                                                }
+
+                                                val clipboardManager = LocalClipboardManager.current
+                                                OutlinedButton(
+                                                    onClick = {
+                                                        val facility = activeTrip.shipperName ?: "Shipper Facility"
+                                                        val detHrs = billableMins / 60
+                                                        val detMins = billableMins % 60
+                                                        val statement = """
+                                                            🚨 DETENTION NOTICE - PRO #${activeTrip.proNumber}
+                                                            Facility: $facility
+                                                            Arrival Time: $arrivalTimeStr
+                                                            Appt Schedule: ${apptText ?: if (isBeforeWindow) "BEFORE / FCFS Window" else "Not Specified"}
+                                                            Total Dock Time: $totalDockStr
+                                                            Billable Detention Accrued: ${detHrs}h ${detMins}m
+                                                        """.trimIndent()
+                                                        clipboardManager.setText(AnnotatedString(statement))
+                                                        Toast.makeText(ctx, "Copied Detention Statement to Clipboard!", Toast.LENGTH_SHORT).show()
+                                                    },
+                                                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
+                                                ) {
+                                                    Text("📋 Copy Detention Statement for Dispatch")
                                                 }
                                             }
                                         }
@@ -426,7 +460,7 @@ fun DashboardScreen(
                                             val apptType = activeTrip.consigneeApptType
                                             val apptText = activeTrip.consigneeApptText
 
-                                            val isBeforeWindow = apptType.equals("BEFORE", ignoreCase = true) || apptType.equals("B", ignoreCase = true) || apptType?.contains("before", ignoreCase = true) == true
+                                            val isBeforeWindow = apptType?.contains("before", ignoreCase = true) == true || apptType?.contains("fcfs", ignoreCase = true) == true || apptType?.equals("B", ignoreCase = true) == true
                                             val clockStartTs = if (isBeforeWindow || apptTs == null) {
                                                 arrivalTs
                                             } else {
@@ -440,6 +474,8 @@ fun DashboardScreen(
                                             val totalDockStr = "${totalDockMins / 60}h ${totalDockMins % 60}m"
                                             val is1Point5HrAlert = clockMins >= 90L
                                             val billableMins = maxOf(0L, clockMins - 120L)
+                                            val timeFormatter = DateTimeFormatter.ofPattern("h:mm a", Locale.US)
+                                            val arrivalTimeStr = Instant.ofEpochMilli(arrivalTs).atZone(ZoneId.systemDefault()).format(timeFormatter)
 
                                             Surface(
                                                 color = MaterialTheme.colorScheme.surfaceVariant,
@@ -457,6 +493,12 @@ fun DashboardScreen(
                                                         Text("⏱️ Facility Dock Time:", style = MaterialTheme.typography.titleSmall)
                                                         Text(totalDockStr, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
                                                     }
+
+                                                    Text(
+                                                        "Dock Check-In: $arrivalTimeStr${if (isBeforeWindow) " (BEFORE / FCFS Window)" else ""}",
+                                                        style = MaterialTheme.typography.bodySmall,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                    )
 
                                                     if (!apptText.isNullOrBlank()) {
                                                         Text("Appt Schedule: $apptText", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
@@ -485,6 +527,28 @@ fun DashboardScreen(
                                                             style = MaterialTheme.typography.bodySmall,
                                                             color = MaterialTheme.colorScheme.primary
                                                         )
+                                                    }
+
+                                                    val clipboardManager = LocalClipboardManager.current
+                                                    OutlinedButton(
+                                                        onClick = {
+                                                            val facility = activeTrip.consigneeName ?: "Consignee Facility"
+                                                            val detHrs = billableMins / 60
+                                                            val detMins = billableMins % 60
+                                                            val statement = """
+                                                                🚨 DETENTION NOTICE - PRO #${activeTrip.proNumber}
+                                                                Facility: $facility
+                                                                Arrival Time: $arrivalTimeStr
+                                                                Appt Schedule: ${apptText ?: if (isBeforeWindow) "BEFORE / FCFS Window" else "Not Specified"}
+                                                                Total Dock Time: $totalDockStr
+                                                                Billable Detention Accrued: ${detHrs}h ${detMins}m
+                                                            """.trimIndent()
+                                                            clipboardManager.setText(AnnotatedString(statement))
+                                                            Toast.makeText(ctx, "Copied Detention Statement to Clipboard!", Toast.LENGTH_SHORT).show()
+                                                        },
+                                                        modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
+                                                    ) {
+                                                        Text("📋 Copy Detention Statement for Dispatch")
                                                     }
                                                 }
                                             }
