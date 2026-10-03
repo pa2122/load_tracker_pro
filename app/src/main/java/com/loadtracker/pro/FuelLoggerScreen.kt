@@ -130,28 +130,20 @@ fun FuelLoggerScreen(
 
     fun exportIftaCsv() {
         try {
-            val csvSb = StringBuilder()
-            csvSb.append("Date,Station,State,Gallons,PricePerGallon,TotalCost,Odometer\n")
-            filteredFuelEntries.forEach { entry ->
-                val dateStr = Instant.ofEpochMilli(entry.timestamp)
-                    .atZone(ZoneId.systemDefault())
-                    .toLocalDate()
-                    .format(DateTimeFormatter.ofPattern("MM/dd/yyyy"))
-                csvSb.append("\"$dateStr\",\"${entry.stationName}\",\"${entry.state}\",${entry.gallons},${entry.pricePerGallon},${entry.totalCost},${entry.odometer}\n")
-            }
+            val csvText = IftaTaxReportExporter.generateIftaCsv(selectedQuarterFilter, filteredFuelEntries, breadcrumbs)
 
-            val file = File(ctx.filesDir, "ifta_fuel_report_$selectedQuarterFilter.csv")
-            file.writeText(csvSb.toString())
+            val file = File(ctx.filesDir, "ifta_tax_report_$selectedQuarterFilter.csv")
+            file.writeText(csvText)
 
             val contentUri = FileProvider.getUriForFile(ctx, "${ctx.packageName}.provider", file)
             val shareIntent = Intent(Intent.ACTION_SEND).apply {
                 type = "text/csv"
-                putExtra(Intent.EXTRA_SUBJECT, "IFTA Fuel Tax Report - $selectedQuarterFilter")
-                putExtra(Intent.EXTRA_TEXT, "Attached is your Load Tracker Pro IFTA Fuel Tax Report ($selectedQuarterFilter).")
+                putExtra(Intent.EXTRA_SUBJECT, "IFTA Fuel & Mileage Tax Report - $selectedQuarterFilter")
+                putExtra(Intent.EXTRA_TEXT, "Attached is your official Load Tracker Pro IFTA Fuel & Mileage Tax Report ($selectedQuarterFilter).")
                 putExtra(Intent.EXTRA_STREAM, contentUri)
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
-            ctx.startActivity(Intent.createChooser(shareIntent, "Export IFTA Fuel Report"))
+            ctx.startActivity(Intent.createChooser(shareIntent, "Export IFTA Tax Report"))
         } catch (e: Exception) {
             Toast.makeText(ctx, "Error exporting IFTA report: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
         }
