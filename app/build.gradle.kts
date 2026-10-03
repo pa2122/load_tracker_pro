@@ -24,6 +24,7 @@ android {
     }
     val defaultGithubToken = localProps.getProperty("GITHUB_TOKEN", "")
     val defaultGithubRepo = localProps.getProperty("GITHUB_REPO", "pa2122/load_tracker_pro")
+    val mapsApiKey = localProps.getProperty("MAPS_API_KEY", "")
 
     val vMajor = versionProps.getProperty("VERSION_MAJOR", "1").toInt()
     val vMinor = versionProps.getProperty("VERSION_MINOR", "1").toInt()
@@ -40,6 +41,7 @@ android {
         versionCode = vCode
         versionName = vName
 
+        manifestPlaceholders["MAPS_API_KEY"] = mapsApiKey
         buildConfigField("String", "DEFAULT_GITHUB_TOKEN", "\"$defaultGithubToken\"")
         buildConfigField("String", "DEFAULT_GITHUB_REPO", "\"$defaultGithubRepo\"")
 
