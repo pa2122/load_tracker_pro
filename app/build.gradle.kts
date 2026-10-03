@@ -48,12 +48,30 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    val releaseStoreFile = localProps.getProperty("RELEASE_STORE_FILE", "")
+    val releaseStorePassword = localProps.getProperty("RELEASE_STORE_PASSWORD", "")
+    val releaseKeyAlias = localProps.getProperty("RELEASE_KEY_ALIAS", "")
+    val releaseKeyPassword = localProps.getProperty("RELEASE_KEY_PASSWORD", "")
+
     signingConfigs {
         create("sharedDebug") {
             storeFile = file("debug.keystore")
             storePassword = "android"
             keyAlias = "androiddebugkey"
             keyPassword = "android"
+        }
+        create("release") {
+            if (releaseStoreFile.isNotBlank() && file(releaseStoreFile).exists()) {
+                storeFile = file(releaseStoreFile)
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            } else {
+                storeFile = file("debug.keystore")
+                storePassword = "android"
+                keyAlias = "androiddebugkey"
+                keyPassword = "android"
+            }
         }
     }
 
@@ -62,7 +80,7 @@ android {
             signingConfig = signingConfigs.getByName("sharedDebug")
         }
         release {
-            signingConfig = signingConfigs.getByName("sharedDebug")
+            signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
