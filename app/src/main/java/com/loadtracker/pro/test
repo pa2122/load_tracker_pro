@@ -1,0 +1,166 @@
+package com.example.tmcloadtracker
+
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Bundle
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.viewModels
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
+import kotlinx.coroutines.launch
+
+class MainActivity : ComponentActivity() {
+
+    private val viewModel: LoadViewModel by viewModels()
+
+    // 1. DEFINE RUNTIME PERMISSION REQUEST SYSTEM
+    private val requestPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        // Permissions are granted or denied; handled gracefully by OS
+    }
+
+    @OptIn(ExperimentalMaterial3Api::class)
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+
+        // 2. TRIGGER REQUISITE LOCATION CHECK ON APP STARTUP
+        checkAndRequestLocationPermissions()
+
+        setContent {
+            MaterialTheme {
+                Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+
+                    var currentScreen by remember { mutableStateOf("dashboard") }
+
+                    var defaultPercentageRate by remember { mutableStateOf("80.0") }
+                    var lumberTarpPay by remember { mutableStateOf("50.0") }
+                    var steelTarpPay by remember { mutableStateOf("30.0") }
+                    var homeBaseLocation by remember { mutableStateOf("") }
+
+                    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+                    val scope = rememberCoroutineScope()
+
+                    val savedLoads by viewModel.allLoads.collectAsState()
+
+                    val weeklySummary = viewModel.getCurrentWeekSummary(
+                        lumberRate = lumberTarpPay.toDoubleOrNull() ?: 0.0,
+                        steelRate = steelTarpPay.toDoubleOrNull() ?: 0.0
+                    )
+
+                    ModalNavigationDrawer(
+                        drawerState = drawerState,
+                        drawerContent = {
+                            ModalDrawerSheet(modifier = Modifier.width(300.dp)) {
+                                Column(
+                                    modifier = Modifier.padding(24.dp).fillMaxHeight(),
+                                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                                ) {
+                                    Text("Configurations", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
+                                    Text("Set semi-static configuration metrics.", style = MaterialTheme.typography.bodyMedium)
+
+                                    OutlinedTextField(
+                                        value = defaultPercentageRate,
+                                        onValueChange = { input ->
+                                            val filtered = input.filter { it.isDigit() || it == '.' }
+                                            if (filtered.isEmpty() || filtered == ".") defaultPercentageRate = filtered
+                                            else if (filtered.count { it == '.' } <= 1) {
+                                                val value = filtered.toDoubleOrNull()
+                                                if (value != null && value >= 0.0 && value <= 100.0) defaultPercentageRate = filtered
+                                            }
+                                        },
+                                        label = { Text("Default Pay Rate (%)") },
+                                        singleLine = true,
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Next),
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+
+                                    OutlinedTextField(
+                                        value = lumberTarpPay,
+                                        onValueChange = { input -> lumberTarpPay = input.filter { it.isDigit() || it == '.' } },
+                                        label = { Text("Lumber Tarp Pay ($)") },
+                                        singleLine = true,
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Next),
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+
+                                    OutlinedTextField(
+                                        value = steelTarpPay,
+                                        onValueChange = { input -> steelTarpPay = input.filter { it.isDigit() || it == '.' } },
+                                        label = { Text("Steel Tarp Pay ($)") },
+                                        singleLine = true,
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Next),
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+
+                                    OutlinedTextField(
+                                        value = homeBaseLocation,
+                                        onValueChange = { homeBaseLocation = it },
+                                        label = { Text("Home Base (City, ST)") },
+                                        singleLine = true,
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text, imeAction = ImeAction.Done),
+                                        keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { scope.launch { drawerState.close() } }),
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+
+                                    Spacer(modifier = Modifier.weight(1f))
+                                    Button(onClick = { scope.launch { drawerState.close() } }, modifier = Modifier.fillMaxWidth()) {
+                                        Text("Save & Close Menu")
+                                    }
+                                }
+                            }
+                        }
+                    ) {
+                        Scaffold(
+                            topBar = {
+                                TopAppBar(
+                                    title = { Text("TMC Load Tracker") },
+                                    navigationIcon = {
+                                        IconButton(onClick = { scope.launch { drawerState.open() } }) {
+                                            Icon(Icons.Default.Menu, contentDescription = "Open Configurations")
+                                        }
+                                    }
+                                )
+                            }
+                        ) { innerPadding ->
+                            Surface(modifier = Modifier.padding(innerPadding)) {
+                                when (currentScreen) {
+                                    "dashboard" -> {
+                                        DashboardScreen(
+                                            summary = weeklySummary,
+                                            pastLoads = savedLoads,
+                                            onAddNewLoadClick = { currentScreen = "entry" }
+                                        )
+                                    }
+                                    "entry" -> {
+                                        LoadEntryScreen(
+                                            initialPercentage = defaultPercentageRate,
+                                            onSaveClick = { finalizedLoadEntity ->
+                                                viewModel.saveLoad(
+                                                    proNumber = finalizedLoadEntity.proNumber,
+                                                    dispBounce = finalizedLoadEntity.dispatchedBounceMiles,
+                                                    dispLoaded = finalizedLoadEntity.dispatchedLoadedMiles,
+                                                    bounceStart = finalizedLoadEntity.bounceMilesStart,
+                                                    bounceEnd = finalizedLoadEntity.bounceMilesEnd,
+                                                    loadedStart = finalizedLoadEntity.loadedMilesStart,
+                                                    loadedEnd = finalizedLoadEntity.loadedMilesEnd,
+                                                    ratePercent = finalizedLoadEntity.percentageRate,
+                                                    loadPay = finalizedLoadEntity.loadPay,
+                                                    tarpType = finalizedLoadEntity.tarpType,
+                                                    isPreTarped = finalizedLoadEntity.isPreTarped,
+                                                    pickupTimestamp = finalizedLoadEntity.pickupTimestamp,
+                                                    isGoingHome = finalizedLoadEntity.isGoingHome
+                                                )
+currentScreen = "dashboard"},onCancelClick = { currentScreen = "dashboard" })}}}}}}}}}// 3. SECURITY GATE CHECK HELPER UTILITYprivate fun checkAndRequestLocationPermissions() {val fineLocationGranted = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTEDval coarseLocationGranted = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTEDif (!fineLocationGranted || !coarseLocationGranted) {requestPermissionLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION,Manifest.permission.ACCESS_COARSE_LOCATION))}}}
