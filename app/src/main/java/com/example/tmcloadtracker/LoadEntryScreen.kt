@@ -250,7 +250,7 @@ fun LoadEntryScreen(
         var extractedBounce: String? = null
 
         // Direct regex check for Loaded Miles & Bounce Miles
-        val loadedRegex = Regex("""(?:loaded\s*miles|loaded\s*mi|load\s*miles)\s*[:=\-\s]*(\d{1,4}(?:,\d{3})*(?:\.\d+)?)""", RegexOption.IGNORE_CASE)
+        val loadedRegex = Regex("""(?:loaded\s*miles|loaded\s*mi|load\s*miles|trip\s*miles|distance)\s*[:=\-\s]*(\d{1,4}(?:,\d{3})*(?:\.\d+)?)""", RegexOption.IGNORE_CASE)
         val loadedMatch = loadedRegex.find(rawText)
         if (loadedMatch != null && loadedMatch.groupValues.size > 1) {
             extractedLoaded = loadedMatch.groupValues[1].replace(",", "")
@@ -262,13 +262,15 @@ fun LoadEntryScreen(
             extractedBounce = bounceMatch.groupValues[1].replace(",", "")
         }
 
-        // Line-by-line inspection fallback
+        // Line-by-line inspection fallback (safely ignoring headers and order numbers)
         if (extractedLoaded == null || extractedBounce == null) {
-            for (i in lines.indices) {
-                val line = lines[i]
+            for (line in lines) {
                 val lower = line.lowercase(Locale.US)
+                if (lower.contains("out of route") || lower.contains("po number") || lower.contains("order") || lower.contains("status")) {
+                    continue
+                }
 
-                if (extractedLoaded == null && (lower.contains("loaded miles") || lower.contains("loaded mi") || lower.contains("loaded:"))) {
+                if (extractedLoaded == null && (lower.contains("loaded miles") || lower.contains("loaded mi"))) {
                     val match = numRegex.find(line)
                     if (match != null) extractedLoaded = match.value.replace(",", "")
                 }
