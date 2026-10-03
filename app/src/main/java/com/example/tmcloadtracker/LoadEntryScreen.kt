@@ -115,9 +115,17 @@ fun LoadEntryScreen(
     var tripNotes by remember { mutableStateOf(value = editingLoad?.tripNotes ?: "") }
     var isManualEntry by remember { mutableStateOf(value = false) }
 
-    var manualActBounce by remember { mutableStateOf(value = "") }
-    var manualActLoaded by remember { mutableStateOf(value = "") }
-    var matchDispatched by remember { mutableStateOf(value = true) }
+    var manualActBounce by remember {
+        mutableStateOf(
+            value = if (editingLoad != null && editingLoad.bounceMilesEnd > 0.0) String.format(Locale.US, "%.1f", editingLoad.bounceMilesEnd) else ""
+        )
+    }
+    var manualActLoaded by remember {
+        mutableStateOf(
+            value = if (editingLoad != null && editingLoad.loadedMilesEnd > 0.0) String.format(Locale.US, "%.1f", editingLoad.loadedMilesEnd) else ""
+        )
+    }
+    var matchDispatched by remember { mutableStateOf(value = editingLoad == null) }
 
     var showDatePicker by remember { mutableStateOf(value = false) }
     var showProPaywallDialog by remember { mutableStateOf(value = false) }
@@ -657,39 +665,43 @@ fun LoadEntryScreen(
             }
         }
 
-        if (isManualEntry) {
-            Text("Historical Data", style = MaterialTheme.typography.titleMedium)
-            OutlinedTextField(
-                value = dateLabel,
-                onValueChange = {},
-                readOnly = true,
-                label = { Text("Pickup Date") },
-                trailingIcon = {
-                    IconButton(onClick = { showDatePicker = true }) {
-                        Icon(Icons.Default.DateRange, contentDescription = "Select Date")
-                    }
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { showDatePicker = true }
-            )
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Checkbox(checked = matchDispatched, onCheckedChange = { matchDispatched = it })
-                Text("Match Dispatched Miles")
+        if (isManualEntry || editingLoad != null) {
+            Text(if (isManualEntry) "Historical Data" else "Actual Miles Driven", style = MaterialTheme.typography.titleMedium)
+            if (isManualEntry) {
+                OutlinedTextField(
+                    value = dateLabel,
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text("Pickup Date") },
+                    trailingIcon = {
+                        IconButton(onClick = { showDatePicker = true }) {
+                            Icon(Icons.Default.DateRange, contentDescription = "Select Date")
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { showDatePicker = true }
+                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(checked = matchDispatched, onCheckedChange = { matchDispatched = it })
+                    Text("Match Dispatched Miles")
+                }
             }
-            if (!matchDispatched) {
+            if (!isManualEntry || !matchDispatched) {
                 Row(horizontalArrangement = Arrangement.spacedBy(space = 8.dp)) {
                     OutlinedTextField(
                         value = manualActBounce,
                         onValueChange = { input -> manualActBounce = input.filter { it.isDigit() || (it == '.') } },
                         label = { Text("Actual Bounce") },
                         modifier = Modifier.weight(1f),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Next)
                     )
                     OutlinedTextField(
                         value = manualActLoaded,
                         onValueChange = { input -> manualActLoaded = input.filter { it.isDigit() || (it == '.') } },
                         label = { Text("Actual Loaded") },
                         modifier = Modifier.weight(1f),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Done)
                     )
                 }
             }
@@ -843,14 +855,17 @@ fun LoadEntryScreen(
                     )
                     processSave(manualData)
                 } else {
+                    val actBounce = manualActBounce.toDoubleOrNull() ?: editingLoad?.bounceMilesEnd ?: 0.0
+                    val actLoaded = manualActLoaded.toDoubleOrNull() ?: editingLoad?.loadedMilesEnd ?: 0.0
+
                     val draftData = CurrentLoad(
                         proNumber = proNum.trim(),
                         dispatchedBounceMiles = dispB,
                         dispatchedLoadedMiles = dispL,
-                        bounceMilesStart = 0.0,
-                        bounceMilesEnd = 0.0,
-                        loadedMilesStart = 0.0,
-                        loadedMilesEnd = 0.0,
+                        bounceMilesStart = editingLoad?.bounceMilesStart ?: 0.0,
+                        bounceMilesEnd = actBounce,
+                        loadedMilesStart = editingLoad?.loadedMilesStart ?: 0.0,
+                        loadedMilesEnd = actLoaded,
                         percentageRate = ratePct.toDoubleOrNull() ?: 31.0,
                         loadPay = loadPay.toDoubleOrNull() ?: 0.0,
                         tarpType = tChar,
@@ -858,9 +873,10 @@ fun LoadEntryScreen(
                         isGoingHome = isGoingHome,
                         isTrainingWeek = isTrainingWeek,
                         trainerPayRate = resolvedTrainerRate,
-                        pickupTimestamp = System.currentTimeMillis(),
-                        tripState = "ACTIVE_BOUNCE",
+                        pickupTimestamp = editingLoad?.pickupTimestamp ?: System.currentTimeMillis(),
+                        tripState = editingLoad?.tripState ?: "ACTIVE_BOUNCE",
                         tripNotes = tripNotes.ifBlank { null },
+                        deliveryTimestamp = editingLoad?.deliveryTimestamp,
                         shipperName = if (sRawPaste.isNotBlank()) sRawPaste.trim() else sName,
                         shipperLat = sLat,
                         shipperLong = sLong,
@@ -874,13 +890,18 @@ fun LoadEntryScreen(
                         consigneeApptTimestamp = cApptTimestamp,
                         consigneeApptType = cApptType
                     )
-                    TrackingService.resetTrackingState()
-                    TrackingService.activeProNumber = proNum.trim()
-                    TrackingService.targetLat = sLat
-                    TrackingService.targetLong = sLong
-                    TrackingService.targetName = sName
-                    TrackingService.isGeofenceActive = true
-                    ContextCompat.startForegroundService(ctx, Intent(ctx, TrackingService::class.java))
+                    if (editingLoad == null) {
+                        TrackingService.resetTrackingState()
+                        TrackingService.activeProNumber = proNum.trim()
+                        TrackingService.targetLat = sLat
+                        TrackingService.targetLong = sLong
+                        TrackingService.targetName = sName
+                        TrackingService.isGeofenceActive = true
+                        ContextCompat.startForegroundService(ctx, Intent(ctx, TrackingService::class.java))
+                    } else {
+                        if (actBounce > 0.0) TrackingService.totalBounceMilesTracked.value = actBounce
+                        if (actLoaded > 0.0) TrackingService.totalLoadedMilesTracked.value = actLoaded
+                    }
                     processSave(draftData)
                 }
             },
