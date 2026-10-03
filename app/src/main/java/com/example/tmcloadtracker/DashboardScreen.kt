@@ -189,19 +189,19 @@ fun DashboardScreen(
 
                             val isAtHome = activeTrip.tripState == "PAUSED_AT_HOME"
 
-                            val actualBounce = if (liveBounceMiles > 0.0) maxOf(liveBounceMiles, activeTrip.bounceMilesEnd) else activeTrip.bounceMilesEnd
+                            val displayBounceMiles = maxOf(liveBounceMiles, activeTrip.bounceMilesEnd)
                             val bounceOorPct = if (activeTrip.isGoingHome || activeTrip.dispatchedBounceMiles <= 0.0) {
                                 0.0
                             } else {
-                                val extraBounce = maxOf(0.0, actualBounce - activeTrip.dispatchedBounceMiles)
+                                val extraBounce = maxOf(0.0, displayBounceMiles - activeTrip.dispatchedBounceMiles)
                                 (extraBounce / activeTrip.dispatchedBounceMiles) * 100.0
                             }
 
-                            val actualLoaded = if (liveLoadedMiles > 0.0) maxOf(liveLoadedMiles, activeTrip.loadedMilesEnd) else activeTrip.loadedMilesEnd
+                            val displayLoadedMiles = maxOf(liveLoadedMiles, activeTrip.loadedMilesEnd)
                             val loadedOorPct = if (activeTrip.isGoingHome || activeTrip.dispatchedLoadedMiles <= 0.0) {
                                 0.0
                             } else {
-                                val extraLoaded = maxOf(0.0, actualLoaded - activeTrip.dispatchedLoadedMiles)
+                                val extraLoaded = maxOf(0.0, displayLoadedMiles - activeTrip.dispatchedLoadedMiles)
                                 (extraLoaded / activeTrip.dispatchedLoadedMiles) * 100.0
                             }
 
@@ -227,7 +227,7 @@ fun DashboardScreen(
                                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                         Text("Tracked Bounce", color = MaterialTheme.colorScheme.onTertiaryContainer)
                                         Text(
-                                            "${String.format(Locale.US, "%.1f", liveBounceMiles)} mi (${String.format(Locale.US, "%.1f", bounceOorPct)}%)",
+                                            "${String.format(Locale.US, "%.1f", displayBounceMiles)} mi (${String.format(Locale.US, "%.1f", bounceOorPct)}%)",
                                             style = MaterialTheme.typography.titleMedium,
                                             color = if (bounceOorPct > 0.0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
                                         )
@@ -235,7 +235,7 @@ fun DashboardScreen(
                                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                         Text("Tracked Loaded", color = MaterialTheme.colorScheme.onTertiaryContainer)
                                         Text(
-                                            "${String.format(Locale.US, "%.1f", liveLoadedMiles)} mi (${String.format(Locale.US, "%.1f", loadedOorPct)}%)",
+                                            "${String.format(Locale.US, "%.1f", displayLoadedMiles)} mi (${String.format(Locale.US, "%.1f", loadedOorPct)}%)",
                                             style = MaterialTheme.typography.titleMedium,
                                             color = if (loadedOorPct > 0.0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
                                         )
