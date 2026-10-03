@@ -56,6 +56,7 @@ class TrackingService : Service() {
 
         var currentLatitude: Double? = null
         var currentLongitude: Double? = null
+        var departureGraceTimeMs: Long = 0L
 
         fun saveState(context: Context) {
             val prefs = context.getSharedPreferences("tracking_service_prefs", MODE_PRIVATE)
@@ -70,6 +71,7 @@ class TrackingService : Service() {
                 putBoolean("isGeofenceActive", isGeofenceActive)
                 putFloat("totalBounceMilesTracked", totalBounceMilesTracked.value.toFloat())
                 putFloat("totalLoadedMilesTracked", totalLoadedMilesTracked.value.toFloat())
+                putLong("departureGraceTimeMs", departureGraceTimeMs)
                 apply()
             }
         }
@@ -96,6 +98,7 @@ class TrackingService : Service() {
             if (tName != null) targetName = tName
 
             isGeofenceActive = prefs.getBoolean("isGeofenceActive", isGeofenceActive)
+            departureGraceTimeMs = prefs.getLong("departureGraceTimeMs", 0L)
 
             val savedBounce = prefs.getFloat("totalBounceMilesTracked", 0f)
             if (totalBounceMilesTracked.value == 0.0 && savedBounce > 0f) {
@@ -107,7 +110,7 @@ class TrackingService : Service() {
             }
         }
 
-        fun resetTrackingState() {
+        fun resetTrackingState(context: Context? = null) {
             totalBounceMilesTracked.value = 0.0
             totalLoadedMilesTracked.value = 0.0
             activeSegment = "Bounce"
@@ -115,6 +118,14 @@ class TrackingService : Service() {
             isGeofenceActive = false
             currentLatitude = null
             currentLongitude = null
+            departureGraceTimeMs = 0L
+            if (context != null) {
+                try {
+                    context.getSharedPreferences("tracking_service_prefs", MODE_PRIVATE).edit().clear().apply()
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
         }
     }
 
@@ -237,6 +248,11 @@ class TrackingService : Service() {
 
         // 2. Standard Facility Geofencing (Pro Feature)
         if (!isProUser || !isGeofenceActive || targetLat == null || targetLong == null) return
+
+        // Departure Grace Guard: Suppress re-triggering for 5 minutes after departing facility
+        if (departureGraceTimeMs > 0L && System.currentTimeMillis() - departureGraceTimeMs < 300000L) {
+            return
+        }
 
         val targetLoc = Location("").apply {
             latitude = targetLat!!

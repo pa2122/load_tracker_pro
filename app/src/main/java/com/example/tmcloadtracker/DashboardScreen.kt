@@ -412,6 +412,7 @@ fun DashboardScreen(
                                                 TrackingService.targetLong = activeTrip.consigneeLong
                                                 TrackingService.targetName = activeTrip.consigneeName ?: "Consignee"
                                                 TrackingService.isGeofenceActive = activeTrip.consigneeLat != null
+                                                TrackingService.departureGraceTimeMs = System.currentTimeMillis()
                                                 onUpdateTripClick(activeTrip.copy(tripState = "ACTIVE_LOADED", dockArrivalTime = null))
                                             },
                                             modifier = Modifier.fillMaxWidth()
@@ -707,8 +708,15 @@ fun DashboardScreen(
                         }
                     },
             confirmButton = {
+                val ctx = LocalContext.current
                 Button(onClick = {
                     onUpdateTripClick(trip)
+                    TrackingService.resetTrackingState(ctx)
+                    try {
+                        ctx.stopService(Intent(ctx, TrackingService::class.java))
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
                     showCompletionDialog = false
                     selectedTripData = null
                 }) { Text("Confirm & File Log") }
