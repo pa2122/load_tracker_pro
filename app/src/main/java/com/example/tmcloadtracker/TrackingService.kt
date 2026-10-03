@@ -68,6 +68,8 @@ class TrackingService : Service() {
                 putFloat("targetLong", targetLong?.toFloat() ?: -999f)
                 putString("targetName", targetName)
                 putBoolean("isGeofenceActive", isGeofenceActive)
+                putFloat("totalBounceMilesTracked", totalBounceMilesTracked.value.toFloat())
+                putFloat("totalLoadedMilesTracked", totalLoadedMilesTracked.value.toFloat())
                 apply()
             }
         }
@@ -94,6 +96,15 @@ class TrackingService : Service() {
             if (tName != null) targetName = tName
 
             isGeofenceActive = prefs.getBoolean("isGeofenceActive", isGeofenceActive)
+
+            val savedBounce = prefs.getFloat("totalBounceMilesTracked", 0f)
+            if (totalBounceMilesTracked.value == 0.0 && savedBounce > 0f) {
+                totalBounceMilesTracked.value = savedBounce.toDouble()
+            }
+            val savedLoaded = prefs.getFloat("totalLoadedMilesTracked", 0f)
+            if (totalLoadedMilesTracked.value == 0.0 && savedLoaded > 0f) {
+                totalLoadedMilesTracked.value = savedLoaded.toDouble()
+            }
         }
 
         fun resetTrackingState() {
@@ -144,29 +155,31 @@ class TrackingService : Service() {
         locationCallback = object : LocationCallback() {
             override fun onLocationResult(locationResult: LocationResult) {
                 for (location in locationResult.locations) {
-                    currentLatitude = location.latitude
-                    currentLongitude = location.longitude
+                    if (GpsLocationFilter.isValidLocation(location, lastLocation)) {
+                        currentLatitude = location.latitude
+                        currentLongitude = location.longitude
 
-                    if (lastLocation != null) {
-                        val distanceMeters = lastLocation!!.distanceTo(location)
-                        val milesDriven = distanceMeters * 0.000621371
+                        if (lastLocation != null) {
+                            val distanceMeters = lastLocation!!.distanceTo(location)
+                            val milesDriven = distanceMeters * 0.000621371
 
-                        if (activeSegment == "Bounce") {
-                            totalBounceMilesTracked.value += milesDriven
-                        } else if (activeSegment == "Loaded") {
-                            totalLoadedMilesTracked.value += milesDriven
+                            if (activeSegment == "Bounce") {
+                                totalBounceMilesTracked.value += milesDriven
+                            } else if (activeSegment == "Loaded") {
+                                totalLoadedMilesTracked.value += milesDriven
+                            }
+                            updateNotification()
+                            checkGeofence(location)
+
+                            // 📍 Record Breadcrumb every 2.5 minutes for smooth route map geometry
+                            val now = System.currentTimeMillis()
+                            if ((activeProNumber != null) && (activeSegment != "Paused") && (now - lastBreadcrumbTime > 150000)) {
+                                saveBreadcrumb(location)
+                                lastBreadcrumbTime = now
+                            }
                         }
-                        updateNotification()
-                        checkGeofence(location)
-
-                        // 📍 Record Breadcrumb every 2.5 minutes for smooth route map geometry
-                        val now = System.currentTimeMillis()
-                        if ((activeProNumber != null) && (activeSegment != "Paused") && (now - lastBreadcrumbTime > 150000)) {
-                            saveBreadcrumb(location)
-                            lastBreadcrumbTime = now
-                        }
+                        lastLocation = location
                     }
-                    lastLocation = location
                 }
             }
         }
@@ -303,9 +316,9 @@ class TrackingService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
+        saveState(this)
         fusedLocationClient.removeLocationUpdates(locationCallback)
         lastLocation = null
-        resetTrackingState()
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
