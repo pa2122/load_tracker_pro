@@ -1,3 +1,6 @@
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import java.util.Properties
 
 plugins {
@@ -9,7 +12,7 @@ plugins {
 
 android {
     namespace = "com.loadtracker.pro"
-    compileSdk = 35
+    compileSdk = 36
 
     val versionPropsFile = rootProject.file("version.properties")
     val versionProps = Properties()
@@ -26,17 +29,23 @@ android {
     val defaultGithubRepo = localProps.getProperty("GITHUB_REPO", "pa2122/load_tracker_pro")
 
     val vMajor = versionProps.getProperty("VERSION_MAJOR", "1").toInt()
-    val vMinor = versionProps.getProperty("VERSION_MINOR", "1").toInt()
+    val vMinor = versionProps.getProperty("VERSION_MINOR", "0").toInt()
     val vPatch = versionProps.getProperty("VERSION_PATCH", "0").toInt()
-    val vBuild = versionProps.getProperty("VERSION_BUILD", "4").toInt()
+    val vBuild = versionProps.getProperty("VERSION_BUILD", "100").toInt()
 
     val vName = "$vMajor.$vMinor.$vPatch"
-    val vCode = vBuild
+    // Automated Date/Timestamp Version Code (Format: YYMMDDHH, e.g. 26031514)
+    val dateVersionCode = try {
+        SimpleDateFormat("yyMMddHH", Locale.US).format(Date()).toInt()
+    } catch (_: Exception) {
+        vBuild
+    }
+    val vCode = maxOf(vBuild, dateVersionCode)
 
     defaultConfig {
         applicationId = "com.loadtracker.pro"
         minSdk = 27
-        targetSdk = 35
+        targetSdk = 36
         versionCode = vCode
         versionName = vName
 
