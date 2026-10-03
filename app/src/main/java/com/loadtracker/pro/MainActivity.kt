@@ -517,6 +517,15 @@ class MainActivity : ComponentActivity() {
                                             }
                                         )
 
+                                        NavigationDrawerItem(
+                                            label = { Text("📅 Form 2290 HVUT & 5k Exemption") },
+                                            selected = currentScreen == "hvut_tracker",
+                                            onClick = {
+                                                scope.launch { drawerState.close() }
+                                                currentScreen = "hvut_tracker"
+                                            }
+                                        )
+
                                         val hasActiveTrip = savedLoads.any { it.tripState != "COMPLETED" && it.tripState != "NOT_STARTED" }
                                         if (hasActiveTrip) {
                                             NavigationDrawerItem(
@@ -1198,6 +1207,13 @@ class MainActivity : ComponentActivity() {
                                                 dvirEntries = dvirList,
                                                 onSaveDvir = { entry -> viewModel.saveDvir(entry) },
                                                 onDeleteDvir = { entry -> viewModel.deleteDvir(entry) },
+                                                onBack = { currentScreen = "dashboard" }
+                                            )
+                                        }
+
+                                        "hvut_tracker" -> {
+                                            HvutTrackerScreen(
+                                                loads = savedLoads,
                                                 onBack = { currentScreen = "dashboard" }
                                             )
                                         }
