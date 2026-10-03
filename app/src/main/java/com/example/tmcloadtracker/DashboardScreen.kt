@@ -267,6 +267,28 @@ fun DashboardScreen(
                                     }
                                 }
 
+                                val phoneMatchResult = extractPhoneNumber(activeTrip.tripNotes ?: "")
+                                if (phoneMatchResult != null) {
+                                    val (dialableNumber, displayString) = phoneMatchResult
+                                    Button(
+                                        onClick = {
+                                            val dialIntent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:$dialableNumber"))
+                                            try {
+                                                ctx.startActivity(dialIntent)
+                                            } catch (_: Exception) {
+                                                Toast.makeText(ctx, "No dialer app found.", Toast.LENGTH_SHORT).show()
+                                            }
+                                        },
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = MaterialTheme.colorScheme.primary,
+                                            contentColor = MaterialTheme.colorScheme.onPrimary
+                                        ),
+                                        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+                                    ) {
+                                        Text("📞 Call Shipping Office: $displayString")
+                                    }
+                                }
+
                                 if (activeTrip.tripState != "ACTIVE_BOUNCE" && activeTrip.tripState != "PAUSED_AT_HOME") {
                                     OutlinedButton(
                                         onClick = {
@@ -1578,4 +1600,29 @@ private fun launchNavigationIntent(context: Context, lat: Double?, lng: Double?,
     } else {
         Toast.makeText(context, "GPS coordinates not available for this facility.", Toast.LENGTH_SHORT).show()
     }
+}
+
+private fun extractPhoneNumber(text: String): Pair<String, String>? {
+    if (text.isBlank()) return null
+    val keywordRegex = Regex("""(?:call|contact|poc|phone|tel)\b.{0,20}?\(?\b(\d{3})\)?[-.\s]?(\d{3})[-.\s]?(\d{4})\b""", RegexOption.IGNORE_CASE)
+    val keywordMatch = keywordRegex.find(text)
+
+    if (keywordMatch != null && keywordMatch.groupValues.size >= 4) {
+        val area = keywordMatch.groupValues[1]
+        val mid = keywordMatch.groupValues[2]
+        val end = keywordMatch.groupValues[3]
+        return Pair("$area$mid$end", "($area) $mid-$end")
+    }
+
+    val standardRegex = Regex("""\(?\b(\d{3})\)?[-.\s]+(\d{3})[-.\s]+(\d{4})\b""")
+    val standardMatch = standardRegex.find(text)
+
+    if (standardMatch != null && standardMatch.groupValues.size >= 4) {
+        val area = standardMatch.groupValues[1]
+        val mid = standardMatch.groupValues[2]
+        val end = standardMatch.groupValues[3]
+        return Pair("$area$mid$end", "($area) $mid-$end")
+    }
+
+    return null
 } 
