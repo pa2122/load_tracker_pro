@@ -63,27 +63,26 @@ fun LedgerScreen(
         allLoads.filter { it.tripState == "COMPLETED" }
     }
 
-    // P&L Metrics Calculation
-    val totalGross = completedLoads.sumOf { it.loadPay }
-    val totalLoadedMiles = completedLoads.sumOf { if (it.loadedMilesEnd > 0) it.loadedMilesEnd else it.dispatchedLoadedMiles }
-    val totalBounceMiles = completedLoads.sumOf { if (it.bounceMilesEnd > 0) it.bounceMilesEnd else it.dispatchedBounceMiles }
-    val totalMiles = totalLoadedMiles + totalBounceMiles
+    val db = remember { AppDatabase.getDatabase(ctx) }
+    val fuelEntries by db.loadDao().getAllFuelEntries().collectAsState(initial = emptyList())
 
-    val rpm = if (totalLoadedMiles > 0) totalGross / totalLoadedMiles else 0.0
-
-    // Overall Driver Take-Home calculation
-    val totalTakeHome = completedLoads.sumOf { load ->
-        val cut = load.loadPay * (load.percentageRate / 100.0)
-        val tarp = when (load.tarpType) {
-            "S" -> if (load.isPreTarped) 15.0 else 30.0
-            "L" -> if (load.isPreTarped) 25.0 else 50.0
-            else -> 0.0
-        }
-        val dh = if (load.dispatchedBounceMiles >= 150.0) load.dispatchedBounceMiles * 0.20 else 0.0
-        val trainer = if (load.isTrainingWeek) load.trainerPayRate else 0.0
-        cut + tarp + dh + trainer
+    val businessSummary = remember(completedLoads, fuelEntries) {
+        OwnerOpBusinessCalculator.calculateBusinessSummary(completedLoads, fuelEntries)
     }
 
+    // P&L Metrics Calculation
+    val totalGross = businessSummary.totalGrossRevenue
+    val totalTakeHome = businessSummary.totalDriverTakeHome
+    val totalFuelDefCost = businessSummary.totalFuelAndDefExpenses
+    val totalMiles = businessSummary.totalMilesDriven
+    val netProfit = businessSummary.netProfit
+    val marginPct = businessSummary.profitMarginPercentage
+    val cpm = businessSummary.costPerMile
+
+    val totalLoadedMiles = completedLoads.sumOf { if (it.loadedMilesEnd > 0) it.loadedMilesEnd else it.dispatchedLoadedMiles }
+    val totalBounceMiles = completedLoads.sumOf { if (it.bounceMilesEnd > 0) it.bounceMilesEnd else it.dispatchedBounceMiles }
+
+    val rpm = if (totalLoadedMiles > 0) totalGross / totalLoadedMiles else 0.0
     val netRpm = if (totalMiles > 0) totalTakeHome / totalMiles else 0.0
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -139,7 +138,7 @@ fun LedgerScreen(
                     modifier = Modifier.padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Text("📈 Owner-Op Profit & Loss Summary", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                    Text("💼 Owner-Op Business P&L Summary", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer)
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -150,8 +149,8 @@ fun LedgerScreen(
                             Text("$${String.format(Locale.US, "%.2f", totalGross)}", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                         }
                         Column(horizontalAlignment = Alignment.End) {
-                            Text("Driver Take-Home", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onPrimaryContainer)
-                            Text("$${String.format(Locale.US, "%.2f", totalTakeHome)}", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.tertiary)
+                            Text("Net Operating Profit", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                            Text("$${String.format(Locale.US, "%.2f", netProfit)} (${String.format(Locale.US, "%.1f", marginPct)}%)", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.tertiary)
                         }
                     }
 
@@ -161,8 +160,16 @@ fun LedgerScreen(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Text("Gross RPM: $${String.format(Locale.US, "%.2f", rpm)}/mi", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer)
-                        Text("Net RPM: $${String.format(Locale.US, "%.2f", netRpm)}/mi", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                        Text("Fuel & DEF Expenses: $${String.format(Locale.US, "%.2f", totalFuelDefCost)}", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                        Text("Operating CPM: $${String.format(Locale.US, "%.2f", cpm)}/mi", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("Gross RPM: $${String.format(Locale.US, "%.2f", rpm)}/mi", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                        Text("Net RPM: $${String.format(Locale.US, "%.2f", netRpm)}/mi", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer)
                     }
                     Text("Total Miles Tracked: ${totalMiles.toInt()} mi (${totalLoadedMiles.toInt()} Loaded / ${totalBounceMiles.toInt()} Bounce)", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onPrimaryContainer)
                 }
