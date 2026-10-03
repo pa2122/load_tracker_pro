@@ -157,23 +157,33 @@ class MainActivity : ComponentActivity() {
 
                     var isProUser by remember { mutableStateOf(value = true) }
 
-                    var defPercent by remember { mutableStateOf(value = "31.0") }
-                    var tarp8Pay by remember { mutableStateOf(value = "50.0") }
-                    var tarp4Pay by remember { mutableStateOf(value = "30.0") }
-                    var extraStopPay by remember { mutableStateOf(value = "0.0") }
-                    var homeBase by remember { mutableStateOf(value = "15381 TX-198, Mabank, TX 75147") }
-                    var homeRawPaste by remember { mutableStateOf(value = "15381 TX-198, Mabank, TX 75147") }
+                    val devPrefs = remember { getSharedPreferences("dev_prefs", MODE_PRIVATE) }
+
+                    val initDefPercent = remember { devPrefs.getString("def_percent", "31.0") ?: "31.0" }
+                    val initTarp8 = remember { devPrefs.getString("tarp_8_pay", "50.0") ?: "50.0" }
+                    val initTarp4 = remember { devPrefs.getString("tarp_4_pay", "40.0") ?: "40.0" }
+                    val initExtraStop = remember { devPrefs.getString("extra_stop_pay", "0.0") ?: "0.0" }
+                    val initHomeRaw = remember { devPrefs.getString("home_raw_paste", "15381 TX-198, Mabank, TX 75147") ?: "15381 TX-198, Mabank, TX 75147" }
+                    val initIsTraining = remember { devPrefs.getBoolean("is_training_active", false) }
+                    val initTrainerRate = remember { devPrefs.getString("flat_trainer_pay_rate", "200.0") ?: "200.0" }
+
+                    var defPercent by remember { mutableStateOf(initDefPercent) }
+                    var tarp8Pay by remember { mutableStateOf(initTarp8) }
+                    var tarp4Pay by remember { mutableStateOf(initTarp4) }
+                    var extraStopPay by remember { mutableStateOf(initExtraStop) }
+                    var homeBase by remember { mutableStateOf(initHomeRaw) }
+                    var homeRawPaste by remember { mutableStateOf(initHomeRaw) }
                     var homeLat by remember { mutableStateOf<Double?>(value = 32.3021) }
                     var homeLong by remember { mutableStateOf<Double?>(value = -96.1116) }
                     var isHomeVerified by remember { mutableStateOf(value = true) }
 
-                    var savedDefPercent by remember { mutableStateOf(value = "31.0") }
-                    var savedTarp8Pay by remember { mutableStateOf(value = "50.0") }
-                    var savedTarp4Pay by remember { mutableStateOf(value = "30.0") }
-                    var savedExtraStopPay by remember { mutableStateOf(value = "0.0") }
-                    var savedHomeRawPaste by remember { mutableStateOf(value = "15381 TX-198, Mabank, TX 75147") }
-                    var savedIsTrainingActive by remember { mutableStateOf(value = false) }
-                    var savedFlatTrainerPayRate by remember { mutableStateOf(value = "200.0") }
+                    var savedDefPercent by remember { mutableStateOf(initDefPercent) }
+                    var savedTarp8Pay by remember { mutableStateOf(initTarp8) }
+                    var savedTarp4Pay by remember { mutableStateOf(initTarp4) }
+                    var savedExtraStopPay by remember { mutableStateOf(initExtraStop) }
+                    var savedHomeRawPaste by remember { mutableStateOf(initHomeRaw) }
+                    var savedIsTrainingActive by remember { mutableStateOf(initIsTraining) }
+                    var savedFlatTrainerPayRate by remember { mutableStateOf(initTrainerRate) }
 
                     var showDevOptionsDialog by remember { mutableStateOf(value = false) }
                     var showDevAccessRequestDialog by remember { mutableStateOf(value = false) }
@@ -185,8 +195,6 @@ class MainActivity : ComponentActivity() {
 
                     var initialRxBytes by remember { mutableLongStateOf(value = TrafficStats.getUidRxBytes(Process.myUid())) }
                     var initialTxBytes by remember { mutableLongStateOf(value = TrafficStats.getUidTxBytes(Process.myUid())) }
-
-                    val devPrefs = remember { getSharedPreferences("dev_prefs", MODE_PRIVATE) }
                     var savedTraineeTier by remember { mutableStateOf(value = devPrefs.getString("trainee_tier", "inexperienced") ?: "inexperienced") }
                     var savedTrainingWeek by remember { mutableIntStateOf(value = devPrefs.getInt("training_week", 1)) }
                     var savedIsTmcBoostActive by remember { mutableStateOf(value = devPrefs.getBoolean("is_tmc_boost_active", true)) }
@@ -403,7 +411,17 @@ class MainActivity : ComponentActivity() {
                                                     savedHomeRawPaste = homeRawPaste
                                                     savedIsTrainingActive = isTrainingActive
                                                     savedFlatTrainerPayRate = flatTrainerPayRate
-                                                    devPrefs.edit().putString("extra_stop_pay", extraStopPay).apply()
+                                                    devPrefs.edit().apply {
+                                                        putString("def_percent", defPercent)
+                                                        putString("tarp_8_pay", tarp8Pay)
+                                                        putString("tarp_4_pay", tarp4Pay)
+                                                        putString("extra_stop_pay", extraStopPay)
+                                                        putString("home_raw_paste", homeRawPaste)
+                                                        putBoolean("is_training_active", isTrainingActive)
+                                                        putString("flat_trainer_pay_rate", flatTrainerPayRate)
+                                                        apply()
+                                                    }
+                                                    resolveHomeAddress(homeRawPaste)
                                                     scope.launch { drawerState.close() }
                                                 }
                                             ) {
