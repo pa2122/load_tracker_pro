@@ -52,6 +52,21 @@ class LoadViewModel(application: Application) :
 
     val allBreadcrumbs: Flow<List<TripBreadcrumb>> = loadDao.getAllBreadcrumbs()
 
+    // 📋 Pre-Trip DVIR
+    val allDvirEntries: Flow<List<DvirEntry>> = loadDao.getAllDvirEntries()
+
+    fun saveDvir(entry: DvirEntry) {
+        viewModelScope.launch {
+            loadDao.insertDvirEntry(entry)
+        }
+    }
+
+    fun deleteDvir(entry: DvirEntry) {
+        viewModelScope.launch {
+            loadDao.deleteDvirEntry(entry)
+        }
+    }
+
     init {
         viewModelScope.launch {
             loadDao.getAllLoads().collect { list ->

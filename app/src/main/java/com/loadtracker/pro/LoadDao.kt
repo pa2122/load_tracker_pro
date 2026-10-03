@@ -64,6 +64,16 @@ interface LoadDao {
 
     @Query("SELECT tripNotes, pickupTimestamp, proNumber FROM trucking_loads WHERE (shipperName = :name OR consigneeName = :name) AND tripNotes IS NOT NULL")
     fun getNotesForFacility(name: String): Flow<List<FacilityNote>>
+
+    // 📋 Pre-Trip DVIR Queries
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertDvirEntry(entry: DvirEntry)
+
+    @Query("SELECT * FROM dvir_entries ORDER BY timestamp DESC")
+    fun getAllDvirEntries(): Flow<List<DvirEntry>>
+
+    @Delete
+    suspend fun deleteDvirEntry(entry: DvirEntry)
 }
 
 data class FacilityNote(

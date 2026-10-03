@@ -11,7 +11,8 @@
 
 ## 2. 💬 Communication & Execution Protocol
 - **Answer First, Act Later:** Always address the user's questions or thoughts directly first. Provide an analysis or proposed design.
-- **Wait for Confirmation:** Do **not** modify code, push Git commits, or make GitHub API calls (creating issues, milestones, etc.) until the user explicitly confirms or says "go ahead" / "do it".
+- **Issue Breakdown & Confirmation:** Break down each issue step-by-step first, then wait for explicit user confirmation ("go ahead" / "do it") before writing or modifying code.
+- **Automated Verification & Unit Tests:** For any core functionality, business logic, or monetary/odometer calculations, you **must** write or update an automated unit test and verify it with real test data.
 - **Exceptions:** Reading files, semantic searching, and compiling code do not require prior permission.
 
 ## 3. 🐙 GitHub Issue Workflow

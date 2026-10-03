@@ -508,6 +508,15 @@ class MainActivity : ComponentActivity() {
                                             }
                                         )
 
+                                        NavigationDrawerItem(
+                                            label = { Text("📋 Pre-Trip Inspection (DVIR)") },
+                                            selected = currentScreen == "dvir",
+                                            onClick = {
+                                                scope.launch { drawerState.close() }
+                                                currentScreen = "dvir"
+                                            }
+                                        )
+
                                         val hasActiveTrip = savedLoads.any { it.tripState != "COMPLETED" && it.tripState != "NOT_STARTED" }
                                         if (hasActiveTrip) {
                                             NavigationDrawerItem(
@@ -1179,6 +1188,16 @@ class MainActivity : ComponentActivity() {
                                         "facility_search" -> {
                                             FacilitySearchScreen(
                                                 viewModel = viewModel,
+                                                onBack = { currentScreen = "dashboard" }
+                                            )
+                                        }
+
+                                        "dvir" -> {
+                                            val dvirList by viewModel.allDvirEntries.collectAsState(initial = emptyList())
+                                            PreTripDvirScreen(
+                                                dvirEntries = dvirList,
+                                                onSaveDvir = { entry -> viewModel.saveDvir(entry) },
+                                                onDeleteDvir = { entry -> viewModel.deleteDvir(entry) },
                                                 onBack = { currentScreen = "dashboard" }
                                             )
                                         }
