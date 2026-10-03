@@ -492,24 +492,6 @@ fun LoadEntryScreen(
         }
     }
 
-    fun processSave(loadToSave: CurrentLoad) {
-        if (editingLoad == null && existingProNumbers.contains(loadToSave.proNumber)) {
-            pendingDuplicateLoad = loadToSave
-            showDuplicateWarningDialog = true
-            return
-        }
-
-        val dateToCheck = Instant.ofEpochMilli(loadToSave.pickupTimestamp)
-            .atZone(ZoneId.systemDefault()).toLocalDate()
-
-        if (!isManualEntry && (dateToCheck.dayOfWeek == DayOfWeek.FRIDAY) && !loadToSave.isGoingHome) {
-            pendingLoadSave = loadToSave
-            showFridayReminder = true
-        } else {
-            onSaveClick(loadToSave)
-        }
-    }
-
     Column(
         modifier = Modifier
             .fillMaxSize()
