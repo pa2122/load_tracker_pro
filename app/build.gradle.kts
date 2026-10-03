@@ -9,7 +9,7 @@ plugins {
 
 android {
     namespace = "com.loadtracker.pro"
-    compileSdk = 35
+    compileSdk = 36
 
     val versionPropsFile = rootProject.file("version.properties")
     val versionProps = Properties()
@@ -37,7 +37,7 @@ android {
     defaultConfig {
         applicationId = "com.loadtracker.pro"
         minSdk = 27
-        targetSdk = 35
+        targetSdk = 36
         versionCode = vCode
         versionName = vName
 
