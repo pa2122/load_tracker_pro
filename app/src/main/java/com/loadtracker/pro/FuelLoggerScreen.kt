@@ -79,12 +79,15 @@ fun FuelLoggerScreen(
     val db = remember { AppDatabase.getDatabase(ctx) }
 
     val fuelEntries by db.loadDao().getAllFuelEntries().collectAsState(initial = emptyList())
+    val breadcrumbs by db.loadDao().getAllBreadcrumbs().collectAsState(initial = emptyList())
 
     var showAddFuelDialog by remember { mutableStateOf(false) }
     var entryToDelete by remember { mutableStateOf<FuelEntry?>(null) }
     var selectedQuarterFilter by remember { mutableStateOf("ALL") }
 
     val currentYear = remember { LocalDate.now().year }
+
+    val stateMileageMap = remember(breadcrumbs) { IftaStateDetector.calculateStateMileage(breadcrumbs) }
 
     val filteredFuelEntries = remember(fuelEntries, selectedQuarterFilter, currentYear) {
         if (selectedQuarterFilter == "ALL") {
@@ -215,8 +218,8 @@ fun FuelLoggerScreen(
                 }
             }
 
-            // 2. IFTA State Fuel Tax Summary Card
-            if (stateIftaMap.isNotEmpty()) {
+            // 2. IFTA State Fuel Tax & Mileage Summary Card
+            if (stateIftaMap.isNotEmpty() || stateMileageMap.isNotEmpty()) {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
@@ -225,23 +228,29 @@ fun FuelLoggerScreen(
                         modifier = Modifier.padding(12.dp),
                         verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        Text("🗺️ IFTA Fuel Tax Summary by State ($selectedQuarterFilter)", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            stateIftaMap.forEach { (stateCode, entries) ->
-                                val stateGal = entries.sumOf { it.gallons }
-                                Surface(
-                                    color = MaterialTheme.colorScheme.surface,
-                                    shape = RoundedCornerShape(6.dp),
-                                    modifier = Modifier.padding(2.dp)
+                        Text("🗺️ IFTA State Tax & Mileage Audit ($selectedQuarterFilter)", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                        
+                        val allStates = (stateIftaMap.keys + stateMileageMap.keys).toSet().sorted()
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            allStates.forEach { stateCode ->
+                                val stateEntries = stateIftaMap[stateCode] ?: emptyList()
+                                val stateGal = stateEntries.sumOf { it.gallons }
+                                val stateMiles = stateMileageMap[stateCode] ?: 0.0
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
+                                    Surface(
+                                        color = MaterialTheme.colorScheme.primary,
+                                        shape = RoundedCornerShape(4.dp)
+                                    ) {
+                                        Text(stateCode, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
+                                    }
                                     Text(
-                                        "$stateCode: ${String.format(Locale.US, "%.1f", stateGal)} gal",
-                                        style = MaterialTheme.typography.labelMedium,
-                                        fontWeight = FontWeight.Bold,
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                        "Fuel: ${String.format(Locale.US, "%.1f", stateGal)} gal | Miles: ${String.format(Locale.US, "%.1f", stateMiles)} mi",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        fontWeight = FontWeight.Bold
                                     )
                                 }
                             }
