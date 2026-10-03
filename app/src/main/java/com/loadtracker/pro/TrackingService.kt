@@ -56,6 +56,7 @@ class TrackingService : Service() {
 
         var currentLatitude: Double? = null
         var currentLongitude: Double? = null
+        var detectedTruckStop: String? = null
 
         fun saveState(context: Context) {
             val prefs = context.getSharedPreferences("tracking_service_prefs", MODE_PRIVATE)
@@ -257,6 +258,12 @@ class TrackingService : Service() {
                     }
                 }
             }
+        }
+        // 3. Truck Stop Fueling Prompt Geofence
+        val nearbyTruckStop = TruckStopGeofenceEngine.findNearbyTruckStop(currentLocation.latitude, currentLocation.longitude)
+        if (nearbyTruckStop != null && activeSegment != "Paused" && activeSegment != "PAUSED_AT_HOME") {
+            detectedTruckStop = nearbyTruckStop.name
+            updateNotification()
         }
     }
 
