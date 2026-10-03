@@ -12,5 +12,7 @@ data class FuelEntry(
     val pricePerGallon: Double,
     val state: String,
     val stationName: String,
-    val odometer: Double
+    val odometer: Double,
+    val defGallons: Double = 0.0,
+    val defCost: Double = 0.0
 )

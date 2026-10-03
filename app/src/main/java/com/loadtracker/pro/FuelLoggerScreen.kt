@@ -351,6 +351,8 @@ fun FuelLoggerScreen(
         var inputState by remember { mutableStateOf("TX") }
         var inputStation by remember { mutableStateOf("Love's") }
         var inputOdometer by remember { mutableStateOf("") }
+        var inputDefGallons by remember { mutableStateOf("") }
+        var inputDefCost by remember { mutableStateOf("") }
 
         var stationDropdownExpanded by remember { mutableStateOf(false) }
         val stationOptions = listOf("Love's", "Pilot Flying J", "TA / Petro", "Speedway", "Kwik Trip", "Other")
@@ -429,9 +431,28 @@ fun FuelLoggerScreen(
                         onValueChange = { inputOdometer = it.filter { char -> char.isDigit() } },
                         label = { Text("Odometer Reading (mi)") },
                         singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Next),
                         modifier = Modifier.fillMaxWidth()
                     )
+
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(
+                            value = inputDefGallons,
+                            onValueChange = { inputDefGallons = it },
+                            label = { Text("DEF Gallons (Optional)") },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Next),
+                            modifier = Modifier.weight(1f)
+                        )
+                        OutlinedTextField(
+                            value = inputDefCost,
+                            onValueChange = { inputDefCost = it },
+                            label = { Text("DEF Cost ($)") },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
                 }
             },
             confirmButton = {
@@ -440,6 +461,8 @@ fun FuelLoggerScreen(
                         val gal = inputGallons.toDoubleOrNull()
                         val ppg = inputPpg.toDoubleOrNull()
                         val odo = inputOdometer.toDoubleOrNull()
+                        val defGalVal = inputDefGallons.toDoubleOrNull() ?: 0.0
+                        val defCostVal = inputDefCost.toDoubleOrNull() ?: 0.0
 
                         if (gal != null && ppg != null && odo != null && inputState.isNotBlank()) {
                             val totalCostCalc = gal * ppg
@@ -450,7 +473,9 @@ fun FuelLoggerScreen(
                                 pricePerGallon = ppg,
                                 state = inputState.trim().uppercase(Locale.US),
                                 stationName = inputStation,
-                                odometer = odo
+                                odometer = odo,
+                                defGallons = defGalVal,
+                                defCost = defCostVal
                             )
 
                             scope.launch(Dispatchers.IO) {
