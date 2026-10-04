@@ -51,28 +51,26 @@ fun WearActiveTripHud(
     val ctx = LocalContext.current
     var isDiagnosticLoading by remember { mutableStateOf(true) }
     var diagnosticStep by remember { mutableStateOf("⚡ Initializing Wrist HUD...") }
+    var liveDiagnostic by remember { mutableStateOf<WearConnectivityEngine.LiveDiagnosticResult?>(null) }
     
     var phoneConnectivity by remember { mutableStateOf(WearConnectivityEngine.ConnectionStatus.CONNECTED) }
     var remoteLoadPayload by remember { mutableStateOf<WearableDataSyncManager.WearTripStatePayload?>(null) }
 
-    // Diagnostic Startup Sequence
+    // Live Hardware Diagnostic Startup Sequence with 0.5s delays
     LaunchedEffect(Unit) {
-        diagnosticStep = "1. Checking Bluetooth..."
-        delay(600)
-        phoneConnectivity = WearConnectivityEngine.checkPhoneConnectivity(ctx)
-
-        if (phoneConnectivity == WearConnectivityEngine.ConnectionStatus.BLUETOOTH_OFF) {
-            isDiagnosticLoading = false
-            return@LaunchedEffect
+        val diag = WearConnectivityEngine.runLiveConnectivityDiagnostic(ctx) { stepText ->
+            diagnosticStep = stepText
+        }
+        liveDiagnostic = diag
+        phoneConnectivity = if (diag.isBluetoothEnabled && diag.connectedPhoneName != null) {
+            WearConnectivityEngine.ConnectionStatus.CONNECTED
+        } else if (!diag.isBluetoothEnabled) {
+            WearConnectivityEngine.ConnectionStatus.BLUETOOTH_OFF
+        } else {
+            WearConnectivityEngine.ConnectionStatus.PHONE_DISCONNECTED
         }
 
-        diagnosticStep = "2. Checking Phone Connection..."
-        delay(600)
-
-        diagnosticStep = "3. Checking Load Tracker Pro App..."
-        delay(600)
-
-        diagnosticStep = "4. Requesting Active Load Data..."
+        // Request active trip state from connected phone
         try {
             val nodeClient = Wearable.getNodeClient(ctx)
             val nodes = nodeClient.connectedNodes.await()
@@ -87,13 +85,20 @@ fun WearActiveTripHud(
         } catch (e: Exception) {
             e.printStackTrace()
         }
-        delay(600)
 
         isDiagnosticLoading = false
 
-        // Periodic Background Status Loop
+        // Background status poll every 3s
         while (true) {
-            phoneConnectivity = WearConnectivityEngine.checkPhoneConnectivity(ctx)
+            val updateDiag = WearConnectivityEngine.runLiveConnectivityDiagnostic(ctx) {}
+            liveDiagnostic = updateDiag
+            phoneConnectivity = if (updateDiag.isBluetoothEnabled && updateDiag.connectedPhoneName != null) {
+                WearConnectivityEngine.ConnectionStatus.CONNECTED
+            } else if (!updateDiag.isBluetoothEnabled) {
+                WearConnectivityEngine.ConnectionStatus.BLUETOOTH_OFF
+            } else {
+                WearConnectivityEngine.ConnectionStatus.PHONE_DISCONNECTED
+            }
             delay(3000L)
         }
     }
@@ -158,7 +163,7 @@ fun WearActiveTripHud(
         contentAlignment = Alignment.Center
     ) {
         if (isDiagnosticLoading) {
-            // DIAGNOSTIC STARTUP LOADING SCREEN
+            // REAL DIAGNOSTIC STARTUP LOADING SCREEN WITH LIVE DEVICE CHECKS
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -189,12 +194,17 @@ fun WearActiveTripHud(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.SpaceBetween
             ) {
-                // 1. Connection Status Badge at Top
+                // 1. Connection Status Badge at Top displaying Connected Phone Name
+                val connectedPhone = liveDiagnostic?.connectedPhoneName
                 val (statusLabel, badgeColor, textColor) = when (phoneConnectivity) {
                     WearConnectivityEngine.ConnectionStatus.BLUETOOTH_OFF -> Triple("BLUETOOTH OFF", Color(0xFFEF4444), Color(0xFFFCA5A5))
                     WearConnectivityEngine.ConnectionStatus.PHONE_DISCONNECTED -> Triple("DISCONNECTED", Color(0xFFEF4444), Color(0xFFFCA5A5))
                     WearConnectivityEngine.ConnectionStatus.APP_NOT_INSTALLED_ON_PHONE -> Triple("INSTALL ON PHONE", Color(0xFFF59E0B), Color(0xFFFDE68A))
-                    WearConnectivityEngine.ConnectionStatus.CONNECTED -> Triple("PHONE CONNECTED", Color(0xFF22C55E), Color(0xFF86EFAC))
+                    WearConnectivityEngine.ConnectionStatus.CONNECTED -> Triple(
+                        if (!connectedPhone.isNullOrBlank()) "📱 $connectedPhone" else "PHONE CONNECTED",
+                        Color(0xFF22C55E),
+                        Color(0xFF86EFAC)
+                    )
                 }
 
                 Row(
@@ -213,7 +223,8 @@ fun WearActiveTripHud(
                         style = MaterialTheme.typography.labelSmall,
                         color = textColor,
                         fontSize = 8.sp,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1
                     )
                 }
 
