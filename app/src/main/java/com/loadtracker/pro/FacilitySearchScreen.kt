@@ -29,6 +29,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -67,28 +68,24 @@ fun FacilitySearchScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text(selectedName.ifBlank { "Facility Insights" }) },
-                navigationIcon = {
-                    IconButton(onClick = {
-                        if (selectedName.isNotBlank()) {
-                            viewModel.selectFacility("")
-                        } else {
-                            onBack()
+            if (selectedName.isNotBlank()) {
+                TopAppBar(
+                    title = { Text(selectedName) },
+                    navigationIcon = {
+                        IconButton(onClick = { viewModel.selectFacility("") }) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                         }
-                    }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
-                }
-            )
+                )
+            }
         }
     ) { innerPadding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             if (selectedName.isBlank()) {
                 Text("Review historical notes for shippers and receivers.", style = MaterialTheme.typography.bodyMedium)
@@ -202,6 +199,22 @@ fun FacilitySearchScreen(
                                     .toLocalDate()
                                     .format(DateTimeFormatter.ofPattern("MM/dd/yyyy"))
                             }
+
+                            val isShipper = note.shipperName.equals(selectedName, ignoreCase = true)
+                            val isReceiver = note.consigneeName.equals(selectedName, ignoreCase = true)
+
+                            val roleBadgeText = when {
+                                isShipper -> "🏭 SHIPPER / PICKUP"
+                                isReceiver -> "🏢 RECEIVER / DELIVERY"
+                                else -> "📍 FACILITY RECORD"
+                            }
+
+                            val oppositeFacilityName = when {
+                                isShipper && note.consigneeName.isNotBlank() -> "Bound for: ${formatFacilityTitle(note.consigneeName)}"
+                                isReceiver && note.shipperName.isNotBlank() -> "Delivered from: ${formatFacilityTitle(note.shipperName)}"
+                                else -> ""
+                            }
+
                             Card(
                                 modifier = Modifier.fillMaxWidth(),
                                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
@@ -209,11 +222,28 @@ fun FacilitySearchScreen(
                                 Column(modifier = Modifier.padding(16.dp)) {
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Text("Logged Entry", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
-                                        Text(date, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
+                                        Surface(
+                                            color = if (isShipper) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.tertiary,
+                                            shape = androidx.compose.foundation.shape.RoundedCornerShape(4.dp)
+                                        ) {
+                                            Text(
+                                                roleBadgeText,
+                                                style = MaterialTheme.typography.labelMedium,
+                                                color = if (isShipper) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onTertiary,
+                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                            )
+                                        }
+                                        Text("PRO #${note.proNumber} • $date", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
                                     }
+
+                                    if (oppositeFacilityName.isNotBlank()) {
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Text(oppositeFacilityName, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
+                                    }
+
                                     Spacer(modifier = Modifier.height(8.dp))
                                     MarkdownText(
                                         markdown = note.tripNotes,
