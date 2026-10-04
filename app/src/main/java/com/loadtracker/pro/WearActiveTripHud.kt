@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -20,21 +21,77 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.google.android.gms.wearable.DataClient
+import com.google.android.gms.wearable.DataMapItem
+import com.google.android.gms.wearable.Wearable
 import java.util.Locale
 
 @Composable
 fun WearActiveTripHud(
     activeLoad: CurrentLoad?,
-    isConnectedToPhone: Boolean = true,
     onWristAction: (String) -> Unit
 ) {
+    val ctx = LocalContext.current
+    var isConnectedToPhone by remember { mutableStateOf(true) }
+    var remoteLoadPayload by remember { mutableStateOf<WearableDataSyncManager.WearTripStatePayload?>(null) }
+
+    // Listen continuously to live active_trip_state DataEvents from phone
+    DisposableEffect(Unit) {
+        val listener = DataClient.OnDataChangedListener { dataEvents ->
+            for (event in dataEvents) {
+                if (event.dataItem.uri.path == WearableDataSyncManager.PATH_ACTIVE_TRIP_STATE) {
+                    val dataMap = DataMapItem.fromDataItem(event.dataItem).dataMap
+                    val pro = dataMap.getString("proNumber", "")
+                    val state = dataMap.getString("tripState", "")
+                    val bounce = dataMap.getDouble("bounceMiles", 0.0)
+                    val loaded = dataMap.getDouble("loadedMiles", 0.0)
+                    val dockTime = dataMap.getLong("dockArrivalTime", 0L)
+
+                    if (pro.isNotBlank() && state != "COMPLETED") {
+                        remoteLoadPayload = WearableDataSyncManager.WearTripStatePayload(
+                            proNumber = pro,
+                            tripState = state,
+                            bounceMiles = bounce,
+                            loadedMiles = loaded,
+                            dockArrivalTime = dockTime
+                        )
+                    } else {
+                        remoteLoadPayload = null
+                    }
+                    isConnectedToPhone = true
+                }
+            }
+        }
+
+        Wearable.getDataClient(ctx).addListener(listener)
+
+        onDispose {
+            Wearable.getDataClient(ctx).removeListener(listener)
+        }
+    }
+
+    // Effective active load: prioritize live Wearable DataMap from phone, fallback to local DB load
+    val effectivePro = remoteLoadPayload?.proNumber ?: activeLoad?.proNumber
+    val effectiveState = remoteLoadPayload?.tripState ?: activeLoad?.tripState
+    val effectiveBounce = remoteLoadPayload?.bounceMiles ?: (if (activeLoad != null && activeLoad.bounceMilesEnd > 0) activeLoad.bounceMilesEnd else activeLoad?.dispatchedBounceMiles ?: 0.0)
+    val effectiveLoaded = remoteLoadPayload?.loadedMiles ?: (if (activeLoad != null && activeLoad.loadedMilesEnd > 0) activeLoad.loadedMilesEnd else activeLoad?.dispatchedLoadedMiles ?: 0.0)
+    val effectiveDockTime = remoteLoadPayload?.dockArrivalTime ?: activeLoad?.dockArrivalTime
+
+    val hasActiveLoad = !effectivePro.isNullOrBlank() && effectiveState != "COMPLETED"
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -44,7 +101,7 @@ fun WearActiveTripHud(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(top = 18.dp, bottom = 32.dp, start = 20.dp, end = 20.dp),
+                .padding(top = 16.dp, bottom = 36.dp, start = 22.dp, end = 22.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.SpaceBetween
         ) {
@@ -72,7 +129,7 @@ fun WearActiveTripHud(
                 )
             }
 
-            if (activeLoad == null || activeLoad.tripState == "COMPLETED") {
+            if (!hasActiveLoad) {
                 // NO ACTIVE TRIP SCREEN
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
@@ -102,14 +159,14 @@ fun WearActiveTripHud(
                     verticalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
                     Text(
-                        "PRO #${activeLoad.proNumber}",
+                        "PRO #$effectivePro",
                         style = MaterialTheme.typography.labelSmall,
                         color = Color(0xFFF59E0B), // Gold
                         fontWeight = FontWeight.Bold,
                         fontSize = 12.sp
                     )
 
-                    val statusText = when (activeLoad.tripState) {
+                    val statusText = when (effectiveState) {
                         "ACTIVE_BOUNCE" -> "EN ROUTE TO SHIPPER"
                         "ACTIVE_SHIPPER" -> "AT SHIPPER DOCK"
                         "ACTIVE_LOADED" -> "EN ROUTE TO CONSIGNEE"
@@ -133,9 +190,9 @@ fun WearActiveTripHud(
                 }
 
                 // Dock Wait Time Calculation (if at Shipper or Consignee Dock)
-                val isAtDock = activeLoad.tripState == "ACTIVE_SHIPPER" || activeLoad.tripState == "ACTIVE_CONSIGNEE"
+                val isAtDock = effectiveState == "ACTIVE_SHIPPER" || effectiveState == "ACTIVE_CONSIGNEE"
                 if (isAtDock) {
-                    val arrivalTime = activeLoad.dockArrivalTime ?: activeLoad.pickupTimestamp
+                    val arrivalTime = if (effectiveDockTime != null && effectiveDockTime > 0L) effectiveDockTime else (activeLoad?.pickupTimestamp ?: System.currentTimeMillis())
                     val elapsedMins = maxOf(0L, (System.currentTimeMillis() - arrivalTime) / 60000L)
                     val hours = elapsedMins / 60
                     val mins = elapsedMins % 60
@@ -155,26 +212,23 @@ fun WearActiveTripHud(
                     }
                 } else {
                     // Live Odometer Metrics
-                    val bounce = if (activeLoad.bounceMilesEnd > 0) activeLoad.bounceMilesEnd else activeLoad.dispatchedBounceMiles
-                    val loaded = if (activeLoad.loadedMilesEnd > 0) activeLoad.loadedMilesEnd else activeLoad.dispatchedLoadedMiles
-
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceEvenly
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text("BOUNCE", fontSize = 7.sp, color = Color(0xFF94A3B8), fontWeight = FontWeight.Bold)
-                            Text("${String.format(Locale.US, "%.1f", bounce)} mi", fontSize = 10.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                            Text("${String.format(Locale.US, "%.1f", effectiveBounce)} mi", fontSize = 10.sp, color = Color.White, fontWeight = FontWeight.Bold)
                         }
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text("LOADED", fontSize = 7.sp, color = Color(0xFF94A3B8), fontWeight = FontWeight.Bold)
-                            Text("${String.format(Locale.US, "%.1f", loaded)} mi", fontSize = 10.sp, color = Color(0xFF38BDF8), fontWeight = FontWeight.Bold)
+                            Text("${String.format(Locale.US, "%.1f", effectiveLoaded)} mi", fontSize = 10.sp, color = Color(0xFF38BDF8), fontWeight = FontWeight.Bold)
                         }
                     }
                 }
 
-                // 1-Tap Wrist Action Button
-                val (btnText, actionCmd) = when (activeLoad.tripState) {
+                // 1-Tap Wrist Action Button with Max 1 Line and Safe Padding
+                val (btnText, actionCmd) = when (effectiveState) {
                     "ACTIVE_BOUNCE" -> Pair("Arrive Shipper", WearableDataSyncManager.ACTION_ARRIVE_SHIPPER)
                     "ACTIVE_SHIPPER" -> Pair("Depart Shipper", WearableDataSyncManager.ACTION_DEPART_SHIPPER)
                     "ACTIVE_LOADED" -> Pair("Arrive Consignee", WearableDataSyncManager.ACTION_ARRIVE_CONSIGNEE)
@@ -189,11 +243,18 @@ fun WearActiveTripHud(
                         contentColor = Color.White
                     ),
                     shape = RoundedCornerShape(16.dp),
+                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
                     modifier = Modifier
-                        .fillMaxWidth(0.9f)
-                        .height(28.dp)
+                        .fillMaxWidth(0.85f)
+                        .height(30.dp)
                 ) {
-                    Text(btnText, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    Text(
+                        btnText,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        softWrap = false
+                    )
                 }
             }
         }
