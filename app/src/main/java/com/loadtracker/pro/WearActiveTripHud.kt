@@ -83,6 +83,13 @@ fun WearActiveTripHud(
         }
     }
 
+    // Reset remote payload when local DB load completes or clears
+    androidx.compose.runtime.LaunchedEffect(activeLoad) {
+        if (activeLoad == null || activeLoad.tripState == "COMPLETED") {
+            remoteLoadPayload = null
+        }
+    }
+
     // Effective active load: prioritize live Wearable DataMap from phone, fallback to local DB load
     val effectivePro = remoteLoadPayload?.proNumber ?: activeLoad?.proNumber
     val effectiveState = remoteLoadPayload?.tripState ?: activeLoad?.tripState
