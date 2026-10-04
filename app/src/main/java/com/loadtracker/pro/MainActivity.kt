@@ -97,6 +97,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.LaunchedEffect
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.ImeAction
@@ -154,6 +155,13 @@ class MainActivity : ComponentActivity() {
                     var currentScreen by remember { mutableStateOf(value = "dashboard") }
                     var tripToEdit by remember { mutableStateOf<CurrentLoad?>(value = null) }
                     var tripForMap by remember { mutableStateOf<CurrentLoad?>(value = null) }
+
+                    val backupRestoreLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+                        if (uri != null) {
+                            val (success, msg) = DatabaseBackupManager.restoreDatabase(this@MainActivity, uri)
+                            Toast.makeText(this@MainActivity, msg, Toast.LENGTH_LONG).show()
+                        }
+                    }
 
                     var isProUser by remember { mutableStateOf(value = true) }
 
@@ -651,6 +659,46 @@ class MainActivity : ComponentActivity() {
                                         modifier = Modifier.fillMaxWidth()
                                     ) {
                                         Text("Export Payload History (CSV)")
+                                    }
+
+                                    HorizontalDivider()
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Button(
+                                            onClick = {
+                                                scope.launch { drawerState.close() }
+                                                val (backupFile, msg) = DatabaseBackupManager.createDatabaseBackup(this@MainActivity)
+                                                if (backupFile != null) {
+                                                    val shareUri = DatabaseBackupManager.getShareableUri(this@MainActivity, backupFile)
+                                                    val intent = Intent(Intent.ACTION_SEND).apply {
+                                                        type = "application/x-sqlite3"
+                                                        putExtra(Intent.EXTRA_SUBJECT, "Load Tracker Pro Database Backup")
+                                                        putExtra(Intent.EXTRA_STREAM, shareUri)
+                                                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                                    }
+                                                    startActivity(Intent.createChooser(intent, "Backup Database"))
+                                                } else {
+                                                    Toast.makeText(this@MainActivity, msg, Toast.LENGTH_SHORT).show()
+                                                }
+                                            },
+                                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                                            modifier = Modifier.weight(1f)
+                                        ) {
+                                            Text("📤 Backup DB")
+                                        }
+
+                                        Button(
+                                            onClick = {
+                                                scope.launch { drawerState.close() }
+                                                backupRestoreLauncher.launch("*/*")
+                                            },
+                                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
+                                            modifier = Modifier.weight(1f)
+                                        ) {
+                                            Text("📥 Restore DB")
+                                        }
                                     }
 
                                     HorizontalDivider()
