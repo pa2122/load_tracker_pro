@@ -62,7 +62,7 @@ interface LoadDao {
     """)
     fun getAllFacilityNames(): Flow<List<String>>
 
-    @Query("SELECT tripNotes, pickupTimestamp, proNumber FROM trucking_loads WHERE (shipperName = :name OR consigneeName = :name) AND tripNotes IS NOT NULL")
+    @Query("SELECT tripNotes, pickupTimestamp, proNumber, shipperName, consigneeName FROM trucking_loads WHERE (shipperName = :name OR consigneeName = :name) AND tripNotes IS NOT NULL AND TRIM(tripNotes) != ''")
     fun getNotesForFacility(name: String): Flow<List<FacilityNote>>
 
     // 📋 Pre-Trip DVIR Queries
@@ -79,5 +79,7 @@ interface LoadDao {
 data class FacilityNote(
     val tripNotes: String,
     val pickupTimestamp: Long,
-    val proNumber: String
+    val proNumber: String,
+    val shipperName: String,
+    val consigneeName: String
 )
