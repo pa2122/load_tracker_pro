@@ -44,7 +44,7 @@ fun WearActiveTripHud(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(top = 18.dp, bottom = 14.dp, start = 18.dp, end = 18.dp),
+                .padding(top = 18.dp, bottom = 32.dp, start = 20.dp, end = 20.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.SpaceBetween
         ) {
@@ -132,21 +132,44 @@ fun WearActiveTripHud(
                     }
                 }
 
-                // Live Odometer Metrics
-                val bounce = if (activeLoad.bounceMilesEnd > 0) activeLoad.bounceMilesEnd else activeLoad.dispatchedBounceMiles
-                val loaded = if (activeLoad.loadedMilesEnd > 0) activeLoad.loadedMilesEnd else activeLoad.dispatchedLoadedMiles
+                // Dock Wait Time Calculation (if at Shipper or Consignee Dock)
+                val isAtDock = activeLoad.tripState == "ACTIVE_SHIPPER" || activeLoad.tripState == "ACTIVE_CONSIGNEE"
+                if (isAtDock) {
+                    val arrivalTime = activeLoad.dockArrivalTime ?: activeLoad.pickupTimestamp
+                    val elapsedMins = maxOf(0L, (System.currentTimeMillis() - arrivalTime) / 60000L)
+                    val hours = elapsedMins / 60
+                    val mins = elapsedMins % 60
+                    val freeMinsLeft = maxOf(0L, 120L - elapsedMins)
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceEvenly
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("BOUNCE", fontSize = 7.sp, color = Color(0xFF94A3B8), fontWeight = FontWeight.Bold)
-                        Text("${String.format(Locale.US, "%.1f", bounce)} mi", fontSize = 10.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                    Surface(
+                        color = if (elapsedMins > 120L) Color(0xFFDC2626) else Color(0xFF1E293B), // Red if in detention
+                        shape = RoundedCornerShape(4.dp)
+                    ) {
+                        Text(
+                            text = "⏱️ Dock: ${hours}h ${mins}m | Free: ${freeMinsLeft}m",
+                            fontSize = 9.sp,
+                            color = if (elapsedMins > 120L) Color.White else Color(0xFFF59E0B),
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
                     }
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("LOADED", fontSize = 7.sp, color = Color(0xFF94A3B8), fontWeight = FontWeight.Bold)
-                        Text("${String.format(Locale.US, "%.1f", loaded)} mi", fontSize = 10.sp, color = Color(0xFF38BDF8), fontWeight = FontWeight.Bold)
+                } else {
+                    // Live Odometer Metrics
+                    val bounce = if (activeLoad.bounceMilesEnd > 0) activeLoad.bounceMilesEnd else activeLoad.dispatchedBounceMiles
+                    val loaded = if (activeLoad.loadedMilesEnd > 0) activeLoad.loadedMilesEnd else activeLoad.dispatchedLoadedMiles
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceEvenly
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("BOUNCE", fontSize = 7.sp, color = Color(0xFF94A3B8), fontWeight = FontWeight.Bold)
+                            Text("${String.format(Locale.US, "%.1f", bounce)} mi", fontSize = 10.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                        }
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("LOADED", fontSize = 7.sp, color = Color(0xFF94A3B8), fontWeight = FontWeight.Bold)
+                            Text("${String.format(Locale.US, "%.1f", loaded)} mi", fontSize = 10.sp, color = Color(0xFF38BDF8), fontWeight = FontWeight.Bold)
+                        }
                     }
                 }
 
@@ -165,10 +188,10 @@ fun WearActiveTripHud(
                         containerColor = Color(0xFFFF6B00), // Safety Orange
                         contentColor = Color.White
                     ),
-                    shape = RoundedCornerShape(18.dp),
+                    shape = RoundedCornerShape(16.dp),
                     modifier = Modifier
-                        .fillMaxWidth(0.95f)
-                        .height(32.dp)
+                        .fillMaxWidth(0.9f)
+                        .height(28.dp)
                 ) {
                     Text(btnText, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                 }
