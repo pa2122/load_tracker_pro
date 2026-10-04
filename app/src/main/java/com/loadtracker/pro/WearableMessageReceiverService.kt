@@ -5,6 +5,7 @@ import com.google.android.gms.wearable.WearableListenerService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
 
 class WearableMessageReceiverService : WearableListenerService() {
@@ -36,6 +37,31 @@ class WearableMessageReceiverService : WearableListenerService() {
                         TrackingService.activeSegment = "Paused"
                         TrackingService.activeProNumber = null
                     }
+                }
+            }
+        } else if (messageEvent.path == WearableDataSyncManager.PATH_REQUEST_ACTIVE_TRIP_STATE) {
+            serviceScope.launch {
+                val dao = AppDatabase.getDatabase(applicationContext).loadDao()
+                val loads = dao.getAllLoads().firstOrNull() ?: emptyList()
+                val activeLoad = loads.firstOrNull { it.tripState != "COMPLETED" }
+
+                if (activeLoad != null) {
+                    val payload = WearableDataSyncManager.WearTripStatePayload(
+                        proNumber = activeLoad.proNumber,
+                        tripState = activeLoad.tripState,
+                        bounceMiles = if (activeLoad.bounceMilesEnd > 0) activeLoad.bounceMilesEnd else activeLoad.dispatchedBounceMiles,
+                        loadedMiles = if (activeLoad.loadedMilesEnd > 0) activeLoad.loadedMilesEnd else activeLoad.dispatchedLoadedMiles,
+                        dockArrivalTime = activeLoad.dockArrivalTime ?: activeLoad.pickupTimestamp
+                    )
+                    WearableDataSyncManager.syncTripStateToWearable(applicationContext, payload)
+                } else {
+                    val payload = WearableDataSyncManager.WearTripStatePayload(
+                        proNumber = "",
+                        tripState = "COMPLETED",
+                        bounceMiles = 0.0,
+                        loadedMiles = 0.0
+                    )
+                    WearableDataSyncManager.syncTripStateToWearable(applicationContext, payload)
                 }
             }
         }
