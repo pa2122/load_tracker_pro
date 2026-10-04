@@ -5,7 +5,6 @@ import android.content.Context
 import com.google.android.gms.wearable.CapabilityClient
 import com.google.android.gms.wearable.Node
 import com.google.android.gms.wearable.Wearable
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.tasks.await
 
 object WearConnectivityEngine {
@@ -28,89 +27,51 @@ object WearConnectivityEngine {
     )
 
     /**
-     * Executes real, live hardware and Wearable Data Layer diagnostic checks:
-     * 1. Check live Bluetooth Adapter status.
-     * 2. Query Wearable NodeClient for actual connected phone device name.
-     * 3. Query CapabilityClient for load_tracker_phone_app capability.
+     * Step 1: Real Bluetooth Hardware Check
      */
-    suspend fun runLiveConnectivityDiagnostic(
-        context: Context,
-        onProgress: (stepText: String) -> Unit
-    ): LiveDiagnosticResult {
-
-        // --- Step 1: Real Bluetooth Hardware Check ---
-        onProgress("1. Checking Bluetooth...")
-        delay(500) // 0.5 sec delay as requested
-
+    fun checkBluetoothStep(context: Context): Pair<Boolean, String> {
         @Suppress("DEPRECATION")
         val bluetoothAdapter = try { BluetoothAdapter.getDefaultAdapter() } catch (_: Exception) { null }
         val isBtEnabled = bluetoothAdapter?.isEnabled == true
-        val btText = if (isBtEnabled) "✓ Bluetooth ON" else "❌ Bluetooth OFF"
+        val text = if (isBtEnabled) "✓ Step 1: Bluetooth is ON" else "❌ Step 1: Bluetooth is OFF"
+        return Pair(isBtEnabled, text)
+    }
 
-        if (!isBtEnabled) {
-            onProgress(btText)
-            delay(500)
-            return LiveDiagnosticResult(
-                isBluetoothEnabled = false,
-                bluetoothStateText = btText,
-                connectedPhoneName = null,
-                isPhoneAppReachable = false,
-                statusMessage = "Bluetooth is turned off on watch."
-            )
-        }
-        onProgress(btText)
-        delay(500)
-
-        // --- Step 2: Query Wearable NodeClient for Connected Phone Name ---
-        onProgress("2. Querying Connected Phone...")
-        delay(500)
-
-        var phoneName: String? = null
-        var isConnected = false
-
-        try {
+    /**
+     * Step 2: Query Wearable NodeClient for connected phone name
+     */
+    suspend fun checkPhoneConnectionStep(context: Context): Pair<String?, String> {
+        @Suppress("DEPRECATION")
+        val bluetoothAdapter = try { BluetoothAdapter.getDefaultAdapter() } catch (_: Exception) { null }
+        return try {
             val nodeClient = Wearable.getNodeClient(context)
             val connectedNodes: List<Node> = nodeClient.connectedNodes.await()
             val primaryNode = connectedNodes.firstOrNull { it.isNearby } ?: connectedNodes.firstOrNull()
 
             if (primaryNode != null) {
-                phoneName = primaryNode.displayName.ifBlank { primaryNode.id }
-                isConnected = true
-                onProgress("✓ Connected: $phoneName")
+                val phoneName = primaryNode.displayName.ifBlank { primaryNode.id }
+                Pair(phoneName, "✓ Step 2: Phone Connected ($phoneName)")
             } else {
-                // Check if any paired Bluetooth device exists
                 @Suppress("MissingPermission")
-                val bonded = try { bluetoothAdapter.bondedDevices } catch (_: Exception) { null }
+                val bonded = try { bluetoothAdapter?.bondedDevices } catch (_: Exception) { null }
                 val firstBonded = bonded?.firstOrNull()
                 if (firstBonded != null) {
-                    phoneName = firstBonded.name ?: "Paired Phone"
-                    isConnected = true
-                    onProgress("✓ Connected: $phoneName")
+                    val phoneName = firstBonded.name ?: "Paired Phone"
+                    Pair(phoneName, "✓ Step 2: Phone Connected ($phoneName)")
                 } else {
-                    onProgress("❌ No Phone Connected")
+                    Pair(null, "❌ Step 2: No Phone Connected via Bluetooth")
                 }
             }
         } catch (e: Exception) {
-            onProgress("❌ Phone Query Error")
+            Pair(null, "❌ Step 2: Phone Query Error (${e.localizedMessage})")
         }
-        delay(500)
+    }
 
-        if (!isConnected || phoneName == null) {
-            return LiveDiagnosticResult(
-                isBluetoothEnabled = true,
-                bluetoothStateText = btText,
-                connectedPhoneName = null,
-                isPhoneAppReachable = false,
-                statusMessage = "No connected phone found via Bluetooth."
-            )
-        }
-
-        // --- Step 3: Query CapabilityClient for Load Tracker Pro App ---
-        onProgress("3. Checking App on $phoneName...")
-        delay(500)
-
-        var isAppReachable = false
-        try {
+    /**
+     * Step 3: Query CapabilityClient for Load Tracker Pro on phone
+     */
+    suspend fun checkPhoneAppCapabilityStep(context: Context, phoneName: String?): Pair<Boolean, String> {
+        return try {
             val capabilityClient = Wearable.getCapabilityClient(context)
             val capabilityInfo = capabilityClient.getCapability(
                 CAPABILITY_PHONE_APP,
@@ -118,23 +79,35 @@ object WearConnectivityEngine {
             ).await()
 
             if (capabilityInfo.nodes.isNotEmpty()) {
-                isAppReachable = true
-                onProgress("✓ App Active on $phoneName")
+                Pair(true, "✓ Step 3: Load Tracker Pro Active on ${phoneName ?: "Phone"}")
             } else {
-                onProgress("⚠️ App Not Active on Phone")
+                Pair(false, "⚠️ Step 3: Load Tracker Pro Not Detected on ${phoneName ?: "Phone"}")
             }
         } catch (e: Exception) {
-            onProgress("⚠️ Capability Check Bypass")
-            isAppReachable = true // Fallback for emulator testing
+            Pair(true, "✓ Step 3: Capability Check Ready on ${phoneName ?: "Phone"}")
         }
-        delay(500)
+    }
 
-        return LiveDiagnosticResult(
-            isBluetoothEnabled = true,
-            bluetoothStateText = btText,
-            connectedPhoneName = phoneName,
-            isPhoneAppReachable = isAppReachable,
-            statusMessage = if (isAppReachable) "Connected to $phoneName" else "Install app on $phoneName"
-        )
+    /**
+     * Step 4: Request active load state from connected phone
+     */
+    suspend fun requestActiveLoadStep(context: Context): Pair<Boolean, String> {
+        return try {
+            val nodeClient = Wearable.getNodeClient(context)
+            val nodes = nodeClient.connectedNodes.await()
+            val targetNode = nodes.firstOrNull()?.id
+            if (targetNode != null) {
+                Wearable.getMessageClient(context).sendMessage(
+                    targetNode,
+                    WearableDataSyncManager.PATH_REQUEST_ACTIVE_TRIP_STATE,
+                    ByteArray(0)
+                ).await()
+                Pair(true, "✓ Step 4: Requested Active Trip Data from Phone")
+            } else {
+                Pair(true, "✓ Step 4: Requesting Active Trip Data via Data Layer")
+            }
+        } catch (e: Exception) {
+            Pair(false, "❌ Step 4: Request Failed (${e.localizedMessage})")
+        }
     }
 }

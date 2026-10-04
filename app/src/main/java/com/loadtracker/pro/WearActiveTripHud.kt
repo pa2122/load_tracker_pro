@@ -27,6 +27,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -39,8 +40,7 @@ import androidx.compose.ui.unit.sp
 import com.google.android.gms.wearable.DataClient
 import com.google.android.gms.wearable.DataMapItem
 import com.google.android.gms.wearable.Wearable
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.launch
 import java.util.Locale
 
 @Composable
@@ -49,59 +49,16 @@ fun WearActiveTripHud(
     onWristAction: (String) -> Unit
 ) {
     val ctx = LocalContext.current
-    var isDiagnosticLoading by remember { mutableStateOf(true) }
-    var diagnosticStep by remember { mutableStateOf("⚡ Initializing Wrist HUD...") }
-    var liveDiagnostic by remember { mutableStateOf<WearConnectivityEngine.LiveDiagnosticResult?>(null) }
-    
+    val scope = rememberCoroutineScope()
+
+    var currentDiagnosticStep by remember { mutableStateOf(1) } // 1: Bluetooth, 2: Phone Node, 3: App Check, 4: Active Load, 5: Wrist HUD
+    var isStepRunning by remember { mutableStateOf(false) }
+    var stepMessage by remember { mutableStateOf("1. Tap below to check Bluetooth hardware.") }
+    var stepRanSuccess by remember { mutableStateOf(false) }
+
+    var detectedPhoneName by remember { mutableStateOf<String?>(null) }
     var phoneConnectivity by remember { mutableStateOf(WearConnectivityEngine.ConnectionStatus.CONNECTED) }
     var remoteLoadPayload by remember { mutableStateOf<WearableDataSyncManager.WearTripStatePayload?>(null) }
-
-    // Live Hardware Diagnostic Startup Sequence with 0.5s delays
-    LaunchedEffect(Unit) {
-        val diag = WearConnectivityEngine.runLiveConnectivityDiagnostic(ctx) { stepText ->
-            diagnosticStep = stepText
-        }
-        liveDiagnostic = diag
-        phoneConnectivity = if (diag.isBluetoothEnabled && diag.connectedPhoneName != null) {
-            WearConnectivityEngine.ConnectionStatus.CONNECTED
-        } else if (!diag.isBluetoothEnabled) {
-            WearConnectivityEngine.ConnectionStatus.BLUETOOTH_OFF
-        } else {
-            WearConnectivityEngine.ConnectionStatus.PHONE_DISCONNECTED
-        }
-
-        // Request active trip state from connected phone
-        try {
-            val nodeClient = Wearable.getNodeClient(ctx)
-            val nodes = nodeClient.connectedNodes.await()
-            val targetNode = nodes.firstOrNull()?.id
-            if (targetNode != null) {
-                Wearable.getMessageClient(ctx).sendMessage(
-                    targetNode,
-                    WearableDataSyncManager.PATH_REQUEST_ACTIVE_TRIP_STATE,
-                    ByteArray(0)
-                ).await()
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-
-        isDiagnosticLoading = false
-
-        // Background status poll every 3s
-        while (true) {
-            val updateDiag = WearConnectivityEngine.runLiveConnectivityDiagnostic(ctx) {}
-            liveDiagnostic = updateDiag
-            phoneConnectivity = if (updateDiag.isBluetoothEnabled && updateDiag.connectedPhoneName != null) {
-                WearConnectivityEngine.ConnectionStatus.CONNECTED
-            } else if (!updateDiag.isBluetoothEnabled) {
-                WearConnectivityEngine.ConnectionStatus.BLUETOOTH_OFF
-            } else {
-                WearConnectivityEngine.ConnectionStatus.PHONE_DISCONNECTED
-            }
-            delay(3000L)
-        }
-    }
 
     // Listen continuously to live active_trip_state DataEvents from phone
     DisposableEffect(Unit) {
@@ -162,31 +119,139 @@ fun WearActiveTripHud(
             .background(Color(0xFF0F172A)), // Steel Navy Dark
         contentAlignment = Alignment.Center
     ) {
-        if (isDiagnosticLoading) {
-            // REAL DIAGNOSTIC STARTUP LOADING SCREEN WITH LIVE DEVICE CHECKS
+        if (currentDiagnosticStep < 5) {
+            // USER-DRIVEN STEP-BY-STEP DIAGNOSTIC LOADING SCREEN
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(20.dp),
+                    .padding(top = 16.dp, bottom = 28.dp, start = 18.dp, end = 18.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
+                verticalArrangement = Arrangement.SpaceBetween
             ) {
-                CircularProgressIndicator(
-                    color = Color(0xFFFF6B00), // Safety Orange
-                    modifier = Modifier.size(24.dp),
-                    strokeWidth = 3.dp
-                )
-                Spacer(modifier = Modifier.height(10.dp))
-                Text(
-                    text = diagnosticStep,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Color.White,
-                    textAlign = TextAlign.Center,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold
-                )
+                // Header Step Counter
+                Surface(
+                    color = Color(0xFF1E293B),
+                    shape = RoundedCornerShape(4.dp)
+                ) {
+                    Text(
+                        text = "DIAGNOSTIC STEP $currentDiagnosticStep / 4",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color(0xFF38BDF8),
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                    )
+                }
+
+                // Step Output Message
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    if (isStepRunning) {
+                        CircularProgressIndicator(
+                            color = Color(0xFFFF6B00),
+                            modifier = Modifier.size(20.dp),
+                            strokeWidth = 2.dp
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                    }
+
+                    Text(
+                        text = stepMessage,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.White,
+                        textAlign = TextAlign.Center,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                // User Proceed / Run Action Button
+                val buttonLabel = when {
+                    isStepRunning -> "Running Check..."
+                    !stepRanSuccess -> "Run Step $currentDiagnosticStep ➔"
+                    currentDiagnosticStep == 4 -> "Open Wrist HUD ➔"
+                    else -> "Proceed to Step ${currentDiagnosticStep + 1} ➔"
+                }
+
+                Button(
+                    onClick = {
+                        if (isStepRunning) return@Button
+
+                        if (stepRanSuccess) {
+                            // Advance to next step
+                            if (currentDiagnosticStep < 4) {
+                                currentDiagnosticStep += 1
+                                stepRanSuccess = false
+                                stepMessage = when (currentDiagnosticStep) {
+                                    2 -> "2. Tap below to check phone connection."
+                                    3 -> "3. Tap below to check app on ${detectedPhoneName ?: "phone"}."
+                                    4 -> "4. Tap below to pull active load."
+                                    else -> ""
+                                }
+                            } else {
+                                // Proceed to Wrist HUD
+                                currentDiagnosticStep = 5
+                            }
+                        } else {
+                            // Execute current step check
+                            isStepRunning = true
+                            scope.launch {
+                                when (currentDiagnosticStep) {
+                                    1 -> {
+                                        val (ok, msg) = WearConnectivityEngine.checkBluetoothStep(ctx)
+                                        stepMessage = msg
+                                        stepRanSuccess = ok
+                                        if (!ok) phoneConnectivity = WearConnectivityEngine.ConnectionStatus.BLUETOOTH_OFF
+                                    }
+                                    2 -> {
+                                        val (phone, msg) = WearConnectivityEngine.checkPhoneConnectionStep(ctx)
+                                        stepMessage = msg
+                                        detectedPhoneName = phone
+                                        stepRanSuccess = phone != null
+                                        if (phone == null) phoneConnectivity = WearConnectivityEngine.ConnectionStatus.PHONE_DISCONNECTED
+                                    }
+                                    3 -> {
+                                        val (ok, msg) = WearConnectivityEngine.checkPhoneAppCapabilityStep(ctx, detectedPhoneName)
+                                        stepMessage = msg
+                                        stepRanSuccess = ok
+                                        if (!ok) phoneConnectivity = WearConnectivityEngine.ConnectionStatus.APP_NOT_INSTALLED_ON_PHONE
+                                    }
+                                    4 -> {
+                                        val (ok, msg) = WearConnectivityEngine.requestActiveLoadStep(ctx)
+                                        stepMessage = msg
+                                        stepRanSuccess = true
+                                        phoneConnectivity = WearConnectivityEngine.ConnectionStatus.CONNECTED
+                                    }
+                                }
+                                isStepRunning = false
+                            }
+                        }
+                    },
+                    enabled = !isStepRunning,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (stepRanSuccess) Color(0xFF22C55E) else Color(0xFFFF6B00), // Green when success, Orange to run
+                        contentColor = Color.White
+                    ),
+                    shape = RoundedCornerShape(16.dp),
+                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
+                    modifier = Modifier
+                        .fillMaxWidth(0.9f)
+                        .height(30.dp)
+                ) {
+                    Text(
+                        buttonLabel,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        softWrap = false
+                    )
+                }
             }
         } else {
+            // STEP 5: WRIST HUD DISPLAY
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -195,7 +260,7 @@ fun WearActiveTripHud(
                 verticalArrangement = Arrangement.SpaceBetween
             ) {
                 // 1. Connection Status Badge at Top displaying Connected Phone Name
-                val connectedPhone = liveDiagnostic?.connectedPhoneName
+                val connectedPhone = detectedPhoneName
                 val (statusLabel, badgeColor, textColor) = when (phoneConnectivity) {
                     WearConnectivityEngine.ConnectionStatus.BLUETOOTH_OFF -> Triple("BLUETOOTH OFF", Color(0xFFEF4444), Color(0xFFFCA5A5))
                     WearConnectivityEngine.ConnectionStatus.PHONE_DISCONNECTED -> Triple("DISCONNECTED", Color(0xFFEF4444), Color(0xFFFCA5A5))
