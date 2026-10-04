@@ -141,6 +141,12 @@ class LoadViewModel(application: Application) :
         }
     }
 
+    fun updateTripState(proNumber: String, newState: String) {
+        viewModelScope.launch {
+            loadDao.updateTripState(proNumber, newState)
+        }
+    }
+
     fun getCurrentWeekSummary(
         lumberRate: Double,
         steelRate: Double,

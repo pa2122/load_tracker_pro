@@ -807,10 +807,28 @@ class MainActivity : ComponentActivity() {
                             }
                         }
                     ) {
-                        val configuration = LocalConfiguration.current
-                        val isTablet = configuration.screenWidthDp >= 600
+                        val isWatchDevice = remember { packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_WATCH) }
+                        val allLoadsList by viewModel.allLoads.collectAsState(initial = emptyList())
+                        val activeWatchLoad = remember(allLoadsList) { allLoadsList.firstOrNull { it.tripState != "COMPLETED" } }
 
-                        Scaffold(
+                        if (isWatchDevice) {
+                            WearActiveTripHud(
+                                activeLoad = activeWatchLoad,
+                                onWristAction = { action ->
+                                    val activePro = activeWatchLoad?.proNumber ?: return@WearActiveTripHud
+                                    when (action) {
+                                        WearableDataSyncManager.ACTION_ARRIVE_SHIPPER -> viewModel.updateTripState(activePro, "ACTIVE_SHIPPER")
+                                        WearableDataSyncManager.ACTION_DEPART_SHIPPER -> viewModel.updateTripState(activePro, "ACTIVE_LOADED")
+                                        WearableDataSyncManager.ACTION_ARRIVE_CONSIGNEE -> viewModel.updateTripState(activePro, "ACTIVE_CONSIGNEE")
+                                        WearableDataSyncManager.ACTION_COMPLETE_LOAD -> viewModel.updateTripState(activePro, "COMPLETED")
+                                    }
+                                }
+                            )
+                        } else {
+                            val configuration = LocalConfiguration.current
+                            val isTablet = configuration.screenWidthDp >= 600
+
+                            Scaffold(
                             topBar = {
                                 TopAppBar(
                                     title = { Text("Load Tracker Pro") },
@@ -1107,6 +1125,7 @@ class MainActivity : ComponentActivity() {
                                     }
                                 }
                             }
+                        }
 
                     if (showDevOptionsDialog) {
                         AlertDialog(
