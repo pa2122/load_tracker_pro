@@ -95,7 +95,7 @@ abstract class AppDatabase : RoomDatabase() {
                 // Auto-migrate legacy file name tmc_loads_local.db -> load_tracker_local.db if needed
                 val newDbFile = context.getDatabasePath("load_tracker_local.db")
                 val oldDbFile = context.getDatabasePath("tmc_loads_local.db")
-                if (!newDbFile.exists() && oldDbFile.exists()) {
+                if ((!newDbFile.exists() || newDbFile.length() < 1000) && oldDbFile.exists() && oldDbFile.length() > 1000) {
                     try {
                         oldDbFile.copyTo(newDbFile, overwrite = true)
                     } catch (e: Exception) {
