@@ -691,6 +691,34 @@ class MainActivity : ComponentActivity() {
                                     }
 
                                     HorizontalDivider()
+                                    Button(
+                                        onClick = {
+                                            scope.launch { drawerState.close() }
+                                            val activeLoad = viewModel.allLoads.value.firstOrNull { it.tripState != "COMPLETED" }
+                                            val payload = if (activeLoad != null) {
+                                                WearableDataSyncManager.WearTripStatePayload(
+                                                    proNumber = activeLoad.proNumber,
+                                                    tripState = activeLoad.tripState,
+                                                    bounceMiles = if (activeLoad.bounceMilesEnd > 0) activeLoad.bounceMilesEnd else activeLoad.dispatchedBounceMiles,
+                                                    loadedMiles = if (activeLoad.loadedMilesEnd > 0) activeLoad.loadedMilesEnd else activeLoad.dispatchedLoadedMiles,
+                                                    dockArrivalTime = activeLoad.dockArrivalTime ?: activeLoad.pickupTimestamp
+                                                )
+                                            } else {
+                                                WearableDataSyncManager.WearTripStatePayload(proNumber = "", tripState = "COMPLETED", bounceMiles = 0.0, loadedMiles = 0.0)
+                                            }
+                                            WearableDataSyncManager.syncTripStateToWearable(this@MainActivity, payload)
+                                            Toast.makeText(this@MainActivity, "⚡ Broadcasted active load PRO #${payload.proNumber.ifBlank { "NONE" }} to watch!", Toast.LENGTH_LONG).show()
+                                        },
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                                        ),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text("⚡ Broadcast Active Load to Watch")
+                                    }
+
+                                    HorizontalDivider()
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
                                         horizontalArrangement = Arrangement.spacedBy(8.dp)
