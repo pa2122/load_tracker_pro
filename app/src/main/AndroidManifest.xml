@@ -27,6 +27,10 @@
             android:name="com.google.android.geo.API_KEY"
             android:value="${MAPS_API_KEY}" />
 
+        <meta-data
+            android:name="com.google.android.gms.wearable.app"
+            android:resource="@xml/wearable_app_config" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
