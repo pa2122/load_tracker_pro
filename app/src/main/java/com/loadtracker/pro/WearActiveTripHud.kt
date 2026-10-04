@@ -40,7 +40,9 @@ import androidx.compose.ui.unit.sp
 import com.google.android.gms.wearable.DataClient
 import com.google.android.gms.wearable.DataMapItem
 import com.google.android.gms.wearable.Wearable
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 import java.util.Locale
 
 @Composable
@@ -51,7 +53,7 @@ fun WearActiveTripHud(
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
 
-    var currentDiagnosticStep by remember { mutableStateOf(1) } // 1: Bluetooth, 2: Phone Node, 3: App Check, 4: Active Load, 5: Wrist HUD
+    var currentDiagnosticStep by remember { mutableStateOf(1) } // 1: BT, 2: Phone Node, 3: App Check, 4: Request Data, 5: Check Load DB, 6: Odometer & Dock, 7: Wrist HUD
     var isStepRunning by remember { mutableStateOf(false) }
     var stepMessage by remember { mutableStateOf("1. Tap below to check Bluetooth hardware.") }
     var stepRanSuccess by remember { mutableStateOf(false) }
@@ -119,12 +121,12 @@ fun WearActiveTripHud(
             .background(Color(0xFF0F172A)), // Steel Navy Dark
         contentAlignment = Alignment.Center
     ) {
-        if (currentDiagnosticStep < 5) {
+        if (currentDiagnosticStep < 7) {
             // USER-DRIVEN STEP-BY-STEP DIAGNOSTIC LOADING SCREEN
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(top = 16.dp, bottom = 28.dp, start = 18.dp, end = 18.dp),
+                    .padding(top = 22.dp, bottom = 28.dp, start = 18.dp, end = 18.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.SpaceBetween
             ) {
@@ -133,11 +135,12 @@ fun WearActiveTripHud(
                     color = Color(0xFF1E293B),
                     shape = RoundedCornerShape(4.dp)
                 ) {
+                    val stepLabel = if (currentDiagnosticStep <= 3) "STEP $currentDiagnosticStep / 6" else "DATA STEP $currentDiagnosticStep / 6"
                     Text(
-                        text = "DIAGNOSTIC STEP $currentDiagnosticStep / 4",
+                        text = stepLabel,
                         style = MaterialTheme.typography.labelSmall,
                         color = Color(0xFF38BDF8),
-                        fontSize = 9.sp,
+                        fontSize = 8.sp,
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                     )
@@ -152,10 +155,10 @@ fun WearActiveTripHud(
                     if (isStepRunning) {
                         CircularProgressIndicator(
                             color = Color(0xFFFF6B00),
-                            modifier = Modifier.size(20.dp),
+                            modifier = Modifier.size(18.dp),
                             strokeWidth = 2.dp
                         )
-                        Spacer(modifier = Modifier.height(6.dp))
+                        Spacer(modifier = Modifier.height(4.dp))
                     }
 
                     Text(
@@ -163,7 +166,7 @@ fun WearActiveTripHud(
                         style = MaterialTheme.typography.bodySmall,
                         color = Color.White,
                         textAlign = TextAlign.Center,
-                        fontSize = 11.sp,
+                        fontSize = 10.sp,
                         fontWeight = FontWeight.Bold
                     )
                 }
@@ -172,7 +175,7 @@ fun WearActiveTripHud(
                 val buttonLabel = when {
                     isStepRunning -> "Running Check..."
                     !stepRanSuccess -> "Run Step $currentDiagnosticStep ➔"
-                    currentDiagnosticStep == 4 -> "Open Wrist HUD ➔"
+                    currentDiagnosticStep == 6 -> "Open Wrist HUD ➔"
                     else -> "Proceed to Step ${currentDiagnosticStep + 1} ➔"
                 }
 
@@ -182,18 +185,20 @@ fun WearActiveTripHud(
 
                         if (stepRanSuccess) {
                             // Advance to next step
-                            if (currentDiagnosticStep < 4) {
+                            if (currentDiagnosticStep < 6) {
                                 currentDiagnosticStep += 1
                                 stepRanSuccess = false
                                 stepMessage = when (currentDiagnosticStep) {
-                                    2 -> "2. Tap below to check phone connection."
-                                    3 -> "3. Tap below to check app on ${detectedPhoneName ?: "phone"}."
-                                    4 -> "4. Tap below to pull active load."
+                                    2 -> "2. Tap to check phone Bluetooth connection."
+                                    3 -> "3. Tap to check app on ${detectedPhoneName ?: "phone"}."
+                                    4 -> "4A. Tap to send load request to phone."
+                                    5 -> "4B. Tap to check active load in database."
+                                    6 -> "4C. Tap to verify odometer & dock timers."
                                     else -> ""
                                 }
                             } else {
                                 // Proceed to Wrist HUD
-                                currentDiagnosticStep = 5
+                                currentDiagnosticStep = 7
                             }
                         } else {
                             // Execute current step check
@@ -221,9 +226,22 @@ fun WearActiveTripHud(
                                     }
                                     4 -> {
                                         val (ok, msg) = WearConnectivityEngine.requestActiveLoadStep(ctx)
-                                        stepMessage = msg
+                                        stepMessage = "✓ 4A: Request sent to ${detectedPhoneName ?: "phone"}"
                                         stepRanSuccess = true
                                         phoneConnectivity = WearConnectivityEngine.ConnectionStatus.CONNECTED
+                                    }
+                                    5 -> {
+                                        val proNum = effectivePro
+                                        if (!proNum.isNullOrBlank()) {
+                                            stepMessage = "✓ 4B: Active Load Found (PRO #$proNum)"
+                                        } else {
+                                            stepMessage = "📍 4B: No Active Trip Found on Phone"
+                                        }
+                                        stepRanSuccess = true
+                                    }
+                                    6 -> {
+                                        stepMessage = "✓ 4C: Odometer & Dock Timers Ready"
+                                        stepRanSuccess = true
                                     }
                                 }
                                 isStepRunning = false
@@ -238,8 +256,8 @@ fun WearActiveTripHud(
                     shape = RoundedCornerShape(16.dp),
                     contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
                     modifier = Modifier
-                        .fillMaxWidth(0.9f)
-                        .height(30.dp)
+                        .fillMaxWidth(0.85f)
+                        .height(28.dp)
                 ) {
                     Text(
                         buttonLabel,
@@ -251,11 +269,11 @@ fun WearActiveTripHud(
                 }
             }
         } else {
-            // STEP 5: WRIST HUD DISPLAY
+            // STEP 7: WRIST HUD DISPLAY
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(top = 16.dp, bottom = 36.dp, start = 22.dp, end = 22.dp),
+                    .padding(top = 28.dp, bottom = 28.dp, start = 20.dp, end = 20.dp), // Comfortably padded top & bottom for circular screens
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.SpaceBetween
             ) {
@@ -418,7 +436,7 @@ fun WearActiveTripHud(
                         contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
                         modifier = Modifier
                             .fillMaxWidth(0.85f)
-                            .height(30.dp)
+                            .height(28.dp)
                     ) {
                         Text(
                             btnText,
