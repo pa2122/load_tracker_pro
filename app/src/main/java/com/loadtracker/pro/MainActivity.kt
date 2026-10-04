@@ -2,7 +2,6 @@ package com.loadtracker.pro
 
 import android.Manifest
 import android.content.Intent
-import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.location.Geocoder
 import android.os.Build
@@ -57,9 +56,6 @@ import androidx.compose.material.icons.filled.Done
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.foundation.clickable
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.LocationOn
 import dev.jeziellago.compose.markdowntext.MarkdownText
 import androidx.compose.material.icons.filled.Menu
@@ -77,19 +73,12 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalDrawerSheet
-import androidx.compose.material3.NavigationDrawerItem
 import androidx.compose.material3.ModalNavigationDrawer
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -98,7 +87,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberDrawerState
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -109,6 +97,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.LaunchedEffect
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.ImeAction
@@ -140,24 +129,7 @@ class MainActivity : ComponentActivity() {
         checkAndRequestPermissions()
 
         setContent {
-            val devPrefs = remember { getSharedPreferences("dev_prefs", MODE_PRIVATE) }
-            var activeThemePreset by remember {
-                mutableStateOf(devPrefs.getString("theme_preset", "safety_amber") ?: "safety_amber")
-            }
-
-            DisposableEffect(devPrefs) {
-                val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-                    if (key == "theme_preset") {
-                        activeThemePreset = devPrefs.getString("theme_preset", "safety_amber") ?: "safety_amber"
-                    }
-                }
-                devPrefs.registerOnSharedPreferenceChangeListener(listener)
-                onDispose {
-                    devPrefs.unregisterOnSharedPreferenceChangeListener(listener)
-                }
-            }
-
-            LoadTrackerProTheme(themePreset = activeThemePreset) {
+            LoadTrackerProTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background,
@@ -184,28 +156,42 @@ class MainActivity : ComponentActivity() {
                     var tripToEdit by remember { mutableStateOf<CurrentLoad?>(value = null) }
                     var tripForMap by remember { mutableStateOf<CurrentLoad?>(value = null) }
 
+                    val backupRestoreLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+                        if (uri != null) {
+                            val (success, msg) = DatabaseBackupManager.restoreDatabase(this@MainActivity, uri)
+                            Toast.makeText(this@MainActivity, msg, Toast.LENGTH_LONG).show()
+                        }
+                    }
+
                     var isProUser by remember { mutableStateOf(value = true) }
 
                     val devPrefs = remember { getSharedPreferences("dev_prefs", MODE_PRIVATE) }
-                    val initialExtraStopPay = remember { devPrefs.getString("extra_stop_pay", "0.0") ?: "0.0" }
 
-                    var defPercent by remember { mutableStateOf(value = "31.0") }
-                    var tarp8Pay by remember { mutableStateOf(value = "50.0") }
-                    var tarp4Pay by remember { mutableStateOf(value = "30.0") }
-                    var extraStopPay by remember { mutableStateOf(value = initialExtraStopPay) }
-                    var homeBase by remember { mutableStateOf(value = "15381 TX-198, Mabank, TX 75147") }
-                    var homeRawPaste by remember { mutableStateOf(value = "15381 TX-198, Mabank, TX 75147") }
+                    val initDefPercent = remember { devPrefs.getString("def_percent", "31.0") ?: "31.0" }
+                    val initTarp8 = remember { devPrefs.getString("tarp_8_pay", "50.0") ?: "50.0" }
+                    val initTarp4 = remember { devPrefs.getString("tarp_4_pay", "40.0") ?: "40.0" }
+                    val initExtraStop = remember { devPrefs.getString("extra_stop_pay", "0.0") ?: "0.0" }
+                    val initHomeRaw = remember { devPrefs.getString("home_raw_paste", "15381 TX-198, Mabank, TX 75147") ?: "15381 TX-198, Mabank, TX 75147" }
+                    val initIsTraining = remember { devPrefs.getBoolean("is_training_active", false) }
+                    val initTrainerRate = remember { devPrefs.getString("flat_trainer_pay_rate", "200.0") ?: "200.0" }
+
+                    var defPercent by remember { mutableStateOf(initDefPercent) }
+                    var tarp8Pay by remember { mutableStateOf(initTarp8) }
+                    var tarp4Pay by remember { mutableStateOf(initTarp4) }
+                    var extraStopPay by remember { mutableStateOf(initExtraStop) }
+                    var homeBase by remember { mutableStateOf(initHomeRaw) }
+                    var homeRawPaste by remember { mutableStateOf(initHomeRaw) }
                     var homeLat by remember { mutableStateOf<Double?>(value = 32.3021) }
                     var homeLong by remember { mutableStateOf<Double?>(value = -96.1116) }
                     var isHomeVerified by remember { mutableStateOf(value = true) }
 
-                    var savedDefPercent by remember { mutableStateOf(value = "31.0") }
-                    var savedTarp8Pay by remember { mutableStateOf(value = "50.0") }
-                    var savedTarp4Pay by remember { mutableStateOf(value = "30.0") }
-                    var savedExtraStopPay by remember { mutableStateOf(value = initialExtraStopPay) }
-                    var savedHomeRawPaste by remember { mutableStateOf(value = "15381 TX-198, Mabank, TX 75147") }
-                    var savedIsTrainingActive by remember { mutableStateOf(value = false) }
-                    var savedFlatTrainerPayRate by remember { mutableStateOf(value = "200.0") }
+                    var savedDefPercent by remember { mutableStateOf(initDefPercent) }
+                    var savedTarp8Pay by remember { mutableStateOf(initTarp8) }
+                    var savedTarp4Pay by remember { mutableStateOf(initTarp4) }
+                    var savedExtraStopPay by remember { mutableStateOf(initExtraStop) }
+                    var savedHomeRawPaste by remember { mutableStateOf(initHomeRaw) }
+                    var savedIsTrainingActive by remember { mutableStateOf(initIsTraining) }
+                    var savedFlatTrainerPayRate by remember { mutableStateOf(initTrainerRate) }
 
                     var showDevOptionsDialog by remember { mutableStateOf(value = false) }
                     var showDevAccessRequestDialog by remember { mutableStateOf(value = false) }
@@ -214,16 +200,9 @@ class MainActivity : ComponentActivity() {
                     var showProUpgradeDialog by remember { mutableStateOf(value = false) }
                     var showReadmeDialog by remember { mutableStateOf(value = false) }
                     var isHistoricalEntry by remember { mutableStateOf(value = false) }
-                    var themeDropdownExpanded by remember { mutableStateOf(false) }
-
-                    var isMapsCategoryExpanded by remember { mutableStateOf(true) }
-                    var isAppSettingsCategoryExpanded by remember { mutableStateOf(false) }
-                    var isDriverConfigCategoryExpanded by remember { mutableStateOf(false) }
-                    var isSupportCategoryExpanded by remember { mutableStateOf(false) }
 
                     var initialRxBytes by remember { mutableLongStateOf(value = TrafficStats.getUidRxBytes(Process.myUid())) }
                     var initialTxBytes by remember { mutableLongStateOf(value = TrafficStats.getUidTxBytes(Process.myUid())) }
-
                     var savedTraineeTier by remember { mutableStateOf(value = devPrefs.getString("trainee_tier", "inexperienced") ?: "inexperienced") }
                     var savedTrainingWeek by remember { mutableIntStateOf(value = devPrefs.getInt("training_week", 1)) }
                     var savedIsTmcBoostActive by remember { mutableStateOf(value = devPrefs.getBoolean("is_tmc_boost_active", true)) }
@@ -236,14 +215,10 @@ class MainActivity : ComponentActivity() {
                         }
                     }
 
-                    var isDevOverrideUnlocked by remember {
-                        mutableStateOf(value = devPrefs.getBoolean("is_dev_override_unlocked", true))
-                    }
-
-                    var isDeviceAuthorized by remember(isDevOverrideUnlocked) {
+                    var isDeviceAuthorized by remember {
                         val savedAuthorizedDevices = devPrefs.getStringSet("authorized_devices", emptySet()) ?: emptySet()
                         mutableStateOf(
-                            BuildConfig.DEBUG || isDevOverrideUnlocked || savedAuthorizedDevices.contains(currentDeviceId)
+                            BuildConfig.DEBUG || savedAuthorizedDevices.contains(currentDeviceId)
                         )
                     }
                     var newTesterDeviceId by remember { mutableStateOf(value = "") }
@@ -265,12 +240,6 @@ class MainActivity : ComponentActivity() {
                             }
                         } catch (e: Exception) {
                             e.printStackTrace()
-                        }
-                    }
-
-                    LaunchedEffect(Unit) {
-                        withContext(Dispatchers.IO) {
-                            performAutoBackup(applicationContext)
                         }
                     }
 
@@ -435,9 +404,8 @@ class MainActivity : ComponentActivity() {
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Text(
-                                            "🚛 Load Tracker Pro v2.0",
+                                            "Configurations",
                                             style = MaterialTheme.typography.titleLarge,
-                                            fontWeight = FontWeight.Bold,
                                             color = MaterialTheme.colorScheme.primary
                                         )
 
@@ -451,7 +419,17 @@ class MainActivity : ComponentActivity() {
                                                     savedHomeRawPaste = homeRawPaste
                                                     savedIsTrainingActive = isTrainingActive
                                                     savedFlatTrainerPayRate = flatTrainerPayRate
-                                                    devPrefs.edit().putString("extra_stop_pay", extraStopPay).apply()
+                                                    devPrefs.edit().apply {
+                                                        putString("def_percent", defPercent)
+                                                        putString("tarp_8_pay", tarp8Pay)
+                                                        putString("tarp_4_pay", tarp4Pay)
+                                                        putString("extra_stop_pay", extraStopPay)
+                                                        putString("home_raw_paste", homeRawPaste)
+                                                        putBoolean("is_training_active", isTrainingActive)
+                                                        putString("flat_trainer_pay_rate", flatTrainerPayRate)
+                                                        apply()
+                                                    }
+                                                    resolveHomeAddress(homeRawPaste)
                                                     scope.launch { drawerState.close() }
                                                 }
                                             ) {
@@ -464,399 +442,348 @@ class MainActivity : ComponentActivity() {
                                         }
                                     }
 
-                                    HorizontalDivider()
+                                    OutlinedTextField(
+                                        value = defPercent,
+                                        onValueChange = { input ->
+                                            val filtered =
+                                                input.filter { it.isDigit() || it == '.' }
+                                            if (filtered.isEmpty() || filtered == ".") defPercent =
+                                                filtered
+                                            else if (filtered.count { it == '.' } <= 1) {
+                                                val value = filtered.toDoubleOrNull()
+                                                if ((value != null) && (value >= 0.0) && (value <= 100.0)) {
+                                                    defPercent = filtered
+                                                }
+                                            }
+                                        },
+                                        label = { Text("Default Pay Rate (%)") },
+                                        singleLine = true,
+                                        keyboardOptions = KeyboardOptions(
+                                            keyboardType = KeyboardType.Number,
+                                            imeAction = ImeAction.Next
+                                        ),
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+
+                                    OutlinedTextField(
+                                        value = tarp8Pay,
+                                        onValueChange = { input ->
+                                            tarp8Pay = input.filter { it.isDigit() || it == '.' }
+                                        },
+                                        label = { Text("8' Drop Tarp Pay ($)") },
+                                        singleLine = true,
+                                        keyboardOptions = KeyboardOptions(
+                                            keyboardType = KeyboardType.Number,
+                                            imeAction = ImeAction.Next
+                                        ),
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+
+                                    OutlinedTextField(
+                                        value = tarp4Pay,
+                                        onValueChange = { input ->
+                                            tarp4Pay = input.filter { it.isDigit() || it == '.' }
+                                        },
+                                        label = { Text("4' Drop Tarp Pay ($)") },
+                                        singleLine = true,
+                                        keyboardOptions = KeyboardOptions(
+                                            keyboardType = KeyboardType.Number,
+                                            imeAction = ImeAction.Next
+                                        ),
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+
+                                    OutlinedTextField(
+                                        value = extraStopPay,
+                                        onValueChange = { input ->
+                                            extraStopPay = input.filter { it.isDigit() || it == '.' }
+                                        },
+                                        label = { Text("Extra Stop Pay ($)") },
+                                        singleLine = true,
+                                        keyboardOptions = KeyboardOptions(
+                                            keyboardType = KeyboardType.Number,
+                                            imeAction = ImeAction.Next
+                                        ),
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+
+                                    OutlinedTextField(
+                                        value = homeRawPaste,
+                                        onValueChange = {
+                                            homeRawPaste = it
+                                            isHomeVerified = false
+                                            homeLat = null
+                                            homeLong = null
+                                        },
+                                        label = { Text("Home Address (Paste)") },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        minLines = 2
+                                    )
+
                                     Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clickable { isMapsCategoryExpanded = !isMapsCategoryExpanded },
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(space = 8.dp)
                                     ) {
-                                        Text("📍 MAPS & FACILITY INSIGHTS", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, modifier = Modifier.weight(1f))
-                                        Icon(
-                                            if (isMapsCategoryExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.primary
-                                        )
+                                        Button(
+                                            onClick = { resolveHomeAddress(homeRawPaste) },
+                                            enabled = homeRawPaste.isNotBlank() && !isHomeVerified,
+                                            modifier = Modifier.weight(weight = 1f)
+                                        ) {
+                                            Text(if (isHomeVerified) "Verified ✅" else "Verify Address")
+                                        }
+
+                                        Button(
+                                            onClick = {
+                                                val lastLat = TrackingService.currentLatitude
+                                                val lastLong = TrackingService.currentLongitude
+                                                if (lastLat != null && lastLong != null) {
+                                                    homeLat = lastLat
+                                                    homeLong = lastLong
+                                                    isHomeVerified = true
+                                                }
+                                            },
+                                            colors = ButtonDefaults.buttonColors(
+                                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                                            ),
+                                            modifier = Modifier.weight(weight = 1f)
+                                        ) {
+                                            Icon(Icons.Default.LocationOn, contentDescription = null)
+                                            Spacer(Modifier.width(width = 4.dp))
+                                            Text("Pin Current")
+                                        }
                                     }
 
-                                    if (isMapsCategoryExpanded) {
-                                        NavigationDrawerItem(
-                                            label = { Text(if (isProUser) "🗺️ Global Route Heatmap" else "🗺️ Global Route Heatmap (Pro)") },
-                                            selected = currentScreen == "route_map",
-                                            onClick = {
-                                                scope.launch { drawerState.close() }
-                                                if (isProUser) {
-                                                    tripForMap = null
-                                                    currentScreen = "route_map"
-                                                } else {
-                                                    showProUpgradeDialog = true
+                                    Text(
+                                        text = if (homeLat != null) "📍 Home Pinned" else "🏠 Home Not Set",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = if (homeLat != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+                                    )
+
+                                    HorizontalDivider()
+                                    Text("🎓 Trainer Incentive Settings", style = MaterialTheme.typography.titleSmall)
+                                    Surface(
+                                        color = if (isTrainingActive) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+                                        shape = RoundedCornerShape(8.dp),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Column(
+                                            modifier = Modifier.padding(10.dp),
+                                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                                        ) {
+                                            Text(
+                                                text = if (isTrainingActive) "Status: ACTIVE 🟢" else "Status: INACTIVE 🔴",
+                                                style = MaterialTheme.typography.labelLarge,
+                                                fontWeight = FontWeight.Bold,
+                                                color = if (isTrainingActive) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                            if (isTrainingActive) {
+                                                val tierLabel = when (savedTraineeTier) {
+                                                    "inexperienced" -> "Inexperienced (Wk $savedTrainingWeek of 4)"
+                                                    "experienced" -> "Experienced (Wk $savedTrainingWeek of 2)"
+                                                    else -> "Custom Rate"
                                                 }
+                                                Text(tierLabel, style = MaterialTheme.typography.bodySmall)
+                                                Text(
+                                                    "Added: +$${String.format(Locale.US, "%.2f", calculatedTrainerPay)}/wk",
+                                                    style = MaterialTheme.typography.labelMedium,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = MaterialTheme.colorScheme.primary
+                                                )
                                             }
-                                        )
 
-                                        NavigationDrawerItem(
-                                            label = { Text(if (isProUser) "🏢 Facility Search & Gate Tips" else "🏢 Facility Search & Gate Tips (Pro)") },
-                                            selected = currentScreen == "facility_search",
-                                            onClick = {
-                                                scope.launch { drawerState.close() }
-                                                if (isProUser) {
-                                                    currentScreen = "facility_search"
-                                                } else {
-                                                    showProUpgradeDialog = true
-                                                }
-                                            }
-                                        )
-
-                                        NavigationDrawerItem(
-                                            label = { Text("📋 Pre-Trip Inspection (DVIR)") },
-                                            selected = currentScreen == "dvir",
-                                            onClick = {
-                                                scope.launch { drawerState.close() }
-                                                currentScreen = "dvir"
-                                            }
-                                        )
-
-                                        NavigationDrawerItem(
-                                            label = { Text("📅 Form 2290 HVUT & 5k Exemption") },
-                                            selected = currentScreen == "hvut_tracker",
-                                            onClick = {
-                                                scope.launch { drawerState.close() }
-                                                currentScreen = "hvut_tracker"
-                                            }
-                                        )
-
-                                        val hasActiveTrip = savedLoads.any { it.tripState != "COMPLETED" && it.tripState != "NOT_STARTED" }
-                                        if (hasActiveTrip) {
-                                            NavigationDrawerItem(
-                                                label = { Text("➕ Add Historical Completed Load") },
-                                                selected = false,
+                                            Button(
                                                 onClick = {
                                                     scope.launch { drawerState.close() }
-                                                    tripToEdit = null
-                                                    isHistoricalEntry = true
-                                                    currentScreen = "entry"
-                                                }
-                                            )
-                                        }
-                                    }
-
-                                    HorizontalDivider()
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clickable { isAppSettingsCategoryExpanded = !isAppSettingsCategoryExpanded },
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Text("⚙️ APP SETTINGS", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, modifier = Modifier.weight(1f))
-                                        Icon(
-                                            if (isAppSettingsCategoryExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.primary
-                                        )
-                                    }
-
-                                    if (isAppSettingsCategoryExpanded) {
-                                        ExposedDropdownMenuBox(
-                                            expanded = themeDropdownExpanded,
-                                            onExpandedChange = { themeDropdownExpanded = !themeDropdownExpanded }
-                                        ) {
-                                            val currentThemeName = when (activeThemePreset) {
-                                                "cobalt_blue" -> "🔵 Cobalt Blue (Classic v1.x)"
-                                                "hi_vis_lime" -> "🟢 Hi-Vis Lime (Daytime)"
-                                                "night_vision_red" -> "🔴 Night Vision Red (2:00 AM)"
-                                                else -> "⚡ Safety Amber (Default v2.0)"
-                                            }
-                                            OutlinedTextField(
-                                                value = currentThemeName,
-                                                onValueChange = {},
-                                                readOnly = true,
-                                                label = { Text("🎨 App Theme & Colors") },
-                                                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = themeDropdownExpanded) },
-                                                colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
-                                                modifier = Modifier.fillMaxWidth().menuAnchor(type = MenuAnchorType.PrimaryNotEditable, enabled = true)
-                                            )
-                                            ExposedDropdownMenu(
-                                                expanded = themeDropdownExpanded,
-                                                onDismissRequest = { themeDropdownExpanded = false }
-                                            ) {
-                                                DropdownMenuItem(
-                                                    text = { Text("⚡ Safety Amber (Default v2.0)") },
-                                                    onClick = {
-                                                        devPrefs.edit().putString("theme_preset", "safety_amber").apply()
-                                                        themeDropdownExpanded = false
-                                                    }
-                                                )
-                                                DropdownMenuItem(
-                                                    text = { Text("🔵 Cobalt Blue (Classic v1.x)") },
-                                                    onClick = {
-                                                        devPrefs.edit().putString("theme_preset", "cobalt_blue").apply()
-                                                        themeDropdownExpanded = false
-                                                    }
-                                                )
-                                                DropdownMenuItem(
-                                                    text = { Text("🟢 Hi-Vis Lime (Daytime)") },
-                                                    onClick = {
-                                                        devPrefs.edit().putString("theme_preset", "hi_vis_lime").apply()
-                                                        themeDropdownExpanded = false
-                                                    }
-                                                )
-                                                DropdownMenuItem(
-                                                    text = { Text("🔴 Night Vision Red (2:00 AM)") },
-                                                    onClick = {
-                                                        devPrefs.edit().putString("theme_preset", "night_vision_red").apply()
-                                                        themeDropdownExpanded = false
-                                                    }
-                                                )
-                                            }
-                                        }
-                                    }
-
-                                    HorizontalDivider()
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clickable { isDriverConfigCategoryExpanded = !isDriverConfigCategoryExpanded },
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Text("💵 DRIVER & PAYROLL CONFIGURATIONS", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, modifier = Modifier.weight(1f))
-                                        Icon(
-                                            if (isDriverConfigCategoryExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.primary
-                                        )
-                                    }
-
-                                    if (isDriverConfigCategoryExpanded) {
-                                        OutlinedTextField(
-                                            value = defPercent,
-                                            onValueChange = { input ->
-                                                val filtered =
-                                                    input.filter { it.isDigit() || it == '.' }
-                                                if (filtered.isEmpty() || filtered == ".") defPercent =
-                                                    filtered
-                                                else if (filtered.count { it == '.' } <= 1) {
-                                                    val value = filtered.toDoubleOrNull()
-                                                    if ((value != null) && (value >= 0.0) && (value <= 100.0)) {
-                                                        defPercent = filtered
-                                                    }
-                                                }
-                                            },
-                                            label = { Text("Default Pay Rate (%)") },
-                                            singleLine = true,
-                                            keyboardOptions = KeyboardOptions(
-                                                keyboardType = KeyboardType.Number,
-                                                imeAction = ImeAction.Next
-                                            ),
-                                            modifier = Modifier.fillMaxWidth()
-                                        )
-
-                                        OutlinedTextField(
-                                            value = tarp8Pay,
-                                            onValueChange = { input ->
-                                                tarp8Pay = input.filter { it.isDigit() || it == '.' }
-                                            },
-                                            label = { Text("8' Drop Tarp Pay ($)") },
-                                            singleLine = true,
-                                            keyboardOptions = KeyboardOptions(
-                                                keyboardType = KeyboardType.Number,
-                                                imeAction = ImeAction.Next
-                                            ),
-                                            modifier = Modifier.fillMaxWidth()
-                                        )
-
-                                        OutlinedTextField(
-                                            value = tarp4Pay,
-                                            onValueChange = { input ->
-                                                tarp4Pay = input.filter { it.isDigit() || it == '.' }
-                                            },
-                                            label = { Text("4' Drop Tarp Pay ($)") },
-                                            singleLine = true,
-                                            keyboardOptions = KeyboardOptions(
-                                                keyboardType = KeyboardType.Number,
-                                                imeAction = ImeAction.Next
-                                            ),
-                                            modifier = Modifier.fillMaxWidth()
-                                        )
-
-                                        OutlinedTextField(
-                                            value = extraStopPay,
-                                            onValueChange = { input ->
-                                                extraStopPay = input.filter { it.isDigit() || it == '.' }
-                                            },
-                                            label = { Text("Extra Stop Pay ($)") },
-                                            singleLine = true,
-                                            keyboardOptions = KeyboardOptions(
-                                                keyboardType = KeyboardType.Number,
-                                                imeAction = ImeAction.Next
-                                            ),
-                                            modifier = Modifier.fillMaxWidth()
-                                        )
-
-                                        OutlinedTextField(
-                                            value = homeRawPaste,
-                                            onValueChange = {
-                                                homeRawPaste = it
-                                                isHomeVerified = false
-                                                homeLat = null
-                                                homeLong = null
-                                            },
-                                            label = { Text("Home Address (Paste)") },
-                                            modifier = Modifier.fillMaxWidth(),
-                                            minLines = 2
-                                        )
-
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.spacedBy(space = 8.dp)
-                                        ) {
-                                            Button(
-                                                onClick = { resolveHomeAddress(homeRawPaste) },
-                                                enabled = homeRawPaste.isNotBlank() && !isHomeVerified,
-                                                modifier = Modifier.weight(weight = 1f)
-                                            ) {
-                                                Text(if (isHomeVerified) "Verified ✅" else "Verify Address")
-                                            }
-
-                                            Button(
-                                                onClick = {
-                                                    val lastLat = TrackingService.currentLatitude
-                                                    val lastLong = TrackingService.currentLongitude
-                                                    if (lastLat != null && lastLong != null) {
-                                                        homeLat = lastLat
-                                                        homeLong = lastLong
-                                                        isHomeVerified = true
-                                                    }
+                                                    showTrainerSettingsDialog = true
                                                 },
                                                 colors = ButtonDefaults.buttonColors(
-                                                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                                                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                                                    containerColor = MaterialTheme.colorScheme.secondary,
+                                                    contentColor = MaterialTheme.colorScheme.onSecondary
                                                 ),
-                                                modifier = Modifier.weight(weight = 1f)
+                                                modifier = Modifier.fillMaxWidth()
                                             ) {
-                                                Icon(Icons.Default.LocationOn, contentDescription = null)
-                                                Spacer(Modifier.width(width = 4.dp))
-                                                Text("Pin Current")
+                                                Text("⚙️ Configure Trainer Pay")
                                             }
                                         }
+                                    }
 
-                                        Text(
-                                            text = if (homeLat != null) "📍 Home Pinned" else "🏠 Home Not Set",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = if (homeLat != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
-                                        )
-
-                                        Surface(
-                                            color = if (isTrainingActive) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
-                                            shape = RoundedCornerShape(8.dp),
-                                            modifier = Modifier.fillMaxWidth()
-                                        ) {
-                                            Column(
-                                                modifier = Modifier.padding(10.dp),
-                                                verticalArrangement = Arrangement.spacedBy(4.dp)
-                                            ) {
-                                                Text(
-                                                    text = if (isTrainingActive) "Trainer Status: ACTIVE 🟢" else "Trainer Status: INACTIVE 🔴",
-                                                    style = MaterialTheme.typography.labelLarge,
-                                                    fontWeight = FontWeight.Bold,
-                                                    color = if (isTrainingActive) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
-                                                )
-                                                if (isTrainingActive) {
-                                                    val tierLabel = when (savedTraineeTier) {
-                                                        "inexperienced" -> "Inexperienced (Wk $savedTrainingWeek of 4)"
-                                                        "experienced" -> "Experienced (Wk $savedTrainingWeek of 2)"
-                                                        else -> "Custom Rate"
-                                                    }
-                                                    Text(tierLabel, style = MaterialTheme.typography.bodySmall)
-                                                    Text(
-                                                        "Added: +$${String.format(Locale.US, "%.2f", calculatedTrainerPay)}/wk",
-                                                        style = MaterialTheme.typography.labelMedium,
-                                                        fontWeight = FontWeight.Bold,
-                                                        color = MaterialTheme.colorScheme.primary
-                                                    )
-                                                }
-
-                                                Button(
-                                                    onClick = {
-                                                        scope.launch { drawerState.close() }
-                                                        showTrainerSettingsDialog = true
-                                                    },
-                                                    colors = ButtonDefaults.buttonColors(
-                                                        containerColor = MaterialTheme.colorScheme.secondary,
-                                                        contentColor = MaterialTheme.colorScheme.onSecondary
-                                                    ),
-                                                    modifier = Modifier.fillMaxWidth()
-                                                ) {
-                                                    Text("⚙️ Configure Trainer Pay")
-                                                }
+                                    HorizontalDivider()
+                                    Button(
+                                        onClick = {
+                                            scope.launch { drawerState.close() }
+                                            if (isProUser) {
+                                                currentScreen = "facility_search"
+                                            } else {
+                                                showProUpgradeDialog = true
                                             }
-                                        }
+                                        },
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                                        ),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text(if (isProUser) "Review Facility Insights" else "Review Facility Insights (Pro)")
+                                    }
 
-                                        NavigationDrawerItem(
-                                            label = { Text("📖 Driver's Reference Manual") },
-                                            selected = false,
-                                            onClick = {
-                                                scope.launch { drawerState.close() }
-                                                triggerHelpView.value = true
+                                    HorizontalDivider()
+                                    Button(
+                                        onClick = {
+                                            scope.launch { drawerState.close() }
+                                            if (isProUser) {
+                                                tripForMap = null
+                                                currentScreen = "route_map"
+                                            } else {
+                                                showProUpgradeDialog = true
                                             }
-                                        )
+                                        },
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                                        ),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text(if (isProUser) "View Global Route Heatmap" else "Global Route Heatmap (Pro)")
+                                    }
 
-                                        NavigationDrawerItem(
-                                            label = { Text("📄 App Technical Specs (README)") },
-                                            selected = false,
-                                            onClick = {
-                                                scope.launch { drawerState.close() }
-                                                showReadmeDialog = true
-                                            }
-                                        )
-
-                                        NavigationDrawerItem(
-                                            label = { Text("📊 Export Payload History (CSV)") },
-                                            selected = false,
-                                            onClick = {
-                                                scope.launch { drawerState.close() }
-                                                exportToCsv()
-                                            }
-                                        )
+                                    HorizontalDivider()
+                                    Button(
+                                        onClick = {
+                                            scope.launch { drawerState.close() }
+                                            exportToCsv()
+                                        },
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = MaterialTheme.colorScheme.tertiary
+                                        ),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text("Export Payload History (CSV)")
                                     }
 
                                     HorizontalDivider()
                                     Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clickable { isSupportCategoryExpanded = !isSupportCategoryExpanded },
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                                     ) {
-                                        Text("🛠️ SUPPORT & DEV OPTIONS", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, modifier = Modifier.weight(1f))
-                                        Icon(
-                                            if (isSupportCategoryExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.primary
-                                        )
-                                    }
-
-                                    if (isSupportCategoryExpanded) {
-                                        NavigationDrawerItem(
-                                            label = { Text("🐛 Report Bug / Driver Feedback") },
-                                            selected = false,
+                                        Button(
                                             onClick = {
                                                 scope.launch { drawerState.close() }
-                                                showTesterFeedbackDialog = true
-                                            }
-                                        )
-
-                                        if (isDeviceAuthorized || BuildConfig.DEBUG) {
-                                            NavigationDrawerItem(
-                                                label = { Text("⚙️ Developer Options & SQLite DB Inspector") },
-                                                selected = currentScreen == "dev_notes",
-                                                onClick = {
-                                                    scope.launch { drawerState.close() }
-                                                    currentScreen = "dev_notes"
+                                                val (backupFile, msg) = DatabaseBackupManager.createDatabaseBackup(this@MainActivity)
+                                                if (backupFile != null) {
+                                                    val shareUri = DatabaseBackupManager.getShareableUri(this@MainActivity, backupFile)
+                                                    val intent = Intent(Intent.ACTION_SEND).apply {
+                                                        type = "application/x-sqlite3"
+                                                        putExtra(Intent.EXTRA_SUBJECT, "Load Tracker Pro Database Backup")
+                                                        putExtra(Intent.EXTRA_STREAM, shareUri)
+                                                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                                    }
+                                                    startActivity(Intent.createChooser(intent, "Backup Database"))
+                                                } else {
+                                                    Toast.makeText(this@MainActivity, msg, Toast.LENGTH_SHORT).show()
                                                 }
-                                            )
+                                            },
+                                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                                            modifier = Modifier.weight(1f)
+                                        ) {
+                                            Text("📤 Backup DB")
+                                        }
+
+                                        Button(
+                                            onClick = {
+                                                scope.launch { drawerState.close() }
+                                                backupRestoreLauncher.launch("*/*")
+                                            },
+                                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
+                                            modifier = Modifier.weight(1f)
+                                        ) {
+                                            Text("📥 Restore DB")
+                                        }
+                                    }
+
+                                    HorizontalDivider()
+                                    Button(
+                                        onClick = {
+                                            scope.launch { drawerState.close() }
+                                            showTesterFeedbackDialog = true
+                                        },
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                                        ),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Icon(Icons.Default.Edit, contentDescription = null)
+                                        Spacer(modifier = Modifier.width(width = 6.dp))
+                                        Text("🐛 Report Bug / Feedback")
+                                    }
+
+                                    HorizontalDivider()
+                                    Button(
+                                        onClick = {
+                                            scope.launch { drawerState.close() }
+                                            triggerHelpView.value = true
+                                        },
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = MaterialTheme.colorScheme.secondary
+                                        ),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text("Open Driver's Guide")
+                                    }
+
+                                    HorizontalDivider()
+                                    Button(
+                                        onClick = {
+                                            scope.launch { drawerState.close() }
+                                            showReadmeDialog = true
+                                        },
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                                        ),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Icon(Icons.Default.Info, contentDescription = null)
+                                        Spacer(modifier = Modifier.width(width = 6.dp))
+                                        Text("📖 App Technical Specs (README)")
+                                    }
+
+                                    val hasActiveTrip = savedLoads.any { it.tripState != "COMPLETED" && it.tripState != "NOT_STARTED" }
+                                    if (hasActiveTrip) {
+                                        HorizontalDivider()
+                                        Button(
+                                            onClick = {
+                                                scope.launch { drawerState.close() }
+                                                tripToEdit = null
+                                                isHistoricalEntry = true
+                                                currentScreen = "entry"
+                                            },
+                                            colors = ButtonDefaults.buttonColors(
+                                                containerColor = MaterialTheme.colorScheme.primary,
+                                                contentColor = MaterialTheme.colorScheme.onPrimary
+                                            ),
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Icon(Icons.Default.Add, contentDescription = null)
+                                            Spacer(modifier = Modifier.width(width = 6.dp))
+                                            Text("➕ Add Historical Completed Load")
+                                        }
+                                    }
+
+                                    if (isDeviceAuthorized || BuildConfig.DEBUG) {
+                                        Spacer(modifier = Modifier.weight(weight = 1f))
+                                        Button(
+                                            onClick = { showDevOptionsDialog = true },
+                                            colors = ButtonDefaults.buttonColors(
+                                                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                                contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                                            ),
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Icon(Icons.Default.Build, contentDescription = null)
+                                            Spacer(modifier = Modifier.width(width = 6.dp))
+                                            Text("🛠️ Developer Options")
                                         }
                                     } else {
                                         Spacer(modifier = Modifier.weight(weight = 1f))
@@ -880,23 +807,31 @@ class MainActivity : ComponentActivity() {
                             }
                         }
                     ) {
-                        val configuration = LocalConfiguration.current
-                        val isTablet = configuration.screenWidthDp >= 600
+                        val isWatchDevice = remember { packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_WATCH) }
+                        val allLoadsList by viewModel.allLoads.collectAsState(initial = emptyList())
+                        val activeWatchLoad = remember(allLoadsList) { allLoadsList.firstOrNull { it.tripState != "COMPLETED" } }
 
-                        val currentScreenTitle = when (currentScreen) {
-                            "dashboard" -> "Load Tracker Pro"
-                            "route_map" -> "Live Route Map"
-                            "fuel_logger" -> "Fuel & IFTA Logger"
-                            "ledger" -> "Pay Ledger"
-                            "facility_search" -> "Facility Directory"
-                            "entry" -> "Load Entry"
-                            else -> "Load Tracker Pro"
-                        }
+                        if (isWatchDevice) {
+                            WearActiveTripHud(
+                                activeLoad = activeWatchLoad,
+                                onWristAction = { action ->
+                                    val activePro = activeWatchLoad?.proNumber ?: return@WearActiveTripHud
+                                    when (action) {
+                                        WearableDataSyncManager.ACTION_ARRIVE_SHIPPER -> viewModel.updateTripState(activePro, "ACTIVE_SHIPPER")
+                                        WearableDataSyncManager.ACTION_DEPART_SHIPPER -> viewModel.updateTripState(activePro, "ACTIVE_LOADED")
+                                        WearableDataSyncManager.ACTION_ARRIVE_CONSIGNEE -> viewModel.updateTripState(activePro, "ACTIVE_CONSIGNEE")
+                                        WearableDataSyncManager.ACTION_COMPLETE_LOAD -> viewModel.updateTripState(activePro, "COMPLETED")
+                                    }
+                                }
+                            )
+                        } else {
+                            val configuration = LocalConfiguration.current
+                            val isTablet = configuration.screenWidthDp >= 600
 
-                        Scaffold(
+                            Scaffold(
                             topBar = {
                                 TopAppBar(
-                                    title = { Text(currentScreenTitle) },
+                                    title = { Text("Load Tracker Pro") },
                                     navigationIcon = {
                                         IconButton(onClick = { scope.launch { drawerState.open() } }) {
                                             Icon(
@@ -906,41 +841,6 @@ class MainActivity : ComponentActivity() {
                                         }
                                     }
                                 )
-                            },
-                            bottomBar = {
-                                NavigationBar {
-                                    NavigationBarItem(
-                                        selected = currentScreen == "dashboard",
-                                        onClick = { currentScreen = "dashboard" },
-                                        icon = { Icon(painterResource(R.drawable.ic_semi_truck), contentDescription = "Dashboard", modifier = Modifier.size(22.dp)) },
-                                        label = { Text("Dashboard") }
-                                    )
-                                    NavigationBarItem(
-                                        selected = currentScreen == "route_map",
-                                        onClick = {
-                                            if (isProUser) {
-                                                tripForMap = null
-                                                currentScreen = "route_map"
-                                            } else {
-                                                showProUpgradeDialog = true
-                                            }
-                                        },
-                                        icon = { Icon(Icons.Default.LocationOn, contentDescription = "Live Map") },
-                                        label = { Text("Live Map") }
-                                    )
-                                    NavigationBarItem(
-                                        selected = currentScreen == "fuel_logger",
-                                        onClick = { currentScreen = "fuel_logger" },
-                                        icon = { Icon(painterResource(R.drawable.ic_diesel_pump), contentDescription = "Fuel", modifier = Modifier.size(22.dp)) },
-                                        label = { Text("Fuel") }
-                                    )
-                                    NavigationBarItem(
-                                        selected = currentScreen == "ledger",
-                                        onClick = { currentScreen = "ledger" },
-                                        icon = { Icon(painterResource(R.drawable.ic_pay_stub), contentDescription = "Ledger", modifier = Modifier.size(22.dp)) },
-                                        label = { Text("Ledger") }
-                                    )
-                                }
                             }
                         ) { innerPadding ->
                             Row(
@@ -1201,38 +1101,8 @@ class MainActivity : ComponentActivity() {
                                             )
                                         }
 
-                                        "dvir" -> {
-                                            val dvirList by viewModel.allDvirEntries.collectAsState(initial = emptyList())
-                                            PreTripDvirScreen(
-                                                dvirEntries = dvirList,
-                                                onSaveDvir = { entry -> viewModel.saveDvir(entry) },
-                                                onDeleteDvir = { entry -> viewModel.deleteDvir(entry) },
-                                                onBack = { currentScreen = "dashboard" }
-                                            )
-                                        }
-
-                                        "hvut_tracker" -> {
-                                            HvutTrackerScreen(
-                                                loads = savedLoads,
-                                                onBack = { currentScreen = "dashboard" }
-                                            )
-                                        }
-
                                         "dev_notes" -> {
                                             DevNotesScreen(
-                                                onBack = { currentScreen = "dashboard" }
-                                            )
-                                        }
-
-                                        "ledger" -> {
-                                            LedgerScreen(
-                                                viewModel = viewModel,
-                                                onBack = { currentScreen = "dashboard" }
-                                            )
-                                        }
-
-                                        "fuel_logger" -> {
-                                            FuelLoggerScreen(
                                                 onBack = { currentScreen = "dashboard" }
                                             )
                                         }
@@ -1255,6 +1125,7 @@ class MainActivity : ComponentActivity() {
                                     }
                                 }
                             }
+                        }
 
                     if (showDevOptionsDialog) {
                         AlertDialog(
@@ -1526,34 +1397,6 @@ class MainActivity : ComponentActivity() {
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.secondary
                                     )
-
-                                    // 🔓 Dev Access Override Switch Card
-                                    Card(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        colors = CardDefaults.cardColors(
-                                            containerColor = if (isDevOverrideUnlocked) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant
-                                        )
-                                    ) {
-                                        Row(
-                                            modifier = Modifier.padding(12.dp).fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.SpaceBetween,
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Column(modifier = Modifier.weight(1f)) {
-                                                Text("🔓 Dev Access Override", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                                                Text("Instant 1-tap unlock for testing", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
-                                            }
-                                            Switch(
-                                                checked = isDevOverrideUnlocked,
-                                                onCheckedChange = { checked ->
-                                                    isDevOverrideUnlocked = checked
-                                                    isDeviceAuthorized = checked || BuildConfig.DEBUG
-                                                    devPrefs.edit().putBoolean("is_dev_override_unlocked", checked).apply()
-                                                    Toast.makeText(this@MainActivity, if (checked) "Developer Options Unlocked! 🔓" else "Dev Options Locked 🔒", Toast.LENGTH_SHORT).show()
-                                                }
-                                            )
-                                        }
-                                    }
 
                                     Card(
                                         modifier = Modifier.fillMaxWidth(),

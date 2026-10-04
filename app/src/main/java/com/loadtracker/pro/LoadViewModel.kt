@@ -52,21 +52,6 @@ class LoadViewModel(application: Application) :
 
     val allBreadcrumbs: Flow<List<TripBreadcrumb>> = loadDao.getAllBreadcrumbs()
 
-    // 📋 Pre-Trip DVIR
-    val allDvirEntries: Flow<List<DvirEntry>> = loadDao.getAllDvirEntries()
-
-    fun saveDvir(entry: DvirEntry) {
-        viewModelScope.launch {
-            loadDao.insertDvirEntry(entry)
-        }
-    }
-
-    fun deleteDvir(entry: DvirEntry) {
-        viewModelScope.launch {
-            loadDao.deleteDvirEntry(entry)
-        }
-    }
-
     init {
         viewModelScope.launch {
             loadDao.getAllLoads().collect { list ->
@@ -156,6 +141,12 @@ class LoadViewModel(application: Application) :
         }
     }
 
+    fun updateTripState(proNumber: String, newState: String) {
+        viewModelScope.launch {
+            loadDao.updateTripState(proNumber, newState)
+        }
+    }
+
     fun getCurrentWeekSummary(
         lumberRate: Double,
         steelRate: Double,
@@ -166,7 +157,7 @@ class LoadViewModel(application: Application) :
             System.currentTimeMillis()
         )
 
-        var totalPay = 0.0
+        var totalPayCents = 0L
         var totalActualMiles = 0.0
         var totalDispatchedMiles = 0.0
         var totalOutOfRouteMiles = 0.0
@@ -181,10 +172,9 @@ class LoadViewModel(application: Application) :
 
             if (loadFriday == targetFriday) {
                 if (load.isTrainingWeek) weekContainsTrainingLoad = true
-                
-                val baseSplit = load.loadPay * (
-                        load.percentageRate / 100.0
-                        )
+
+                val grossCents = load.loadPay.toCents()
+                val baseSplitCents = Math.round(grossCents * (load.percentageRate / 100.0))
 
                 var tarpPay = when (load.tarpType) {
                     "L" -> lumberRate
@@ -194,6 +184,7 @@ class LoadViewModel(application: Application) :
                 if (load.isPreTarped) {
                     tarpPay /= 2.0
                 }
+                val tarpCents = tarpPay.toCents()
 
                 val bounceBonus = if (
                     load.dispatchedBounceMiles >= 150.0
@@ -202,8 +193,9 @@ class LoadViewModel(application: Application) :
                 } else {
                     0.0
                 }
+                val bounceBonusCents = bounceBonus.toCents()
 
-                totalPay += (baseSplit + tarpPay + bounceBonus)
+                totalPayCents += (baseSplitCents + tarpCents + bounceBonusCents)
 
                 val actBounce = load.bounceMilesEnd -
                         load.bounceMilesStart
@@ -231,7 +223,9 @@ class LoadViewModel(application: Application) :
         val weekTrainerPay = weekLoads.maxOfOrNull { it.trainerPayRate }?.takeIf { it > 0.0 }
             ?: if (weekContainsTrainingLoad || isTrainingGlobal) trainerRate else 0.0
 
-        totalPay += weekTrainerPay
+        totalPayCents += weekTrainerPay.toCents()
+
+        val totalPay = totalPayCents.toDollars()
 
         val oorPct = if (totalDispatchedMiles > 0.0) {
             (totalOutOfRouteMiles / totalDispatchedMiles) * 100.0
@@ -261,11 +255,11 @@ class LoadViewModel(application: Application) :
             val actBounce = load.bounceMilesEnd - load.bounceMilesStart
             val actLoaded = load.loadedMilesEnd - load.loadedMilesStart
 
-            // Calculate Net Pay for the CSV
-            val baseSplit = load.loadPay * (load.percentageRate / 100.0)
-            val bounceBonus = if (load.dispatchedBounceMiles >= 150.0) load.dispatchedBounceMiles * 0.20 else 0.0
-            // Note: Tarp rates aren't stored in the load entity, so we'll just note the type
-            val netPayEstimate = baseSplit + bounceBonus
+            // Calculate Net Pay for the CSV in integer cents
+            val grossCents = load.loadPay.toCents()
+            val baseSplitCents = Math.round(grossCents * (load.percentageRate / 100.0))
+            val bounceBonusCents = (if (load.dispatchedBounceMiles >= 150.0) load.dispatchedBounceMiles * 0.20 else 0.0).toCents()
+            val netPayEstimate = (baseSplitCents + bounceBonusCents).toDollars()
 
             sb.append("${load.proNumber},")
             sb.append("$date,")
@@ -299,4 +293,8 @@ fun getPayPeriodDate(timestamp: Long): LocalDate {
 
     return pDate.with(TemporalAdjusters.next(DayOfWeek.FRIDAY))
 }
+
+fun Double.toCents(): Long = Math.round(this * 100.0)
+fun Long.toDollars(): Double = this / 100.0
+
 
