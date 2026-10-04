@@ -37,6 +37,7 @@ object WearableDataSyncManager {
                 dataMap.putDouble("loadedMiles", payload.loadedMiles)
                 dataMap.putLong("dockArrivalTime", payload.dockArrivalTime)
                 dataMap.putLong("timestamp", payload.timestamp)
+                dataMap.putLong("nonce", System.nanoTime()) // Force unique hash on every sync
             }
             val putDataReq = request.asPutDataRequest().setUrgent()
             Wearable.getDataClient(context).putDataItem(putDataReq)
