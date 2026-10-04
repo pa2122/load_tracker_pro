@@ -92,10 +92,21 @@ abstract class AppDatabase : RoomDatabase() {
         // Safe singleton factory constructor to control access to your data file
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
+                // Auto-migrate legacy file name tmc_loads_local.db -> load_tracker_local.db if needed
+                val newDbFile = context.getDatabasePath("load_tracker_local.db")
+                val oldDbFile = context.getDatabasePath("tmc_loads_local.db")
+                if (!newDbFile.exists() && oldDbFile.exists()) {
+                    try {
+                        oldDbFile.copyTo(newDbFile, overwrite = true)
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
+
                 val instance = Room.databaseBuilder(
                     context.applicationContext,
                     AppDatabase::class.java,
-                    "tmc_loads_local.db" // The actual tiny file written to your phone's hardware
+                    "load_tracker_local.db"
                 )
                     .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10)
                     .build()
