@@ -60,6 +60,15 @@ fun WearActiveTripHud(
     var phoneConnectivity by remember { mutableStateOf(WearConnectivityEngine.ConnectionStatus.CONNECTED) }
     var remoteLoadPayload by remember { mutableStateOf<WearableDataSyncManager.WearTripStatePayload?>(null) }
 
+    // Auto-send Active Trip Request to Phone on startup
+    LaunchedEffect(Unit) {
+        try {
+            WearConnectivityEngine.requestActiveLoadStep(ctx)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
     // Listen continuously to live active_trip_state DataEvents from phone
     DisposableEffect(Unit) {
         val listener = DataClient.OnDataChangedListener { dataEvents ->
@@ -101,9 +110,7 @@ fun WearActiveTripHud(
     val effectiveLoaded = remoteLoadPayload?.loadedMiles ?: (if (activeLoad != null && activeLoad.loadedMilesEnd > 0) activeLoad.loadedMilesEnd else activeLoad?.dispatchedLoadedMiles ?: 0.0)
     val effectiveDockTime = remoteLoadPayload?.dockArrivalTime ?: activeLoad?.dockArrivalTime
 
-    val hasActiveLoad = phoneConnectivity == WearConnectivityEngine.ConnectionStatus.CONNECTED &&
-            !effectivePro.isNullOrBlank() && 
-            effectiveState != "COMPLETED"
+    val hasActiveLoad = !effectivePro.isNullOrBlank() && effectiveState != "COMPLETED"
 
     Box(
         modifier = Modifier
