@@ -51,7 +51,7 @@ fun WearActiveTripHud(
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
 
-    var currentDiagnosticStep by remember { mutableStateOf(1) } // 1: Bluetooth, 2: Phone Node, 3: App Check, 4: Active Load, 5: Wrist HUD
+    var currentDiagnosticStep by remember { mutableStateOf(5) } // 5: Wrist HUD directly by default
     var isStepRunning by remember { mutableStateOf(false) }
     var stepMessage by remember { mutableStateOf("1. Tap below to check Bluetooth hardware.") }
     var stepRanSuccess by remember { mutableStateOf(false) }
