@@ -107,6 +107,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
+import androidx.lifecycle.lifecycleScope
 import com.loadtracker.pro.ui.theme.LoadTrackerProTheme
 import com.loadtracker.pro.CurrentLoad
 import com.google.android.gms.maps.model.LatLng
@@ -130,6 +131,31 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         checkAndRequestPermissions()
+
+        // Activity-level Wear OS Message Listener (Guaranteed active on launch)
+        com.google.android.gms.wearable.Wearable.getMessageClient(this).addListener { messageEvent ->
+            android.util.Log.d("WEAR_DEBUG", "Phone Activity received Wear message on path: ${messageEvent.path}")
+            if (messageEvent.path == WearableDataSyncManager.PATH_REQUEST_ACTIVE_TRIP_STATE) {
+                lifecycleScope.launch(Dispatchers.IO) {
+                    val dao = AppDatabase.getDatabase(applicationContext).loadDao()
+                    val loads: List<CurrentLoad> = dao.getAllLoads().firstOrNull() ?: emptyList()
+                    val activeLoad = loads.firstOrNull { it.tripState != "COMPLETED" }
+
+                    val payload = if (activeLoad != null) {
+                        WearableDataSyncManager.WearTripStatePayload(
+                            proNumber = activeLoad.proNumber,
+                            tripState = activeLoad.tripState,
+                            bounceMiles = if (activeLoad.bounceMilesEnd > 0) activeLoad.bounceMilesEnd else activeLoad.dispatchedBounceMiles,
+                            loadedMiles = if (activeLoad.loadedMilesEnd > 0) activeLoad.loadedMilesEnd else activeLoad.dispatchedLoadedMiles,
+                            dockArrivalTime = activeLoad.dockArrivalTime ?: activeLoad.pickupTimestamp
+                        )
+                    } else {
+                        WearableDataSyncManager.WearTripStatePayload(proNumber = "", tripState = "COMPLETED", bounceMiles = 0.0, loadedMiles = 0.0)
+                    }
+                    WearableDataSyncManager.syncTripStateToWearable(this@MainActivity, payload)
+                }
+            }
+        }
 
         setContent {
             LoadTrackerProTheme {
