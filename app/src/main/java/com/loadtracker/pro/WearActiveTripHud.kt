@@ -22,6 +22,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -37,6 +38,7 @@ import androidx.compose.ui.unit.sp
 import com.google.android.gms.wearable.DataClient
 import com.google.android.gms.wearable.DataMapItem
 import com.google.android.gms.wearable.Wearable
+import kotlinx.coroutines.delay
 import java.util.Locale
 
 @Composable
@@ -45,8 +47,16 @@ fun WearActiveTripHud(
     onWristAction: (String) -> Unit
 ) {
     val ctx = LocalContext.current
-    var isConnectedToPhone by remember { mutableStateOf(true) }
+    var phoneConnectivity by remember { mutableStateOf(WearConnectivityEngine.ConnectionStatus.CONNECTED) }
     var remoteLoadPayload by remember { mutableStateOf<WearableDataSyncManager.WearTripStatePayload?>(null) }
+
+    // Periodically run 4-step connectivity pipeline (Bluetooth -> Phone Node -> App Installed)
+    LaunchedEffect(Unit) {
+        while (true) {
+            phoneConnectivity = WearConnectivityEngine.checkPhoneConnectivity(ctx)
+            delay(3000L)
+        }
+    }
 
     // Listen continuously to live active_trip_state DataEvents from phone
     DisposableEffect(Unit) {
@@ -71,7 +81,6 @@ fun WearActiveTripHud(
                     } else {
                         remoteLoadPayload = null
                     }
-                    isConnectedToPhone = true
                 }
             }
         }
@@ -84,7 +93,7 @@ fun WearActiveTripHud(
     }
 
     // Reset remote payload when local DB load completes or clears
-    androidx.compose.runtime.LaunchedEffect(activeLoad?.tripState) {
+    LaunchedEffect(activeLoad?.tripState) {
         if (activeLoad == null || activeLoad.tripState == "COMPLETED") {
             remoteLoadPayload = null
         }
@@ -97,7 +106,10 @@ fun WearActiveTripHud(
     val effectiveLoaded = remoteLoadPayload?.loadedMiles ?: (if (activeLoad != null && activeLoad.loadedMilesEnd > 0) activeLoad.loadedMilesEnd else activeLoad?.dispatchedLoadedMiles ?: 0.0)
     val effectiveDockTime = remoteLoadPayload?.dockArrivalTime ?: activeLoad?.dockArrivalTime
 
-    val hasActiveLoad = !effectivePro.isNullOrBlank() && effectiveState != "COMPLETED" && (activeLoad == null || activeLoad.tripState != "COMPLETED")
+    val hasActiveLoad = phoneConnectivity == WearConnectivityEngine.ConnectionStatus.CONNECTED &&
+            !effectivePro.isNullOrBlank() && 
+            effectiveState != "COMPLETED" && 
+            (activeLoad == null || activeLoad.tripState != "COMPLETED")
 
     Box(
         modifier = Modifier
@@ -112,7 +124,14 @@ fun WearActiveTripHud(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.SpaceBetween
         ) {
-            // 1. Connection Status Badge at Top
+            // 1. Connection Status Badge at Top (Evaluated via 4-step pipeline)
+            val (statusLabel, badgeColor, textColor) = when (phoneConnectivity) {
+                WearConnectivityEngine.ConnectionStatus.BLUETOOTH_OFF -> Triple("BLUETOOTH OFF", Color(0xFFEF4444), Color(0xFFFCA5A5))
+                WearConnectivityEngine.ConnectionStatus.PHONE_DISCONNECTED -> Triple("DISCONNECTED", Color(0xFFEF4444), Color(0xFFFCA5A5))
+                WearConnectivityEngine.ConnectionStatus.APP_NOT_INSTALLED_ON_PHONE -> Triple("INSTALL ON PHONE", Color(0xFFF59E0B), Color(0xFFFDE68A))
+                WearConnectivityEngine.ConnectionStatus.CONNECTED -> Triple("PHONE CONNECTED", Color(0xFF22C55E), Color(0xFF86EFAC))
+            }
+
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.Center,
@@ -121,16 +140,13 @@ fun WearActiveTripHud(
                 Box(
                     modifier = Modifier
                         .size(6.dp)
-                        .background(
-                            if (isConnectedToPhone) Color(0xFF22C55E) else Color(0xFFEF4444),
-                            shape = CircleShape
-                        )
+                        .background(badgeColor, shape = CircleShape)
                 )
                 Spacer(modifier = Modifier.width(4.dp))
                 Text(
-                    text = if (isConnectedToPhone) "PHONE CONNECTED" else "DISCONNECTED",
+                    text = statusLabel,
                     style = MaterialTheme.typography.labelSmall,
-                    color = if (isConnectedToPhone) Color(0xFF86EFAC) else Color(0xFFFCA5A5),
+                    color = textColor,
                     fontSize = 8.sp,
                     fontWeight = FontWeight.Bold
                 )
@@ -143,8 +159,16 @@ fun WearActiveTripHud(
                     verticalArrangement = Arrangement.Center,
                     modifier = Modifier.weight(1f)
                 ) {
+                    val fallbackTitle = if (phoneConnectivity == WearConnectivityEngine.ConnectionStatus.CONNECTED) "📍 No Active Trip" else "📱 Check Phone"
+                    val fallbackSub = when (phoneConnectivity) {
+                        WearConnectivityEngine.ConnectionStatus.BLUETOOTH_OFF -> "Turn on Bluetooth on phone & watch."
+                        WearConnectivityEngine.ConnectionStatus.PHONE_DISCONNECTED -> "Connect watch to phone via Bluetooth."
+                        WearConnectivityEngine.ConnectionStatus.APP_NOT_INSTALLED_ON_PHONE -> "Install Load Tracker Pro on phone."
+                        WearConnectivityEngine.ConnectionStatus.CONNECTED -> "Start a load on your phone to track on wrist."
+                    }
+
                     Text(
-                        "📍 No Active Trip",
+                        fallbackTitle,
                         style = MaterialTheme.typography.titleSmall,
                         color = Color.White,
                         fontWeight = FontWeight.Bold,
@@ -152,7 +176,7 @@ fun WearActiveTripHud(
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        "Start a load on your phone to track on wrist.",
+                        fallbackSub,
                         style = MaterialTheme.typography.bodySmall,
                         color = Color(0xFF94A3B8),
                         textAlign = TextAlign.Center,
