@@ -87,6 +87,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberDrawerState
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -97,6 +98,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.LaunchedEffect
+import kotlinx.coroutines.flow.firstOrNull
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -106,6 +108,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import com.loadtracker.pro.ui.theme.LoadTrackerProTheme
+import com.loadtracker.pro.CurrentLoad
 import com.google.android.gms.maps.model.LatLng
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -810,6 +813,33 @@ class MainActivity : ComponentActivity() {
                         val isWatchDevice = remember { packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_WATCH) }
                         val allLoadsList by viewModel.allLoads.collectAsState(initial = emptyList())
                         val activeWatchLoad = remember(allLoadsList) { allLoadsList.firstOrNull { it.tripState != "COMPLETED" } }
+
+                        DisposableEffect(allLoadsList) {
+                            val messageListener = com.google.android.gms.wearable.MessageClient.OnMessageReceivedListener { messageEvent ->
+                                android.util.Log.d("WEAR_DEBUG", "Phone received Wear message on path: ${messageEvent.path}")
+                                if (messageEvent.path == WearableDataSyncManager.PATH_REQUEST_ACTIVE_TRIP_STATE) {
+                                    val activeLoad = allLoadsList.firstOrNull { it.tripState != "COMPLETED" }
+                                    val payload = if (activeLoad != null) {
+                                        WearableDataSyncManager.WearTripStatePayload(
+                                            proNumber = activeLoad.proNumber,
+                                            tripState = activeLoad.tripState,
+                                            bounceMiles = if (activeLoad.bounceMilesEnd > 0) activeLoad.bounceMilesEnd else activeLoad.dispatchedBounceMiles,
+                                            loadedMiles = if (activeLoad.loadedMilesEnd > 0) activeLoad.loadedMilesEnd else activeLoad.dispatchedLoadedMiles,
+                                            dockArrivalTime = activeLoad.dockArrivalTime ?: activeLoad.pickupTimestamp
+                                        )
+                                    } else {
+                                        WearableDataSyncManager.WearTripStatePayload(proNumber = "", tripState = "COMPLETED", bounceMiles = 0.0, loadedMiles = 0.0)
+                                    }
+                                    WearableDataSyncManager.syncTripStateToWearable(this@MainActivity, payload)
+                                }
+                            }
+
+                            com.google.android.gms.wearable.Wearable.getMessageClient(this@MainActivity).addListener(messageListener)
+
+                            onDispose {
+                                com.google.android.gms.wearable.Wearable.getMessageClient(this@MainActivity).removeListener(messageListener)
+                            }
+                        }
 
                         if (isWatchDevice) {
                             WearActiveTripHud(
