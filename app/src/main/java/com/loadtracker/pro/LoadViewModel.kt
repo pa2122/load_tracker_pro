@@ -135,15 +135,27 @@ class LoadViewModel(application: Application) :
         }
     }
 
+    private fun notifyWearableOfTripState(proNumber: String, state: String, bounce: Double = 0.0, loaded: Double = 0.0) {
+        val payload = WearableDataSyncManager.WearTripStatePayload(
+            proNumber = proNumber,
+            tripState = state,
+            bounceMiles = bounce,
+            loadedMiles = loaded
+        )
+        WearableDataSyncManager.syncTripStateToWearable(getApplication(), payload)
+    }
+
     fun deleteLoad(load: CurrentLoad) {
         viewModelScope.launch {
             loadDao.deleteLoad(load)
+            notifyWearableOfTripState(load.proNumber, "COMPLETED")
         }
     }
 
     fun updateTripState(proNumber: String, newState: String) {
         viewModelScope.launch {
             loadDao.updateTripState(proNumber, newState)
+            notifyWearableOfTripState(proNumber, newState)
         }
     }
 

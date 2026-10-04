@@ -84,20 +84,20 @@ fun WearActiveTripHud(
     }
 
     // Reset remote payload when local DB load completes or clears
-    androidx.compose.runtime.LaunchedEffect(activeLoad) {
+    androidx.compose.runtime.LaunchedEffect(activeLoad?.tripState) {
         if (activeLoad == null || activeLoad.tripState == "COMPLETED") {
             remoteLoadPayload = null
         }
     }
 
     // Effective active load: prioritize live Wearable DataMap from phone, fallback to local DB load
-    val effectivePro = remoteLoadPayload?.proNumber ?: activeLoad?.proNumber
-    val effectiveState = remoteLoadPayload?.tripState ?: activeLoad?.tripState
+    val effectivePro = if (activeLoad?.tripState == "COMPLETED") null else (remoteLoadPayload?.proNumber ?: activeLoad?.proNumber)
+    val effectiveState = if (activeLoad?.tripState == "COMPLETED") "COMPLETED" else (remoteLoadPayload?.tripState ?: activeLoad?.tripState)
     val effectiveBounce = remoteLoadPayload?.bounceMiles ?: (if (activeLoad != null && activeLoad.bounceMilesEnd > 0) activeLoad.bounceMilesEnd else activeLoad?.dispatchedBounceMiles ?: 0.0)
     val effectiveLoaded = remoteLoadPayload?.loadedMiles ?: (if (activeLoad != null && activeLoad.loadedMilesEnd > 0) activeLoad.loadedMilesEnd else activeLoad?.dispatchedLoadedMiles ?: 0.0)
     val effectiveDockTime = remoteLoadPayload?.dockArrivalTime ?: activeLoad?.dockArrivalTime
 
-    val hasActiveLoad = !effectivePro.isNullOrBlank() && effectiveState != "COMPLETED"
+    val hasActiveLoad = !effectivePro.isNullOrBlank() && effectiveState != "COMPLETED" && (activeLoad == null || activeLoad.tripState != "COMPLETED")
 
     Box(
         modifier = Modifier
