@@ -15,6 +15,7 @@ composeMarkdown = "0.3.1"
 coil = "2.7.0"
 mapsCompose = "6.1.2"
 playServicesMaps = "19.0.0"
+playServicesWearable = "19.0.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -40,6 +41,7 @@ compose-markdown = { module = "com.github.jeziellago:compose-markdown", version.
 coil-compose = { module = "io.coil-kt:coil-compose", version.ref = "coil" }
 maps-compose = { module = "com.google.maps.android:maps-compose", version.ref = "mapsCompose" }
 play-services-maps = { module = "com.google.android.gms:play-services-maps", version.ref = "playServicesMaps" }
+play-services-wearable = { module = "com.google.android.gms:play-services-wearable", version.ref = "playServicesWearable" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
