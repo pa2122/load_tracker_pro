@@ -328,6 +328,24 @@ class TrackingService : Service() {
         } else {
             startForeground(NOTIFICATION_ID, notification)
         }
+
+        // Sync live active trip state to Wear OS Smartwatch
+        val activePro = activeProNumber
+        if (activePro != null) {
+            val stateText = when (activeSegment) {
+                "Bounce" -> "ACTIVE_BOUNCE"
+                "Loaded" -> "ACTIVE_LOADED"
+                "Paused" -> "ACTIVE_SHIPPER"
+                else -> "ACTIVE_BOUNCE"
+            }
+            val payload = WearableDataSyncManager.WearTripStatePayload(
+                proNumber = activePro,
+                tripState = stateText,
+                bounceMiles = totalBounceMilesTracked.value,
+                loadedMiles = totalLoadedMilesTracked.value
+            )
+            WearableDataSyncManager.syncTripStateToWearable(this, payload)
+        }
     }
 
     override fun onDestroy() {
