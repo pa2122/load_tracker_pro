@@ -30,7 +30,7 @@ android {
     val mapsApiKey = localProps.getProperty("MAPS_API_KEY", "")
 
     val vMajor = versionProps.getProperty("VERSION_MAJOR", "1").toInt()
-    val vMinor = versionProps.getProperty("VERSION_MINOR", "0").toInt()
+    val vMinor = versionProps.getProperty("VERSION_MINOR", "10").toInt()
     val vPatch = versionProps.getProperty("VERSION_PATCH", "0").toInt()
     val vBuild = versionProps.getProperty("VERSION_BUILD", "100").toInt()
 
@@ -57,6 +57,11 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    val releaseStoreFile = localProps.getProperty("RELEASE_STORE_FILE", "")
+    val releaseStorePassword = localProps.getProperty("RELEASE_STORE_PASSWORD", "")
+    val releaseKeyAlias = localProps.getProperty("RELEASE_KEY_ALIAS", "")
+    val releaseKeyPassword = localProps.getProperty("RELEASE_KEY_PASSWORD", "")
+
     signingConfigs {
         create("sharedDebug") {
             storeFile = file("debug.keystore")
@@ -64,15 +69,27 @@ android {
             keyAlias = "androiddebugkey"
             keyPassword = "android"
         }
+        create("release") {
+            if (releaseStoreFile.isNotBlank() && file(releaseStoreFile).exists()) {
+                storeFile = file(releaseStoreFile)
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            } else {
+                storeFile = file("debug.keystore")
+                storePassword = "android"
+                keyAlias = "androiddebugkey"
+                keyPassword = "android"
+            }
+        }
     }
 
     buildTypes {
         debug {
-            applicationIdSuffix = ".v2"
-            resValue("string", "app_name", "Load Tracker v2 🚀")
             signingConfig = signingConfigs.getByName("sharedDebug")
         }
         release {
+            signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = false
             ndk {
                 debugSymbolLevel = "FULL"
@@ -84,11 +101,11 @@ android {
         }
     }
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions {
-        jvmTarget = "11"
+        jvmTarget = "17"
     }
     buildFeatures {
         compose = true
@@ -124,7 +141,8 @@ dependencies {
     implementation(libs.compose.markdown)
     implementation(libs.coil.compose)
 
-    // 🗺️ Google Maps for Route Visualization
+    // 🗺️ Google Maps & Wearable Sync
     implementation(libs.maps.compose)
     implementation(libs.play.services.maps)
+    implementation(libs.play.services.wearable)
 }
