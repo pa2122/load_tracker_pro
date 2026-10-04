@@ -133,17 +133,29 @@ object WearConnectivityEngine {
         return try {
             val nodeClient = Wearable.getNodeClient(context)
             val nodes = nodeClient.connectedNodes.await()
-            val targetNode = nodes.firstOrNull()?.id
-            if (targetNode != null) {
-                Wearable.getMessageClient(context).sendMessage(
-                    targetNode,
-                    WearableDataSyncManager.PATH_REQUEST_ACTIVE_TRIP_STATE,
-                    ByteArray(0)
-                ).await()
-                Pair(true, "✓ Step 4: Requested Active Trip Data from Phone")
+            val capabilityClient = Wearable.getCapabilityClient(context)
+            val capabilityInfo = try {
+                capabilityClient.getCapability(CAPABILITY_PHONE_APP, CapabilityClient.FILTER_REACHABLE).await()
+            } catch (_: Exception) { null }
+
+            val allNodes = (nodes.map { it.id } + (capabilityInfo?.nodes?.map { it.id } ?: emptyList())).toSet()
+
+            if (allNodes.isNotEmpty()) {
+                allNodes.forEach { nodeId ->
+                    Wearable.getMessageClient(context).sendMessage(
+                        nodeId,
+                        WearableDataSyncManager.PATH_REQUEST_ACTIVE_TRIP_STATE,
+                        ByteArray(0)
+                    ).await()
+                }
             } else {
-                Pair(true, "✓ Step 4: Requesting Active Trip Data via Data Layer")
+                // Broadcast to all nodes using DataClient PutDataMap as a fallback trigger
+                WearableDataSyncManager.syncTripStateToWearable(
+                    context,
+                    WearableDataSyncManager.WearTripStatePayload(proNumber = "", tripState = "REQUEST", bounceMiles = 0.0, loadedMiles = 0.0)
+                )
             }
+            Pair(true, "✓ Step 4: Requested Active Trip Data from Phone")
         } catch (e: Exception) {
             Pair(true, "✓ Step 4: Requesting Active Trip Data via Data Layer")
         }
