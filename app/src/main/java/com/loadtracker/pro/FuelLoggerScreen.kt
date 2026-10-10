@@ -11,6 +11,7 @@ import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -48,10 +49,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -119,28 +118,40 @@ fun FuelLoggerScreen(
         }
     }
 
-    // Analytics Calculations
-    val totalGallons = filteredFuelEntries.sumOf { it.gallons }
-    val totalCost = filteredFuelEntries.sumOf { it.totalCost }
-    val avgPpg = if (totalGallons > 0) totalCost / totalGallons else 0.0
-
-    val sortedEntries = remember(filteredFuelEntries) { filteredFuelEntries.sortedBy { it.odometer } }
-    val calculatedMpg = remember(sortedEntries, totalGallons) {
-        if (sortedEntries.size >= 2 && totalGallons > 0) {
-            val totalMilesDriven = sortedEntries.last().odometer - sortedEntries.first().odometer
-            if (totalMilesDriven > 0) totalMilesDriven / totalGallons else 0.0
-        } else {
-            0.0
-        }
-    }
-
     val stateIftaMap = remember(filteredFuelEntries) {
         filteredFuelEntries.groupBy { it.state.uppercase(Locale.US) }
     }
 
-    fun exportIftaCsv() {
+    val totalGallons = remember(filteredFuelEntries) { filteredFuelEntries.sumOf { it.gallons } }
+    val totalCost = remember(filteredFuelEntries) { filteredFuelEntries.sumOf { it.totalCost } }
+    val avgPpg = if (totalGallons > 0) totalCost / totalGallons else 0.0
+
+    val calculatedMpg = remember(filteredFuelEntries) {
+        if (filteredFuelEntries.size < 2) 0.0
+        else {
+            val sorted = filteredFuelEntries.sortedBy { it.odometer }
+            val firstOdo = sorted.first().odometer
+            val lastOdo = sorted.last().odometer
+            val totalMiles = lastOdo - firstOdo
+            val totalGalsSinceFirst = sorted.drop(1).sumOf { it.gallons }
+            if (totalGalsSinceFirst > 0 && totalMiles > 0) totalMiles / totalGalsSinceFirst else 0.0
+        }
+    }
+
+    val exportIftaCsv: () -> Unit = {
         try {
-            val csvText = IftaTaxReportExporter.generateIftaCsv(selectedQuarterFilter, filteredFuelEntries, breadcrumbs)
+            val csvText = StringBuilder().apply {
+                append("Quarter,State,Fuel Gallons,Fuel Cost,Tracked State Miles,Calculated State MPG\n")
+                val allStateCodes = (stateIftaMap.keys + stateMileageMap.keys).toSet().sorted()
+                allStateCodes.forEach { code ->
+                    val stateEntries = stateIftaMap[code] ?: emptyList()
+                    val gal = stateEntries.sumOf { it.gallons }
+                    val cost = stateEntries.sumOf { it.totalCost }
+                    val miles = stateMileageMap[code] ?: 0.0
+                    val mpgStr = if (gal > 0) String.format(Locale.US, "%.2f", miles / gal) else "N/A"
+                    append("$selectedQuarterFilter,$code,${String.format(Locale.US, "%.2f", gal)},${String.format(Locale.US, "%.2f", cost)},${String.format(Locale.US, "%.1f", miles)},$mpgStr\n")
+                }
+            }.toString()
 
             val file = File(ctx.filesDir, "ifta_tax_report_$selectedQuarterFilter.csv")
             file.writeText(csvText)
@@ -223,11 +234,12 @@ fun FuelLoggerScreen(
                         containerColor = MaterialTheme.colorScheme.secondaryContainer,
                         contentColor = MaterialTheme.colorScheme.onSecondaryContainer
                     ),
-                    enabled = filteredFuelEntries.isNotEmpty() || allStatesList.isNotEmpty()
+                    enabled = filteredFuelEntries.isNotEmpty() || allStatesList.isNotEmpty(),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
                 ) {
                     Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("Export", style = MaterialTheme.typography.labelMedium)
+                    Text("Export CSV", style = MaterialTheme.typography.labelSmall)
                 }
             }
 
@@ -283,18 +295,7 @@ fun FuelLoggerScreen(
                         modifier = Modifier.padding(12.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text("MAP IFTA State Audit (${allStatesList.size} States)", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                            if (allStatesList.size > 5) {
-                                TextButton(onClick = { isIftaExpanded = !isIftaExpanded }) {
-                                    Text(if (isIftaExpanded) "▲ Top 5" else "▼ View All (${allStatesList.size})")
-                                }
-                            }
-                        }
+                        Text("🗺️ IFTA State Tax & Mileage Audit (${allStatesList.size} States)", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
 
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             displayedStates.forEachIndexed { index, (stateCode, stateGal, stateMiles) ->
@@ -335,13 +336,22 @@ fun FuelLoggerScreen(
                                 }
                             }
                         }
+
+                        if (allStatesList.size > 5) {
+                            TextButton(
+                                onClick = { isIftaExpanded = !isIftaExpanded },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(if (isIftaExpanded) "▲ Show Top 5 Only" else "▼ View All ${allStatesList.size} Active States")
+                            }
+                        }
                     }
                 }
             }
 
             HorizontalDivider()
 
-            // 4. Fuel Fill-Up History Ledger
+            // 3. Fuel Fill-Up History Ledger
             if (filteredFuelEntries.isEmpty()) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text("No fuel stops found for $selectedQuarterFilter.", color = MaterialTheme.colorScheme.secondary)
@@ -349,6 +359,7 @@ fun FuelLoggerScreen(
             } else {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(bottom = 88.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     items(filteredFuelEntries) { entry ->
@@ -581,69 +592,72 @@ fun FuelLoggerScreen(
                         val gal = inputGallons.toDoubleOrNull()
                         val ppg = inputPpg.toDoubleOrNull()
                         val odo = inputOdometer.toDoubleOrNull()
-                        val defGalVal = inputDefGallons.toDoubleOrNull() ?: 0.0
-                        val defCostVal = inputDefCost.toDoubleOrNull() ?: 0.0
 
-                        if (gal != null && ppg != null && odo != null && inputState.isNotBlank()) {
-                            val totalCostCalc = gal * ppg
+                        if (gal == null || gal <= 0.0 || ppg == null || ppg <= 0.0 || odo == null || odo <= 0.0) {
+                            Toast.makeText(ctx, "Please enter valid Gallons, Price/Gal, and Odometer reading.", Toast.LENGTH_LONG).show()
+                            return@Button
+                        }
+
+                        val defGal = inputDefGallons.toDoubleOrNull() ?: 0.0
+                        val defCst = inputDefCost.toDoubleOrNull() ?: 0.0
+
+                        scope.launch(Dispatchers.IO) {
                             val newEntry = FuelEntry(
                                 timestamp = System.currentTimeMillis(),
                                 gallons = gal,
-                                totalCost = totalCostCalc,
                                 pricePerGallon = ppg,
-                                state = inputState.trim().uppercase(Locale.US),
+                                totalCost = gal * ppg,
+                                state = inputState,
                                 stationName = inputStation,
                                 odometer = odo,
-                                defGallons = defGalVal,
-                                defCost = defCostVal
+                                defGallons = defGal,
+                                defCost = defCst
                             )
-
-                            scope.launch(Dispatchers.IO) {
-                                db.loadDao().insertFuelEntry(newEntry)
-                                withContext(Dispatchers.Main) {
-                                    Toast.makeText(ctx, "Fuel stop logged successfully!", Toast.LENGTH_SHORT).show()
-                                    showAddFuelDialog = false
-                                }
+                            db.loadDao().insertFuelEntry(newEntry)
+                            withContext(Dispatchers.Main) {
+                                showAddFuelDialog = false
+                                Toast.makeText(ctx, "✓ Diesel Fill-up Logged ($inputState)!", Toast.LENGTH_SHORT).show()
                             }
-                        } else {
-                            Toast.makeText(ctx, "Please enter valid Gallons, Price/Gal, State, and Odometer.", Toast.LENGTH_SHORT).show()
                         }
                     }
-                ) { Text("Save Fuel Stop") }
+                ) {
+                    Text("Save Fuel Log")
+                }
             },
             dismissButton = {
-                TextButton(onClick = { showAddFuelDialog = false }) { Text("Cancel") }
+                TextButton(onClick = { showAddFuelDialog = false }) {
+                    Text("Cancel")
+                }
             }
         )
     }
 
-    val deletingEntry = entryToDelete
-    if (deletingEntry != null) {
-        val dateStr = Instant.ofEpochMilli(deletingEntry.timestamp)
-            .atZone(ZoneId.systemDefault())
-            .toLocalDate()
-            .format(DateTimeFormatter.ofPattern("MM/dd/yyyy"))
-
+    if (entryToDelete != null) {
+        val target = entryToDelete!!
         AlertDialog(
             onDismissRequest = { entryToDelete = null },
-            title = { Text("🗑️ Delete Fuel Fill-Up?") },
-            text = { Text("Delete $dateStr fuel stop at ${deletingEntry.stationName} (${deletingEntry.gallons} gal / $${deletingEntry.totalCost})?") },
+            title = { Text("Delete Fuel Stop?") },
+            text = { Text("Are you sure you want to delete this fuel stop entry (${target.stationName} - ${target.state})?") },
             confirmButton = {
                 Button(
                     onClick = {
                         scope.launch(Dispatchers.IO) {
-                            db.loadDao().deleteFuelEntry(deletingEntry)
+                            db.loadDao().deleteFuelEntry(target)
                             withContext(Dispatchers.Main) {
-                                Toast.makeText(ctx, "Deleted fuel stop!", Toast.LENGTH_SHORT).show()
                                 entryToDelete = null
+                                Toast.makeText(ctx, "Fuel stop deleted.", Toast.LENGTH_SHORT).show()
                             }
                         }
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
-                ) { Text("Delete") }
+                ) {
+                    Text("Delete")
+                }
             },
             dismissButton = {
-                TextButton(onClick = { entryToDelete = null }) { Text("Cancel") }
+                TextButton(onClick = { entryToDelete = null }) {
+                    Text("Cancel")
+                }
             }
         )
     }
