@@ -214,13 +214,15 @@ fun FuelLoggerScreen(
                 .padding(horizontal = 16.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // Quarterly Filter Chips & Export Button Row
-            Row(
+            // Quarterly Filter Chips & Export Button Rows
+            Column(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
                     FilterChip(selected = selectedQuarterFilter == "ALL", onClick = { selectedQuarterFilter = "ALL" }, label = { Text("All") })
                     FilterChip(selected = selectedQuarterFilter == "Q1", onClick = { selectedQuarterFilter = "Q1" }, label = { Text("Q1") })
                     FilterChip(selected = selectedQuarterFilter == "Q2", onClick = { selectedQuarterFilter = "Q2" }, label = { Text("Q2") })
@@ -228,18 +230,22 @@ fun FuelLoggerScreen(
                     FilterChip(selected = selectedQuarterFilter == "Q4", onClick = { selectedQuarterFilter = "Q4" }, label = { Text("Q4") })
                 }
 
-                Button(
-                    onClick = { exportIftaCsv() },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                    ),
-                    enabled = filteredFuelEntries.isNotEmpty() || allStatesList.isNotEmpty(),
-                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
                 ) {
-                    Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("Export CSV", style = MaterialTheme.typography.labelSmall)
+                    Button(
+                        onClick = { exportIftaCsv() },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                        ),
+                        enabled = filteredFuelEntries.isNotEmpty() || allStatesList.isNotEmpty()
+                    ) {
+                        Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("📄 Export IFTA CSV Schedule")
+                    }
                 }
             }
 

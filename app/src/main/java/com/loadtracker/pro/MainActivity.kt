@@ -436,7 +436,7 @@ class MainActivity : ComponentActivity() {
 
                     ModalNavigationDrawer(
                         drawerState = drawerState,
-                        gesturesEnabled = currentScreen != "route_map",
+                        gesturesEnabled = false, // Disables accidental horizontal swipe gestures while scrolling lists
                         drawerContent = {
                             ModalDrawerSheet(modifier = Modifier.width(width = 300.dp)) {
                                 Column(
