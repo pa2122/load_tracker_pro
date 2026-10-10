@@ -511,6 +511,17 @@ class MainActivity : ComponentActivity() {
                                     )
 
                                     NavigationDrawerItem(
+                                        label = { Text("➕ Add Historical Completed Load") },
+                                        selected = currentScreen == "entry" && isHistoricalEntry,
+                                        onClick = {
+                                            scope.launch { drawerState.close() }
+                                            tripToEdit = null
+                                            isHistoricalEntry = true
+                                            currentScreen = "entry"
+                                        }
+                                    )
+
+                                    NavigationDrawerItem(
                                         label = { Text("🏢 Review Facility Insights") },
                                         selected = currentScreen == "facility_search",
                                         onClick = {
@@ -876,7 +887,13 @@ class MainActivity : ComponentActivity() {
                                                 isProUser = isProUser,
                                                 onAddNewLoadClick = { 
                                                     tripToEdit = null
+                                                    isHistoricalEntry = false
                                                     currentScreen = "entry" 
+                                                },
+                                                onAddHistoricalLoadClick = {
+                                                    tripToEdit = null
+                                                    isHistoricalEntry = true
+                                                    currentScreen = "entry"
                                                 },
                                                 onEditTripClick = { load ->
                                                     tripToEdit = load
