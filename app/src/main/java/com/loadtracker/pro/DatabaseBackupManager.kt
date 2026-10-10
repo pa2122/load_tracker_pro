@@ -15,6 +15,15 @@ object DatabaseBackupManager {
     private const val DB_NAME_V1 = "tmc_loads_local.db"
     private const val DB_NAME_V2 = "load_tracker_local.db"
 
+    data class BackupMetadata(
+        val fileName: String,
+        val formattedDate: String,
+        val sizeKb: Long,
+        val absolutePath: String,
+        val isValid: Boolean,
+        val file: File
+    )
+
     /**
      * Finds active SQLite database file on device.
      */
@@ -39,9 +48,46 @@ object DatabaseBackupManager {
     }
 
     /**
-     * Creates a timestamped backup copy of the Room database.
+     * Finds all local backup files in app files directory sorted newest-first.
      */
-    fun createDatabaseBackup(context: Context): Pair<File?, String> {
+    fun getAllBackupFiles(context: Context): List<File> {
+        val backupDir = File(context.filesDir, "backups")
+        if (!backupDir.exists()) return emptyList()
+        return backupDir.listFiles { _, name -> name.startsWith("load_tracker_backup_") && name.endsWith(".db") }
+            ?.sortedByDescending { it.lastModified() }
+            ?: emptyList()
+    }
+
+    /**
+     * Finds the latest local backup file in app files directory.
+     */
+    fun getLatestBackupFile(context: Context): File? {
+        return getAllBackupFiles(context).firstOrNull()
+    }
+
+    /**
+     * Extracts metadata preview from a backup file.
+     */
+    fun getBackupMetadata(file: File?): BackupMetadata? {
+        if (file == null || !file.exists()) return null
+        val isValid = isValidSqliteDatabase(file)
+        val dateStr = SimpleDateFormat("MMM d, yyyy • h:mm a", Locale.US).format(Date(file.lastModified()))
+        val kb = file.length() / 1024
+        return BackupMetadata(
+            fileName = file.name,
+            formattedDate = dateStr,
+            sizeKb = kb,
+            absolutePath = file.absolutePath,
+            isValid = isValid,
+            file = file
+        )
+    }
+
+    /**
+     * Creates a timestamped backup copy of the Room database.
+     * When replacePrevious is true, deletes ONLY the single most recent backup file (preserving older backups).
+     */
+    fun createDatabaseBackup(context: Context, replacePrevious: Boolean = false): Pair<File?, String> {
         try {
             val activeDb = getActiveDatabaseFile(context)
 
@@ -58,9 +104,15 @@ object DatabaseBackupManager {
                 return Pair(null, "Active database file not found.")
             }
 
+            val backupDir = File(context.filesDir, "backups").apply { mkdirs() }
+
+            if (replacePrevious) {
+                val latest = getLatestBackupFile(context)
+                latest?.delete()
+            }
+
             val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
             val backupFileName = "load_tracker_backup_$timestamp.db"
-            val backupDir = File(context.filesDir, "backups").apply { mkdirs() }
             val backupFile = File(backupDir, backupFileName)
 
             FileInputStream(activeDb).use { input ->
@@ -69,7 +121,7 @@ object DatabaseBackupManager {
                 }
             }
 
-            return Pair(backupFile, "Backup created successfully: $backupFileName")
+            return Pair(backupFile, "Backup saved to: ${backupFile.absolutePath}")
         } catch (e: Exception) {
             return Pair(null, "Backup failed: ${e.localizedMessage}")
         }
@@ -84,6 +136,31 @@ object DatabaseBackupManager {
             "${context.packageName}.provider",
             backupFile
         )
+    }
+
+    /**
+     * Restores database directly from a local File instance.
+     */
+    fun restoreDatabaseFromFile(context: Context, backupFile: File): Pair<Boolean, String> {
+        if (!backupFile.exists() || !isValidSqliteDatabase(backupFile)) {
+            return Pair(false, "Invalid database file.")
+        }
+        return try {
+            val activeDb = getActiveDatabaseFile(context)
+            try {
+                AppDatabase.getDatabase(context).close()
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+            FileInputStream(backupFile).use { input ->
+                FileOutputStream(activeDb).use { output ->
+                    input.copyTo(output)
+                }
+            }
+            Pair(true, "Database restored successfully from ${backupFile.name}! Restart app to refresh records.")
+        } catch (e: Exception) {
+            Pair(false, "Restore failed: ${e.localizedMessage}")
+        }
     }
 
     /**

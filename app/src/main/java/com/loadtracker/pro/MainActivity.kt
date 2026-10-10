@@ -107,6 +107,10 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.ui.unit.sp
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material3.NavigationDrawerItem
 import androidx.lifecycle.lifecycleScope
 import com.loadtracker.pro.ui.theme.LoadTrackerProTheme
 import com.loadtracker.pro.CurrentLoad
@@ -199,6 +203,11 @@ class MainActivity : ComponentActivity() {
                     }
 
                     var isProUser by remember { mutableStateOf(value = true) }
+                    var showConfigureRatesDialog by remember { mutableStateOf(value = false) }
+                    var showBackupRestoreDialog by remember { mutableStateOf(value = false) }
+                    var showReplaceBackupPrompt by remember { mutableStateOf(value = false) }
+                    var showPostBackupShareDialog by remember { mutableStateOf(value = false) }
+                    var createdBackupFileForShare by remember { mutableStateOf<File?>(value = null) }
 
                     val devPrefs = remember { getSharedPreferences("dev_prefs", MODE_PRIVATE) }
 
@@ -428,276 +437,142 @@ class MainActivity : ComponentActivity() {
                             ModalDrawerSheet(modifier = Modifier.width(width = 300.dp)) {
                                 Column(
                                     modifier = Modifier
-                                        .padding(all = 24.dp)
+                                        .padding(all = 16.dp)
                                         .fillMaxHeight()
                                         .verticalScroll(state = drawerScrollState),
-                                    verticalArrangement = Arrangement.spacedBy(space = 16.dp)
+                                    verticalArrangement = Arrangement.spacedBy(space = 10.dp)
                                 ) {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Text(
-                                            "Configurations",
-                                            style = MaterialTheme.typography.titleLarge,
-                                            color = MaterialTheme.colorScheme.primary
-                                        )
-
-                                        if (hasDrawerSettingsChanged) {
-                                            IconButton(
-                                                onClick = {
-                                                    savedDefPercent = defPercent
-                                                    savedTarp8Pay = tarp8Pay
-                                                    savedTarp4Pay = tarp4Pay
-                                                    savedExtraStopPay = extraStopPay
-                                                    savedHomeRawPaste = homeRawPaste
-                                                    savedIsTrainingActive = isTrainingActive
-                                                    savedFlatTrainerPayRate = flatTrainerPayRate
-                                                    devPrefs.edit().apply {
-                                                        putString("def_percent", defPercent)
-                                                        putString("tarp_8_pay", tarp8Pay)
-                                                        putString("tarp_4_pay", tarp4Pay)
-                                                        putString("extra_stop_pay", extraStopPay)
-                                                        putString("home_raw_paste", homeRawPaste)
-                                                        putBoolean("is_training_active", isTrainingActive)
-                                                        putString("flat_trainer_pay_rate", flatTrainerPayRate)
-                                                        apply()
-                                                    }
-                                                    resolveHomeAddress(homeRawPaste)
-                                                    scope.launch { drawerState.close() }
-                                                }
-                                            ) {
-                                                Icon(
-                                                    Icons.Default.Done,
-                                                    contentDescription = "Save and Close Menu",
-                                                    tint = MaterialTheme.colorScheme.primary
-                                                )
-                                            }
-                                        }
-                                    }
-
-                                    OutlinedTextField(
-                                        value = defPercent,
-                                        onValueChange = { input ->
-                                            val filtered =
-                                                input.filter { it.isDigit() || it == '.' }
-                                            if (filtered.isEmpty() || filtered == ".") defPercent =
-                                                filtered
-                                            else if (filtered.count { it == '.' } <= 1) {
-                                                val value = filtered.toDoubleOrNull()
-                                                if ((value != null) && (value >= 0.0) && (value <= 100.0)) {
-                                                    defPercent = filtered
-                                                }
-                                            }
-                                        },
-                                        label = { Text("Default Pay Rate (%)") },
-                                        singleLine = true,
-                                        keyboardOptions = KeyboardOptions(
-                                            keyboardType = KeyboardType.Number,
-                                            imeAction = ImeAction.Next
-                                        ),
-                                        modifier = Modifier.fillMaxWidth()
-                                    )
-
-                                    OutlinedTextField(
-                                        value = tarp8Pay,
-                                        onValueChange = { input ->
-                                            tarp8Pay = input.filter { it.isDigit() || it == '.' }
-                                        },
-                                        label = { Text("8' Drop Tarp Pay ($)") },
-                                        singleLine = true,
-                                        keyboardOptions = KeyboardOptions(
-                                            keyboardType = KeyboardType.Number,
-                                            imeAction = ImeAction.Next
-                                        ),
-                                        modifier = Modifier.fillMaxWidth()
-                                    )
-
-                                    OutlinedTextField(
-                                        value = tarp4Pay,
-                                        onValueChange = { input ->
-                                            tarp4Pay = input.filter { it.isDigit() || it == '.' }
-                                        },
-                                        label = { Text("4' Drop Tarp Pay ($)") },
-                                        singleLine = true,
-                                        keyboardOptions = KeyboardOptions(
-                                            keyboardType = KeyboardType.Number,
-                                            imeAction = ImeAction.Next
-                                        ),
-                                        modifier = Modifier.fillMaxWidth()
-                                    )
-
-                                    OutlinedTextField(
-                                        value = extraStopPay,
-                                        onValueChange = { input ->
-                                            extraStopPay = input.filter { it.isDigit() || it == '.' }
-                                        },
-                                        label = { Text("Extra Stop Pay ($)") },
-                                        singleLine = true,
-                                        keyboardOptions = KeyboardOptions(
-                                            keyboardType = KeyboardType.Number,
-                                            imeAction = ImeAction.Next
-                                        ),
-                                        modifier = Modifier.fillMaxWidth()
-                                    )
-
-                                    OutlinedTextField(
-                                        value = homeRawPaste,
-                                        onValueChange = {
-                                            homeRawPaste = it
-                                            isHomeVerified = false
-                                            homeLat = null
-                                            homeLong = null
-                                        },
-                                        label = { Text("Home Address (Paste)") },
-                                        modifier = Modifier.fillMaxWidth(),
-                                        minLines = 2
-                                    )
-
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.spacedBy(space = 8.dp)
-                                    ) {
-                                        Button(
-                                            onClick = { resolveHomeAddress(homeRawPaste) },
-                                            enabled = homeRawPaste.isNotBlank() && !isHomeVerified,
-                                            modifier = Modifier.weight(weight = 1f)
-                                        ) {
-                                            Text(if (isHomeVerified) "Verified ✅" else "Verify Address")
-                                        }
-
-                                        Button(
-                                            onClick = {
-                                                val lastLat = TrackingService.currentLatitude
-                                                val lastLong = TrackingService.currentLongitude
-                                                if (lastLat != null && lastLong != null) {
-                                                    homeLat = lastLat
-                                                    homeLong = lastLong
-                                                    isHomeVerified = true
-                                                }
-                                            },
-                                            colors = ButtonDefaults.buttonColors(
-                                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                                                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                                            ),
-                                            modifier = Modifier.weight(weight = 1f)
-                                        ) {
-                                            Icon(Icons.Default.LocationOn, contentDescription = null)
-                                            Spacer(Modifier.width(width = 4.dp))
-                                            Text("Pin Current")
-                                        }
-                                    }
-
-                                    Text(
-                                        text = if (homeLat != null) "📍 Home Pinned" else "🏠 Home Not Set",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = if (homeLat != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
-                                    )
-
-                                    HorizontalDivider()
-                                    Text("🎓 Trainer Incentive Settings", style = MaterialTheme.typography.titleSmall)
+                                    // 1. Driver Profile Header Card
                                     Surface(
-                                        color = if (isTrainingActive) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
-                                        shape = RoundedCornerShape(8.dp),
+                                        color = MaterialTheme.colorScheme.primaryContainer,
+                                        shape = RoundedCornerShape(12.dp),
                                         modifier = Modifier.fillMaxWidth()
                                     ) {
                                         Column(
-                                            modifier = Modifier.padding(10.dp),
+                                            modifier = Modifier.padding(14.dp),
                                             verticalArrangement = Arrangement.spacedBy(4.dp)
                                         ) {
-                                            Text(
-                                                text = if (isTrainingActive) "Status: ACTIVE 🟢" else "Status: INACTIVE 🔴",
-                                                style = MaterialTheme.typography.labelLarge,
-                                                fontWeight = FontWeight.Bold,
-                                                color = if (isTrainingActive) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                            if (isTrainingActive) {
-                                                val tierLabel = when (savedTraineeTier) {
-                                                    "inexperienced" -> "Inexperienced (Wk $savedTrainingWeek of 4)"
-                                                    "experienced" -> "Experienced (Wk $savedTrainingWeek of 2)"
-                                                    else -> "Custom Rate"
-                                                }
-                                                Text(tierLabel, style = MaterialTheme.typography.bodySmall)
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                            ) {
+                                                Image(
+                                                    painter = painterResource(id = R.drawable.app_logo),
+                                                    contentDescription = null,
+                                                    modifier = Modifier.size(28.dp)
+                                                )
                                                 Text(
-                                                    "Added: +$${String.format(Locale.US, "%.2f", calculatedTrainerPay)}/wk",
-                                                    style = MaterialTheme.typography.labelMedium,
+                                                    "Load Tracker Pro",
+                                                    style = MaterialTheme.typography.titleMedium,
                                                     fontWeight = FontWeight.Bold,
-                                                    color = MaterialTheme.colorScheme.primary
+                                                    color = MaterialTheme.colorScheme.onPrimaryContainer
                                                 )
                                             }
-
-                                            Button(
-                                                onClick = {
-                                                    scope.launch { drawerState.close() }
-                                                    showTrainerSettingsDialog = true
-                                                },
-                                                colors = ButtonDefaults.buttonColors(
-                                                    containerColor = MaterialTheme.colorScheme.secondary,
-                                                    contentColor = MaterialTheme.colorScheme.onSecondary
-                                                ),
-                                                modifier = Modifier.fillMaxWidth()
-                                            ) {
-                                                Text("⚙️ Configure Trainer Pay")
-                                            }
+                                            Text(
+                                                "Active Fleet Driver • v$appVersionName",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.primary
+                                            )
                                         }
                                     }
 
-                                    HorizontalDivider()
-                                    Button(
+                                    // Section 1: 🚚 NAVIGATION & WORKSPACES
+                                    Text("🚚 NAVIGATION & WORKSPACES", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+
+                                    NavigationDrawerItem(
+                                        label = { Text("🏠 Dashboard") },
+                                        selected = currentScreen == "dashboard",
                                         onClick = {
                                             scope.launch { drawerState.close() }
-                                            if (isProUser) {
-                                                currentScreen = "facility_search"
-                                            } else {
-                                                showProUpgradeDialog = true
-                                            }
-                                        },
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                                        ),
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
-                                        Text(if (isProUser) "Review Facility Insights" else "Review Facility Insights (Pro)")
-                                    }
+                                            currentScreen = "dashboard"
+                                        }
+                                    )
 
-                                    HorizontalDivider()
-                                    Button(
+                                    NavigationDrawerItem(
+                                        label = { Text("🏢 Review Facility Insights") },
+                                        selected = currentScreen == "facility_search",
                                         onClick = {
                                             scope.launch { drawerState.close() }
-                                            if (isProUser) {
-                                                tripForMap = null
-                                                currentScreen = "route_map"
-                                            } else {
-                                                showProUpgradeDialog = true
-                                            }
-                                        },
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                                        ),
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
-                                        Text(if (isProUser) "View Global Route Heatmap" else "Global Route Heatmap (Pro)")
-                                    }
+                                            if (isProUser) currentScreen = "facility_search" else showProUpgradeDialog = true
+                                        }
+                                    )
+
+                                    NavigationDrawerItem(
+                                        label = { Text("🗺️ Global Route Heatmap") },
+                                        selected = currentScreen == "route_map",
+                                        onClick = {
+                                            scope.launch { drawerState.close() }
+                                            if (isProUser) { tripForMap = null; currentScreen = "route_map" } else showProUpgradeDialog = true
+                                        }
+                                    )
+
+                                    NavigationDrawerItem(
+                                        label = { Text("⛽ Fuel & IFTA Logger") },
+                                        selected = currentScreen == "fuel_logger",
+                                        onClick = {
+                                            scope.launch { drawerState.close() }
+                                            currentScreen = "fuel_logger"
+                                        }
+                                    )
+
+                                    NavigationDrawerItem(
+                                        label = { Text("💼 Owner-Op Business Suite") },
+                                        selected = currentScreen == "owner_op",
+                                        onClick = {
+                                            scope.launch { drawerState.close() }
+                                            currentScreen = "owner_op"
+                                        }
+                                    )
 
                                     HorizontalDivider()
-                                    Button(
+
+                                    // Section 2: ⚙️ DRIVER SETTINGS
+                                    Text("⚙️ DRIVER SETTINGS", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+
+                                    NavigationDrawerItem(
+                                        label = { Text("⚙️ Configure Pay Rates & Home") },
+                                        selected = false,
+                                        onClick = {
+                                            scope.launch { drawerState.close() }
+                                            showConfigureRatesDialog = true
+                                        }
+                                    )
+
+                                    NavigationDrawerItem(
+                                        label = { Text("🎓 Configure Trainer Pay") },
+                                        selected = false,
+                                        onClick = {
+                                            scope.launch { drawerState.close() }
+                                            showTrainerSettingsDialog = true
+                                        }
+                                    )
+
+                                    HorizontalDivider()
+
+                                    // Section 3: 💾 DATA, UTILITIES & DEV
+                                    Text("💾 DATA & UTILITIES", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+
+                                    NavigationDrawerItem(
+                                        label = { Text("📄 Export Settlement Log (CSV)") },
+                                        selected = false,
                                         onClick = {
                                             scope.launch { drawerState.close() }
                                             exportToCsv()
-                                        },
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = MaterialTheme.colorScheme.tertiary
-                                        ),
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
-                                        Text("Export Payload History (CSV)")
-                                    }
+                                        }
+                                    )
 
-                                    HorizontalDivider()
-                                    Button(
+                                    NavigationDrawerItem(
+                                        label = { Text("💾 Export Data") },
+                                        selected = false,
+                                        onClick = {
+                                            scope.launch { drawerState.close() }
+                                            showBackupRestoreDialog = true
+                                        }
+                                    )
+
+                                    NavigationDrawerItem(
+                                        label = { Text("⚡ Broadcast Load to Watch") },
+                                        selected = false,
                                         onClick = {
                                             scope.launch { drawerState.close() }
                                             val activeLoad = viewModel.allLoads.value.firstOrNull { it.tripState != "COMPLETED" }
@@ -714,140 +589,36 @@ class MainActivity : ComponentActivity() {
                                             }
                                             WearableDataSyncManager.syncTripStateToWearable(this@MainActivity, payload)
                                             Toast.makeText(this@MainActivity, "⚡ Broadcasted active load PRO #${payload.proNumber.ifBlank { "NONE" }} to watch!", Toast.LENGTH_LONG).show()
-                                        },
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = MaterialTheme.colorScheme.primaryContainer,
-                                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                                        ),
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
-                                        Text("⚡ Broadcast Active Load to Watch")
-                                    }
-
-                                    HorizontalDivider()
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                    ) {
-                                        Button(
-                                            onClick = {
-                                                scope.launch { drawerState.close() }
-                                                val (backupFile, msg) = DatabaseBackupManager.createDatabaseBackup(this@MainActivity)
-                                                if (backupFile != null) {
-                                                    val shareUri = DatabaseBackupManager.getShareableUri(this@MainActivity, backupFile)
-                                                    val intent = Intent(Intent.ACTION_SEND).apply {
-                                                        type = "application/x-sqlite3"
-                                                        putExtra(Intent.EXTRA_SUBJECT, "Load Tracker Pro Database Backup")
-                                                        putExtra(Intent.EXTRA_STREAM, shareUri)
-                                                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                                    }
-                                                    startActivity(Intent.createChooser(intent, "Backup Database"))
-                                                } else {
-                                                    Toast.makeText(this@MainActivity, msg, Toast.LENGTH_SHORT).show()
-                                                }
-                                            },
-                                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                                            modifier = Modifier.weight(1f)
-                                        ) {
-                                            Text("📤 Backup DB")
                                         }
+                                    )
 
-                                        Button(
-                                            onClick = {
-                                                scope.launch { drawerState.close() }
-                                                backupRestoreLauncher.launch("*/*")
-                                            },
-                                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
-                                            modifier = Modifier.weight(1f)
-                                        ) {
-                                            Text("📥 Restore DB")
-                                        }
-                                    }
-
-                                    HorizontalDivider()
-                                    Button(
+                                    NavigationDrawerItem(
+                                        label = { Text("🐛 Report Bug / Feedback") },
+                                        selected = false,
                                         onClick = {
                                             scope.launch { drawerState.close() }
                                             showTesterFeedbackDialog = true
-                                        },
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                                        ),
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
-                                        Icon(Icons.Default.Edit, contentDescription = null)
-                                        Spacer(modifier = Modifier.width(width = 6.dp))
-                                        Text("🐛 Report Bug / Feedback")
-                                    }
+                                        }
+                                    )
 
-                                    HorizontalDivider()
-                                    Button(
-                                        onClick = {
-                                            scope.launch { drawerState.close() }
-                                            triggerHelpView.value = true
-                                        },
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = MaterialTheme.colorScheme.secondary
-                                        ),
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
-                                        Text("Open Driver's Guide")
-                                    }
-
-                                    HorizontalDivider()
-                                    Button(
+                                    NavigationDrawerItem(
+                                        label = { Text("📖 App Technical Specs (README)") },
+                                        selected = false,
                                         onClick = {
                                             scope.launch { drawerState.close() }
                                             showReadmeDialog = true
-                                        },
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                                        ),
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
-                                        Icon(Icons.Default.Info, contentDescription = null)
-                                        Spacer(modifier = Modifier.width(width = 6.dp))
-                                        Text("📖 App Technical Specs (README)")
-                                    }
-
-                                    val hasActiveTrip = savedLoads.any { it.tripState != "COMPLETED" && it.tripState != "NOT_STARTED" }
-                                    if (hasActiveTrip) {
-                                        HorizontalDivider()
-                                        Button(
-                                            onClick = {
-                                                scope.launch { drawerState.close() }
-                                                tripToEdit = null
-                                                isHistoricalEntry = true
-                                                currentScreen = "entry"
-                                            },
-                                            colors = ButtonDefaults.buttonColors(
-                                                containerColor = MaterialTheme.colorScheme.primary,
-                                                contentColor = MaterialTheme.colorScheme.onPrimary
-                                            ),
-                                            modifier = Modifier.fillMaxWidth()
-                                        ) {
-                                            Icon(Icons.Default.Add, contentDescription = null)
-                                            Spacer(modifier = Modifier.width(width = 6.dp))
-                                            Text("➕ Add Historical Completed Load")
                                         }
-                                    }
+                                    )
 
                                     if (isDeviceAuthorized || BuildConfig.DEBUG) {
-                                        Spacer(modifier = Modifier.weight(weight = 1f))
-                                        Button(
-                                            onClick = { showDevOptionsDialog = true },
-                                            colors = ButtonDefaults.buttonColors(
-                                                containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                                                contentColor = MaterialTheme.colorScheme.onSurfaceVariant
-                                            ),
-                                            modifier = Modifier.fillMaxWidth()
-                                        ) {
-                                            Icon(Icons.Default.Build, contentDescription = null)
-                                            Spacer(modifier = Modifier.width(width = 6.dp))
-                                            Text("🛠️ Developer Options")
-                                        }
+                                        NavigationDrawerItem(
+                                            label = { Text("🛠️ Developer Options & Notes") },
+                                            selected = false,
+                                            onClick = {
+                                                scope.launch { drawerState.close() }
+                                                showDevOptionsDialog = true
+                                            }
+                                        )
                                     } else {
                                         Spacer(modifier = Modifier.weight(weight = 1f))
                                         Button(
@@ -1462,6 +1233,359 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
                         )
+                    }
+
+                    if (showConfigureRatesDialog) {
+                        AlertDialog(
+                            onDismissRequest = { showConfigureRatesDialog = false },
+                            title = { Text("⚙️ Configure Pay Rates & Home Base") },
+                            text = {
+                                val ratesScrollState = rememberScrollState()
+                                Column(
+                                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                                    modifier = Modifier.fillMaxWidth().verticalScroll(ratesScrollState)
+                                ) {
+                                    OutlinedTextField(
+                                        value = defPercent,
+                                        onValueChange = { input ->
+                                            val filtered = input.filter { it.isDigit() || it == '.' }
+                                            if (filtered.isEmpty() || filtered == ".") defPercent = filtered
+                                            else if (filtered.count { it == '.' } <= 1) {
+                                                val value = filtered.toDoubleOrNull()
+                                                if ((value != null) && (value >= 0.0) && (value <= 100.0)) defPercent = filtered
+                                            }
+                                        },
+                                        label = { Text("Default Pay Rate (%)") },
+                                        singleLine = true,
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Next),
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+
+                                    OutlinedTextField(
+                                        value = tarp8Pay,
+                                        onValueChange = { input -> tarp8Pay = input.filter { it.isDigit() || it == '.' } },
+                                        label = { Text("8' Drop Tarp Pay ($)") },
+                                        singleLine = true,
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Next),
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+
+                                    OutlinedTextField(
+                                        value = tarp4Pay,
+                                        onValueChange = { input -> tarp4Pay = input.filter { it.isDigit() || it == '.' } },
+                                        label = { Text("4' Drop Tarp Pay ($)") },
+                                        singleLine = true,
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Next),
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+
+                                    OutlinedTextField(
+                                        value = extraStopPay,
+                                        onValueChange = { input -> extraStopPay = input.filter { it.isDigit() || it == '.' } },
+                                        label = { Text("Extra Stop Pay ($)") },
+                                        singleLine = true,
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Next),
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+
+                                    OutlinedTextField(
+                                        value = homeRawPaste,
+                                        onValueChange = {
+                                            homeRawPaste = it
+                                            isHomeVerified = false
+                                            homeLat = null
+                                            homeLong = null
+                                        },
+                                        label = { Text("Home Address (Paste)") },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        minLines = 2
+                                    )
+
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Button(
+                                            onClick = { resolveHomeAddress(homeRawPaste) },
+                                            enabled = homeRawPaste.isNotBlank() && !isHomeVerified,
+                                            modifier = Modifier.weight(1f)
+                                        ) {
+                                            Text(if (isHomeVerified) "Verified ✅" else "Verify Address")
+                                        }
+
+                                        Button(
+                                            onClick = {
+                                                val lastLat = TrackingService.currentLatitude
+                                                val lastLong = TrackingService.currentLongitude
+                                                if (lastLat != null && lastLong != null) {
+                                                    homeLat = lastLat
+                                                    homeLong = lastLong
+                                                    isHomeVerified = true
+                                                }
+                                            },
+                                            colors = ButtonDefaults.buttonColors(
+                                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                                            ),
+                                            modifier = Modifier.weight(1f)
+                                        ) {
+                                            Icon(Icons.Default.LocationOn, contentDescription = null)
+                                            Spacer(Modifier.width(4.dp))
+                                            Text("Pin Current")
+                                        }
+                                    }
+                                }
+                            },
+                            confirmButton = {
+                                Button(
+                                    onClick = {
+                                        savedDefPercent = defPercent
+                                        savedTarp8Pay = tarp8Pay
+                                        savedTarp4Pay = tarp4Pay
+                                        savedExtraStopPay = extraStopPay
+                                        savedHomeRawPaste = homeRawPaste
+                                        devPrefs.edit().apply {
+                                            putString("def_percent", defPercent)
+                                            putString("tarp_8_pay", tarp8Pay)
+                                            putString("tarp_4_pay", tarp4Pay)
+                                            putString("extra_stop_pay", extraStopPay)
+                                            putString("home_raw_paste", homeRawPaste)
+                                            apply()
+                                        }
+                                        resolveHomeAddress(homeRawPaste)
+                                        showConfigureRatesDialog = false
+                                    }
+                                ) {
+                                    Text("Save Changes")
+                                }
+                            },
+                            dismissButton = {
+                                TextButton(onClick = { showConfigureRatesDialog = false }) {
+                                    Text("Cancel")
+                                }
+                            }
+                        )
+                    }
+
+                    if (showBackupRestoreDialog) {
+                        var backupRefreshKey by remember { mutableIntStateOf(0) }
+                        val backupFiles = remember(backupRefreshKey) { DatabaseBackupManager.getAllBackupFiles(this@MainActivity) }
+                        val latestBackupFile = backupFiles.firstOrNull()
+                        val backupMeta = remember(latestBackupFile) { DatabaseBackupManager.getBackupMetadata(latestBackupFile) }
+
+                        val executeBackup: (replace: Boolean) -> Unit = { replace ->
+                            val (backupFile, msg) = DatabaseBackupManager.createDatabaseBackup(this@MainActivity, replacePrevious = replace)
+                            if (backupFile != null) {
+                                backupRefreshKey++
+                                createdBackupFileForShare = backupFile
+                                showPostBackupShareDialog = true
+                            } else {
+                                Toast.makeText(this@MainActivity, msg, Toast.LENGTH_SHORT).show()
+                            }
+                        }
+
+                        AlertDialog(
+                            onDismissRequest = { showBackupRestoreDialog = false },
+                            title = { Text("💾 Export & Restore Data") },
+                            text = {
+                                val backupScrollState = rememberScrollState()
+                                Column(
+                                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                                    modifier = Modifier.fillMaxWidth().verticalScroll(backupScrollState)
+                                ) {
+                                    Text(
+                                        "Safely export a timestamped backup copy of your trip logs, rate confirmations, fuel records, and settings.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.secondary
+                                    )
+
+                                    Button(
+                                        onClick = {
+                                            if (backupMeta != null) {
+                                                showReplaceBackupPrompt = true
+                                            } else {
+                                                executeBackup(false)
+                                            }
+                                        },
+                                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text("📤 Create Data Backup")
+                                    }
+
+                                    Button(
+                                        onClick = {
+                                            showBackupRestoreDialog = false
+                                            backupRestoreLauncher.launch("*/*")
+                                        },
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                                        ),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text("📥 Import & Restore External File")
+                                    }
+
+                                    HorizontalDivider()
+
+                                    // Local Data Backup History List
+                                    if (backupFiles.isEmpty()) {
+                                        Text(
+                                            "📍 No local data backups found.",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.error,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    } else {
+                                        Text(
+                                            "📦 Local Data Backups Saved (${backupFiles.size} Files):",
+                                            style = MaterialTheme.typography.labelMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+
+                                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            backupFiles.forEach { bFile ->
+                                                val meta = DatabaseBackupManager.getBackupMetadata(bFile)
+                                                if (meta != null) {
+                                                    Surface(
+                                                        color = MaterialTheme.colorScheme.surfaceVariant,
+                                                        shape = RoundedCornerShape(8.dp),
+                                                        modifier = Modifier.fillMaxWidth()
+                                                    ) {
+                                                        Column(
+                                                            modifier = Modifier.padding(10.dp),
+                                                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                                                        ) {
+                                                            Text("• ${meta.fileName}", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
+                                                            Text("  Date: ${meta.formattedDate}", style = MaterialTheme.typography.labelSmall)
+                                                            Text("  Size: ${meta.sizeKb} KB • Validated ✅", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
+
+                                                            Row(
+                                                                modifier = Modifier.fillMaxWidth(),
+                                                                horizontalArrangement = Arrangement.End,
+                                                                verticalAlignment = Alignment.CenterVertically
+                                                            ) {
+                                                                Button(
+                                                                    onClick = {
+                                                                        val (success, msg) = DatabaseBackupManager.restoreDatabaseFromFile(this@MainActivity, bFile)
+                                                                        Toast.makeText(this@MainActivity, msg, Toast.LENGTH_LONG).show()
+                                                                        if (success) showBackupRestoreDialog = false
+                                                                    },
+                                                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
+                                                                    modifier = Modifier.height(28.dp),
+                                                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                                                                ) {
+                                                                    Text("Restore", fontSize = 10.sp)
+                                                                }
+
+                                                                Spacer(modifier = Modifier.width(6.dp))
+
+                                                                IconButton(
+                                                                    onClick = {
+                                                                        bFile.delete()
+                                                                        backupRefreshKey++
+                                                                        Toast.makeText(this@MainActivity, "Deleted backup: ${bFile.name}", Toast.LENGTH_SHORT).show()
+                                                                    },
+                                                                    modifier = Modifier.size(28.dp)
+                                                                ) {
+                                                                    Icon(Icons.Default.Delete, contentDescription = "Delete Backup", tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(16.dp))
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            confirmButton = {
+                                TextButton(onClick = { showBackupRestoreDialog = false }) {
+                                    Text("Close")
+                                }
+                            }
+                        )
+
+                        if (showReplaceBackupPrompt) {
+                            AlertDialog(
+                                onDismissRequest = { showReplaceBackupPrompt = false },
+                                title = { Text("⚠️ Replace Existing Backup?") },
+                                text = {
+                                    Text(
+                                        "An existing data backup file was found on this device (${backupMeta?.fileName}). Would you like to replace the previous backup or keep both as separate timestamped files?",
+                                        style = MaterialTheme.typography.bodySmall
+                                    )
+                                },
+                                confirmButton = {
+                                    Button(
+                                        onClick = {
+                                            showReplaceBackupPrompt = false
+                                            executeBackup(true)
+                                        },
+                                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                                    ) {
+                                        Text("Replace Previous")
+                                    }
+                                },
+                                dismissButton = {
+                                    Button(
+                                        onClick = {
+                                            showReplaceBackupPrompt = false
+                                            executeBackup(false)
+                                        }
+                                    ) {
+                                        Text("Keep Both (New File)")
+                                    }
+                                }
+                            )
+                        }
+
+                        if (showPostBackupShareDialog && createdBackupFileForShare != null) {
+                            val fileToShare = createdBackupFileForShare!!
+                            AlertDialog(
+                                onDismissRequest = { showPostBackupShareDialog = false },
+                                title = { Text("✓ Local Backup Created Successfully!") },
+                                text = {
+                                    Column(
+                                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text("• File: ${fileToShare.name}", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
+                                        Text("• Location: ${fileToShare.absolutePath}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Text(
+                                            "Would you like to export or save a copy to Google Drive, Documents, or Email as well?",
+                                            style = MaterialTheme.typography.bodySmall
+                                        )
+                                    }
+                                },
+                                confirmButton = {
+                                    Button(
+                                        onClick = {
+                                            showPostBackupShareDialog = false
+                                            val shareUri = DatabaseBackupManager.getShareableUri(this@MainActivity, fileToShare)
+                                            val intent = Intent(Intent.ACTION_SEND).apply {
+                                                type = "application/x-sqlite3"
+                                                putExtra(Intent.EXTRA_SUBJECT, "Load Tracker Pro Data Backup")
+                                                putExtra(Intent.EXTRA_STREAM, shareUri)
+                                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                            }
+                                            startActivity(Intent.createChooser(intent, "Share / Save Backup File"))
+                                        },
+                                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                                    ) {
+                                        Text("☁️ Export / Share File")
+                                    }
+                                },
+                                dismissButton = {
+                                    TextButton(onClick = { showPostBackupShareDialog = false }) {
+                                        Text("Done (Keep Local Only)")
+                                    }
+                                }
+                            )
+                        }
                     }
 
                     if (showDevAccessRequestDialog) {
