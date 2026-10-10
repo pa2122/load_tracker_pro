@@ -85,6 +85,7 @@ object DatabaseBackupManager {
 
     /**
      * Creates a timestamped backup copy of the Room database.
+     * When replacePrevious is true, deletes ONLY the single most recent backup file (preserving older backups).
      */
     fun createDatabaseBackup(context: Context, replacePrevious: Boolean = false): Pair<File?, String> {
         try {
@@ -106,8 +107,9 @@ object DatabaseBackupManager {
             val backupDir = File(context.filesDir, "backups").apply { mkdirs() }
 
             if (replacePrevious) {
-                backupDir.listFiles { _, name -> name.startsWith("load_tracker_backup_") && name.endsWith(".db") }
-                    ?.forEach { it.delete() }
+                // Delete ONLY the single most recent backup file (preserving older historical backups!)
+                val latest = getLatestBackupFile(context)
+                latest?.delete()
             }
 
             val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
