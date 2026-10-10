@@ -66,6 +66,7 @@ fun DashboardScreen(
     pastLoads: List<CurrentLoad>,
     isProUser: Boolean,
     onAddNewLoadClick: () -> Unit,
+    onAddHistoricalLoadClick: (() -> Unit)? = null,
     onUpdateTripClick: (CurrentLoad) -> Unit,
     onEditTripClick: (CurrentLoad) -> Unit,
     onDeleteTripClick: (CurrentLoad) -> Unit,
@@ -629,12 +630,25 @@ fun DashboardScreen(
                 }
 
                 item {
-                    Button(
-                        onClick = { showStatementHistoryDialog = true },
+                    Row(
                         modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Text("View Statements by Week")
+                        Button(
+                            onClick = { showStatementHistoryDialog = true },
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
+                        ) {
+                            Text("View Statements")
+                        }
+                        if (onAddHistoricalLoadClick != null) {
+                            OutlinedButton(
+                                onClick = onAddHistoricalLoadClick,
+                                modifier = Modifier.weight(1.2f)
+                            ) {
+                                Text("➕ Add Past Load")
+                            }
+                        }
                     }
                 }
 

@@ -115,7 +115,7 @@ fun LoadEntryScreen(
     var isGoingHome by remember { mutableStateOf(value = editingLoad?.isGoingHome ?: false) }
     var isTrainingWeek by remember { mutableStateOf(value = editingLoad?.isTrainingWeek ?: initialIsTraining) }
     var tripNotes by remember { mutableStateOf(value = editingLoad?.tripNotes ?: "") }
-    var isManualEntry by remember { mutableStateOf(value = false) }
+    var isManualEntry by remember(isHistorical) { mutableStateOf(value = isHistorical) }
 
     var manualActBounce by remember {
         mutableStateOf(
