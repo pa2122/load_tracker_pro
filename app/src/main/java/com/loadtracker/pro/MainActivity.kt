@@ -53,6 +53,7 @@ import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.AccountBox
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material.icons.filled.Done
 import androidx.compose.material.icons.filled.Edit
@@ -457,20 +458,37 @@ class MainActivity : ComponentActivity() {
                                             verticalArrangement = Arrangement.spacedBy(4.dp)
                                         ) {
                                             Row(
+                                                modifier = Modifier.fillMaxWidth(),
                                                 verticalAlignment = Alignment.CenterVertically,
-                                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                                horizontalArrangement = Arrangement.SpaceBetween
                                             ) {
-                                                Image(
-                                                    painter = painterResource(id = R.drawable.app_logo),
-                                                    contentDescription = null,
-                                                    modifier = Modifier.size(28.dp)
-                                                )
-                                                Text(
-                                                    "Load Tracker Pro",
-                                                    style = MaterialTheme.typography.titleMedium,
-                                                    fontWeight = FontWeight.Bold,
-                                                    color = MaterialTheme.colorScheme.onPrimaryContainer
-                                                )
+                                                Row(
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                                ) {
+                                                    Image(
+                                                        painter = painterResource(id = R.drawable.app_logo),
+                                                        contentDescription = null,
+                                                        modifier = Modifier.size(28.dp)
+                                                    )
+                                                    Text(
+                                                        "Load Tracker Pro",
+                                                        style = MaterialTheme.typography.titleMedium,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                                                    )
+                                                }
+
+                                                IconButton(
+                                                    onClick = { scope.launch { drawerState.close() } },
+                                                    modifier = Modifier.size(24.dp)
+                                                ) {
+                                                    Icon(
+                                                        Icons.Default.Close,
+                                                        contentDescription = "Close Drawer",
+                                                        tint = MaterialTheme.colorScheme.onPrimaryContainer
+                                                    )
+                                                }
                                             }
                                             Text(
                                                 "Active Fleet Driver • v$appVersionName",
@@ -544,6 +562,27 @@ class MainActivity : ComponentActivity() {
                                         onClick = {
                                             scope.launch { drawerState.close() }
                                             exportToCsv()
+                                        }
+                                    )
+
+                                    NavigationDrawerItem(
+                                        label = { Text("📄 Export IFTA Tax Report (CSV)") },
+                                        selected = false,
+                                        onClick = {
+                                            scope.launch { drawerState.close() }
+                                            val exportFile = File(filesDir, "ifta_tax_report_ALL.csv")
+                                            if (exportFile.exists()) {
+                                                val shareUri = FileProvider.getUriForFile(this@MainActivity, "$packageName.provider", exportFile)
+                                                val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                                                    type = "text/csv"
+                                                    putExtra(Intent.EXTRA_SUBJECT, "IFTA Fuel & Mileage Tax Report")
+                                                    putExtra(Intent.EXTRA_STREAM, shareUri)
+                                                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                                }
+                                                startActivity(Intent.createChooser(shareIntent, "Export IFTA Tax Report"))
+                                            } else {
+                                                currentScreen = "fuel_logger"
+                                            }
                                         }
                                     )
 

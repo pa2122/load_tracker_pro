@@ -138,38 +138,6 @@ fun FuelLoggerScreen(
         }
     }
 
-    val exportIftaCsv: () -> Unit = {
-        try {
-            val csvText = StringBuilder().apply {
-                append("Quarter,State,Fuel Gallons,Fuel Cost,Tracked State Miles,Calculated State MPG\n")
-                val allStateCodes = (stateIftaMap.keys + stateMileageMap.keys).toSet().sorted()
-                allStateCodes.forEach { code ->
-                    val stateEntries = stateIftaMap[code] ?: emptyList()
-                    val gal = stateEntries.sumOf { it.gallons }
-                    val cost = stateEntries.sumOf { it.totalCost }
-                    val miles = stateMileageMap[code] ?: 0.0
-                    val mpgStr = if (gal > 0) String.format(Locale.US, "%.2f", miles / gal) else "N/A"
-                    append("$selectedQuarterFilter,$code,${String.format(Locale.US, "%.2f", gal)},${String.format(Locale.US, "%.2f", cost)},${String.format(Locale.US, "%.1f", miles)},$mpgStr\n")
-                }
-            }.toString()
-
-            val file = File(ctx.filesDir, "ifta_tax_report_$selectedQuarterFilter.csv")
-            file.writeText(csvText)
-
-            val contentUri = FileProvider.getUriForFile(ctx, "${ctx.packageName}.provider", file)
-            val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                type = "text/csv"
-                putExtra(Intent.EXTRA_SUBJECT, "IFTA Fuel & Mileage Tax Report - $selectedQuarterFilter")
-                putExtra(Intent.EXTRA_TEXT, "Attached is your official Load Tracker Pro IFTA Fuel & Mileage Tax Report ($selectedQuarterFilter).")
-                putExtra(Intent.EXTRA_STREAM, contentUri)
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            }
-            ctx.startActivity(Intent.createChooser(shareIntent, "Export IFTA Tax Report"))
-        } catch (e: Exception) {
-            Toast.makeText(ctx, "Error exporting IFTA report: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
-        }
-    }
-
     var isIftaExpanded by remember { mutableStateOf(false) }
 
     val allStatesList = remember(stateIftaMap, stateMileageMap) {
@@ -211,42 +179,19 @@ fun FuelLoggerScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+                .padding(horizontal = 16.dp, vertical = 2.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            // Quarterly Filter Chips & Export Button Rows
-            Column(
+            // Quarterly Filter Chips Row
+            Row(
                 modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    FilterChip(selected = selectedQuarterFilter == "ALL", onClick = { selectedQuarterFilter = "ALL" }, label = { Text("All") })
-                    FilterChip(selected = selectedQuarterFilter == "Q1", onClick = { selectedQuarterFilter = "Q1" }, label = { Text("Q1") })
-                    FilterChip(selected = selectedQuarterFilter == "Q2", onClick = { selectedQuarterFilter = "Q2" }, label = { Text("Q2") })
-                    FilterChip(selected = selectedQuarterFilter == "Q3", onClick = { selectedQuarterFilter = "Q3" }, label = { Text("Q3") })
-                    FilterChip(selected = selectedQuarterFilter == "Q4", onClick = { selectedQuarterFilter = "Q4" }, label = { Text("Q4") })
-                }
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End
-                ) {
-                    Button(
-                        onClick = { exportIftaCsv() },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                        ),
-                        enabled = filteredFuelEntries.isNotEmpty() || allStatesList.isNotEmpty()
-                    ) {
-                        Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("📄 Export IFTA CSV Schedule")
-                    }
-                }
+                FilterChip(selected = selectedQuarterFilter == "ALL", onClick = { selectedQuarterFilter = "ALL" }, label = { Text("All") })
+                FilterChip(selected = selectedQuarterFilter == "Q1", onClick = { selectedQuarterFilter = "Q1" }, label = { Text("Q1") })
+                FilterChip(selected = selectedQuarterFilter == "Q2", onClick = { selectedQuarterFilter = "Q2" }, label = { Text("Q2") })
+                FilterChip(selected = selectedQuarterFilter == "Q3", onClick = { selectedQuarterFilter = "Q3" }, label = { Text("Q3") })
+                FilterChip(selected = selectedQuarterFilter == "Q4", onClick = { selectedQuarterFilter = "Q4" }, label = { Text("Q4") })
             }
 
             // 1. MPG & Fuel Expenditure Analytics Card
@@ -423,6 +368,8 @@ fun FuelLoggerScreen(
     }
 
     if (showAddFuelDialog) {
+        val todayStr = remember { LocalDate.now().format(DateTimeFormatter.ofPattern("MM/dd/yyyy")) }
+        var inputDateText by remember { mutableStateOf(todayStr) }
         var inputGallons by remember { mutableStateOf("") }
         var inputPpg by remember { mutableStateOf("") }
         var inputState by remember { mutableStateOf("TX") }
@@ -451,6 +398,7 @@ fun FuelLoggerScreen(
                             if (parsed.odometer != null) inputOdometer = parsed.odometer.toInt().toString()
                             if (parsed.state != null) inputState = parsed.state
                             if (parsed.stationName != null) inputStation = parsed.stationName
+                            if (parsed.dateText != null) inputDateText = parsed.dateText
                             Toast.makeText(ctx, "Receipt screenshot parsed successfully!", Toast.LENGTH_SHORT).show()
                         }
                         .addOnFailureListener {
@@ -481,6 +429,15 @@ fun FuelLoggerScreen(
                     ) {
                         Text("📷 Scan / Attach Receipt Screenshot")
                     }
+
+                    OutlinedTextField(
+                        value = inputDateText,
+                        onValueChange = { inputDateText = it },
+                        label = { Text("Date (MM/DD/YYYY)") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Next),
+                        modifier = Modifier.fillMaxWidth()
+                    )
 
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedTextField(
@@ -607,9 +564,24 @@ fun FuelLoggerScreen(
                         val defGal = inputDefGallons.toDoubleOrNull() ?: 0.0
                         val defCst = inputDefCost.toDoubleOrNull() ?: 0.0
 
+                        val parsedTimestamp = try {
+                            val parts = inputDateText.split("/", "-")
+                            if (parts.size == 3) {
+                                val m = parts[0].padStart(2, '0')
+                                val d = parts[1].padStart(2, '0')
+                                var y = parts[2]
+                                if (y.length == 2) y = "20$y"
+                                LocalDate.parse("$y-$m-$d").atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
+                            } else {
+                                System.currentTimeMillis()
+                            }
+                        } catch (_: Exception) {
+                            System.currentTimeMillis()
+                        }
+
                         scope.launch(Dispatchers.IO) {
                             val newEntry = FuelEntry(
-                                timestamp = System.currentTimeMillis(),
+                                timestamp = parsedTimestamp,
                                 gallons = gal,
                                 pricePerGallon = ppg,
                                 totalCost = gal * ppg,

@@ -12,7 +12,8 @@ object FuelReceiptOcrParser {
         val defGallons: Double? = null,
         val defCost: Double? = null,
         val odometer: Double? = null,
-        val state: String? = null
+        val state: String? = null,
+        val dateText: String? = null
     )
 
     /**
@@ -31,6 +32,7 @@ object FuelReceiptOcrParser {
         var defCost: Double? = null
         var odometer: Double? = null
         var state: String? = null
+        var dateText: String? = null
 
         // 1. Station Name Detection
         for (line in lines.take(10)) {
@@ -86,7 +88,14 @@ object FuelReceiptOcrParser {
             }
         }
 
-        // 7. Total Cost Extraction
+        // 7. Date Extraction (MM/DD/YYYY or MM-DD-YYYY)
+        val dateRegex = Regex("""\b(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})\b""")
+        val dateMatch = dateRegex.find(rawText)
+        if (dateMatch != null && dateMatch.groupValues.size > 1) {
+            dateText = dateMatch.groupValues[1]
+        }
+
+        // 8. Total Cost Extraction
         val totalRegex = Regex("""(?:total|amount|net\s*total|net|paid)\D*?\$?\s*(\d{1,4}\.\d{2})""", RegexOption.IGNORE_CASE)
         val totalMatch = totalRegex.find(rawText)
         if (totalMatch != null && totalMatch.groupValues.size > 1) {
@@ -106,7 +115,8 @@ object FuelReceiptOcrParser {
             defGallons = defGallons,
             defCost = defCost,
             odometer = odometer,
-            state = state
+            state = state,
+            dateText = dateText
         )
     }
 
