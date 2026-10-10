@@ -506,24 +506,6 @@ class MainActivity : ComponentActivity() {
                                         }
                                     )
 
-                                    NavigationDrawerItem(
-                                        label = { Text("⛽ Fuel & IFTA Logger") },
-                                        selected = currentScreen == "fuel_logger",
-                                        onClick = {
-                                            scope.launch { drawerState.close() }
-                                            currentScreen = "fuel_logger"
-                                        }
-                                    )
-
-                                    NavigationDrawerItem(
-                                        label = { Text("💼 Owner-Op Business Suite") },
-                                        selected = currentScreen == "owner_op",
-                                        onClick = {
-                                            scope.launch { drawerState.close() }
-                                            currentScreen = "owner_op"
-                                        }
-                                    )
-
                                     HorizontalDivider()
 
                                     // Section 2: ⚙️ DRIVER SETTINGS
