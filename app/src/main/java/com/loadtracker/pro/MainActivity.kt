@@ -206,6 +206,8 @@ class MainActivity : ComponentActivity() {
                     var showConfigureRatesDialog by remember { mutableStateOf(value = false) }
                     var showBackupRestoreDialog by remember { mutableStateOf(value = false) }
                     var showReplaceBackupPrompt by remember { mutableStateOf(value = false) }
+                    var showPostBackupShareDialog by remember { mutableStateOf(value = false) }
+                    var createdBackupFileForShare by remember { mutableStateOf<File?>(value = null) }
 
                     val devPrefs = remember { getSharedPreferences("dev_prefs", MODE_PRIVATE) }
 
@@ -1279,15 +1281,8 @@ class MainActivity : ComponentActivity() {
                             val (backupFile, msg) = DatabaseBackupManager.createDatabaseBackup(this@MainActivity, replacePrevious = replace)
                             if (backupFile != null) {
                                 backupRefreshKey++
-                                Toast.makeText(this@MainActivity, "✓ Backup created: ${backupFile.absolutePath}", Toast.LENGTH_LONG).show()
-                                val shareUri = DatabaseBackupManager.getShareableUri(this@MainActivity, backupFile)
-                                val intent = Intent(Intent.ACTION_SEND).apply {
-                                    type = "application/x-sqlite3"
-                                    putExtra(Intent.EXTRA_SUBJECT, "Load Tracker Pro Data Backup")
-                                    putExtra(Intent.EXTRA_STREAM, shareUri)
-                                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                }
-                                startActivity(Intent.createChooser(intent, "Share / Save Backup File"))
+                                createdBackupFileForShare = backupFile
+                                showPostBackupShareDialog = true
                             } else {
                                 Toast.makeText(this@MainActivity, msg, Toast.LENGTH_SHORT).show()
                             }
@@ -1446,6 +1441,51 @@ class MainActivity : ComponentActivity() {
                                         }
                                     ) {
                                         Text("Keep Both (New File)")
+                                    }
+                                }
+                            )
+                        }
+
+                        if (showPostBackupShareDialog && createdBackupFileForShare != null) {
+                            val fileToShare = createdBackupFileForShare!!
+                            AlertDialog(
+                                onDismissRequest = { showPostBackupShareDialog = false },
+                                title = { Text("✓ Local Backup Created Successfully!") },
+                                text = {
+                                    Column(
+                                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text("• File: ${fileToShare.name}", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
+                                        Text("• Location: ${fileToShare.absolutePath}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Text(
+                                            "Would you like to export or save a copy to Google Drive, Documents, or Email as well?",
+                                            style = MaterialTheme.typography.bodySmall
+                                        )
+                                    }
+                                },
+                                confirmButton = {
+                                    Button(
+                                        onClick = {
+                                            showPostBackupShareDialog = false
+                                            val shareUri = DatabaseBackupManager.getShareableUri(this@MainActivity, fileToShare)
+                                            val intent = Intent(Intent.ACTION_SEND).apply {
+                                                type = "application/x-sqlite3"
+                                                putExtra(Intent.EXTRA_SUBJECT, "Load Tracker Pro Data Backup")
+                                                putExtra(Intent.EXTRA_STREAM, shareUri)
+                                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                            }
+                                            startActivity(Intent.createChooser(intent, "Share / Save Backup File"))
+                                        },
+                                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                                    ) {
+                                        Text("☁️ Export / Share File")
+                                    }
+                                },
+                                dismissButton = {
+                                    TextButton(onClick = { showPostBackupShareDialog = false }) {
+                                        Text("Done (Keep Local Only)")
                                     }
                                 }
                             )
