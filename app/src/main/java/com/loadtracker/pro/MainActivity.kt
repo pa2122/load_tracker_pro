@@ -107,6 +107,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
+import androidx.compose.material3.NavigationDrawerItem
 import androidx.lifecycle.lifecycleScope
 import com.loadtracker.pro.ui.theme.LoadTrackerProTheme
 import com.loadtracker.pro.CurrentLoad
@@ -199,6 +200,7 @@ class MainActivity : ComponentActivity() {
                     }
 
                     var isProUser by remember { mutableStateOf(value = true) }
+                    var showConfigureRatesDialog by remember { mutableStateOf(value = false) }
 
                     val devPrefs = remember { getSharedPreferences("dev_prefs", MODE_PRIVATE) }
 
@@ -428,303 +430,112 @@ class MainActivity : ComponentActivity() {
                             ModalDrawerSheet(modifier = Modifier.width(width = 300.dp)) {
                                 Column(
                                     modifier = Modifier
-                                        .padding(all = 24.dp)
+                                        .padding(all = 16.dp)
                                         .fillMaxHeight()
                                         .verticalScroll(state = drawerScrollState),
-                                    verticalArrangement = Arrangement.spacedBy(space = 16.dp)
+                                    verticalArrangement = Arrangement.spacedBy(space = 10.dp)
                                 ) {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Text(
-                                            "Configurations",
-                                            style = MaterialTheme.typography.titleLarge,
-                                            color = MaterialTheme.colorScheme.primary
-                                        )
-
-                                        if (hasDrawerSettingsChanged) {
-                                            IconButton(
-                                                onClick = {
-                                                    savedDefPercent = defPercent
-                                                    savedTarp8Pay = tarp8Pay
-                                                    savedTarp4Pay = tarp4Pay
-                                                    savedExtraStopPay = extraStopPay
-                                                    savedHomeRawPaste = homeRawPaste
-                                                    savedIsTrainingActive = isTrainingActive
-                                                    savedFlatTrainerPayRate = flatTrainerPayRate
-                                                    devPrefs.edit().apply {
-                                                        putString("def_percent", defPercent)
-                                                        putString("tarp_8_pay", tarp8Pay)
-                                                        putString("tarp_4_pay", tarp4Pay)
-                                                        putString("extra_stop_pay", extraStopPay)
-                                                        putString("home_raw_paste", homeRawPaste)
-                                                        putBoolean("is_training_active", isTrainingActive)
-                                                        putString("flat_trainer_pay_rate", flatTrainerPayRate)
-                                                        apply()
-                                                    }
-                                                    resolveHomeAddress(homeRawPaste)
-                                                    scope.launch { drawerState.close() }
-                                                }
-                                            ) {
-                                                Icon(
-                                                    Icons.Default.Done,
-                                                    contentDescription = "Save and Close Menu",
-                                                    tint = MaterialTheme.colorScheme.primary
-                                                )
-                                            }
-                                        }
-                                    }
-
-                                    OutlinedTextField(
-                                        value = defPercent,
-                                        onValueChange = { input ->
-                                            val filtered =
-                                                input.filter { it.isDigit() || it == '.' }
-                                            if (filtered.isEmpty() || filtered == ".") defPercent =
-                                                filtered
-                                            else if (filtered.count { it == '.' } <= 1) {
-                                                val value = filtered.toDoubleOrNull()
-                                                if ((value != null) && (value >= 0.0) && (value <= 100.0)) {
-                                                    defPercent = filtered
-                                                }
-                                            }
-                                        },
-                                        label = { Text("Default Pay Rate (%)") },
-                                        singleLine = true,
-                                        keyboardOptions = KeyboardOptions(
-                                            keyboardType = KeyboardType.Number,
-                                            imeAction = ImeAction.Next
-                                        ),
-                                        modifier = Modifier.fillMaxWidth()
-                                    )
-
-                                    OutlinedTextField(
-                                        value = tarp8Pay,
-                                        onValueChange = { input ->
-                                            tarp8Pay = input.filter { it.isDigit() || it == '.' }
-                                        },
-                                        label = { Text("8' Drop Tarp Pay ($)") },
-                                        singleLine = true,
-                                        keyboardOptions = KeyboardOptions(
-                                            keyboardType = KeyboardType.Number,
-                                            imeAction = ImeAction.Next
-                                        ),
-                                        modifier = Modifier.fillMaxWidth()
-                                    )
-
-                                    OutlinedTextField(
-                                        value = tarp4Pay,
-                                        onValueChange = { input ->
-                                            tarp4Pay = input.filter { it.isDigit() || it == '.' }
-                                        },
-                                        label = { Text("4' Drop Tarp Pay ($)") },
-                                        singleLine = true,
-                                        keyboardOptions = KeyboardOptions(
-                                            keyboardType = KeyboardType.Number,
-                                            imeAction = ImeAction.Next
-                                        ),
-                                        modifier = Modifier.fillMaxWidth()
-                                    )
-
-                                    OutlinedTextField(
-                                        value = extraStopPay,
-                                        onValueChange = { input ->
-                                            extraStopPay = input.filter { it.isDigit() || it == '.' }
-                                        },
-                                        label = { Text("Extra Stop Pay ($)") },
-                                        singleLine = true,
-                                        keyboardOptions = KeyboardOptions(
-                                            keyboardType = KeyboardType.Number,
-                                            imeAction = ImeAction.Next
-                                        ),
-                                        modifier = Modifier.fillMaxWidth()
-                                    )
-
-                                    OutlinedTextField(
-                                        value = homeRawPaste,
-                                        onValueChange = {
-                                            homeRawPaste = it
-                                            isHomeVerified = false
-                                            homeLat = null
-                                            homeLong = null
-                                        },
-                                        label = { Text("Home Address (Paste)") },
-                                        modifier = Modifier.fillMaxWidth(),
-                                        minLines = 2
-                                    )
-
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.spacedBy(space = 8.dp)
-                                    ) {
-                                        Button(
-                                            onClick = { resolveHomeAddress(homeRawPaste) },
-                                            enabled = homeRawPaste.isNotBlank() && !isHomeVerified,
-                                            modifier = Modifier.weight(weight = 1f)
-                                        ) {
-                                            Text(if (isHomeVerified) "Verified ✅" else "Verify Address")
-                                        }
-
-                                        Button(
-                                            onClick = {
-                                                val lastLat = TrackingService.currentLatitude
-                                                val lastLong = TrackingService.currentLongitude
-                                                if (lastLat != null && lastLong != null) {
-                                                    homeLat = lastLat
-                                                    homeLong = lastLong
-                                                    isHomeVerified = true
-                                                }
-                                            },
-                                            colors = ButtonDefaults.buttonColors(
-                                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                                                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                                            ),
-                                            modifier = Modifier.weight(weight = 1f)
-                                        ) {
-                                            Icon(Icons.Default.LocationOn, contentDescription = null)
-                                            Spacer(Modifier.width(width = 4.dp))
-                                            Text("Pin Current")
-                                        }
-                                    }
-
-                                    Text(
-                                        text = if (homeLat != null) "📍 Home Pinned" else "🏠 Home Not Set",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = if (homeLat != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
-                                    )
-
-                                    HorizontalDivider()
-                                    Text("🎓 Trainer Incentive Settings", style = MaterialTheme.typography.titleSmall)
+                                    // 1. Driver Profile Header Card
                                     Surface(
-                                        color = if (isTrainingActive) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
-                                        shape = RoundedCornerShape(8.dp),
+                                        color = MaterialTheme.colorScheme.primaryContainer,
+                                        shape = RoundedCornerShape(12.dp),
                                         modifier = Modifier.fillMaxWidth()
                                     ) {
                                         Column(
-                                            modifier = Modifier.padding(10.dp),
+                                            modifier = Modifier.padding(14.dp),
                                             verticalArrangement = Arrangement.spacedBy(4.dp)
                                         ) {
-                                            Text(
-                                                text = if (isTrainingActive) "Status: ACTIVE 🟢" else "Status: INACTIVE 🔴",
-                                                style = MaterialTheme.typography.labelLarge,
-                                                fontWeight = FontWeight.Bold,
-                                                color = if (isTrainingActive) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                            if (isTrainingActive) {
-                                                val tierLabel = when (savedTraineeTier) {
-                                                    "inexperienced" -> "Inexperienced (Wk $savedTrainingWeek of 4)"
-                                                    "experienced" -> "Experienced (Wk $savedTrainingWeek of 2)"
-                                                    else -> "Custom Rate"
-                                                }
-                                                Text(tierLabel, style = MaterialTheme.typography.bodySmall)
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                            ) {
+                                                Image(
+                                                    painter = painterResource(id = R.drawable.app_logo),
+                                                    contentDescription = null,
+                                                    modifier = Modifier.size(28.dp)
+                                                )
                                                 Text(
-                                                    "Added: +$${String.format(Locale.US, "%.2f", calculatedTrainerPay)}/wk",
-                                                    style = MaterialTheme.typography.labelMedium,
+                                                    "Load Tracker Pro",
+                                                    style = MaterialTheme.typography.titleMedium,
                                                     fontWeight = FontWeight.Bold,
-                                                    color = MaterialTheme.colorScheme.primary
+                                                    color = MaterialTheme.colorScheme.onPrimaryContainer
                                                 )
                                             }
-
-                                            Button(
-                                                onClick = {
-                                                    scope.launch { drawerState.close() }
-                                                    showTrainerSettingsDialog = true
-                                                },
-                                                colors = ButtonDefaults.buttonColors(
-                                                    containerColor = MaterialTheme.colorScheme.secondary,
-                                                    contentColor = MaterialTheme.colorScheme.onSecondary
-                                                ),
-                                                modifier = Modifier.fillMaxWidth()
-                                            ) {
-                                                Text("⚙️ Configure Trainer Pay")
-                                            }
+                                            Text(
+                                                "Active Fleet Driver • v$appVersionName",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.primary
+                                            )
                                         }
                                     }
 
-                                    HorizontalDivider()
-                                    Button(
+                                    // Section 1: 🚚 NAVIGATION & WORKSPACES
+                                    Text("🚚 NAVIGATION & WORKSPACES", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+
+                                    NavigationDrawerItem(
+                                        label = { Text("🏠 Dashboard") },
+                                        selected = currentScreen == "dashboard",
                                         onClick = {
                                             scope.launch { drawerState.close() }
-                                            if (isProUser) {
-                                                currentScreen = "facility_search"
-                                            } else {
-                                                showProUpgradeDialog = true
-                                            }
-                                        },
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                                        ),
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
-                                        Text(if (isProUser) "Review Facility Insights" else "Review Facility Insights (Pro)")
-                                    }
+                                            currentScreen = "dashboard"
+                                        }
+                                    )
 
-                                    HorizontalDivider()
-                                    Button(
+                                    NavigationDrawerItem(
+                                        label = { Text("🏢 Review Facility Insights") },
+                                        selected = currentScreen == "facility_search",
                                         onClick = {
                                             scope.launch { drawerState.close() }
-                                            if (isProUser) {
-                                                tripForMap = null
-                                                currentScreen = "route_map"
-                                            } else {
-                                                showProUpgradeDialog = true
-                                            }
-                                        },
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                                        ),
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
-                                        Text(if (isProUser) "View Global Route Heatmap" else "Global Route Heatmap (Pro)")
-                                    }
+                                            if (isProUser) currentScreen = "facility_search" else showProUpgradeDialog = true
+                                        }
+                                    )
+
+                                    NavigationDrawerItem(
+                                        label = { Text("🗺️ Global Route Heatmap") },
+                                        selected = currentScreen == "route_map",
+                                        onClick = {
+                                            scope.launch { drawerState.close() }
+                                            if (isProUser) { tripForMap = null; currentScreen = "route_map" } else showProUpgradeDialog = true
+                                        }
+                                    )
 
                                     HorizontalDivider()
-                                    Button(
+
+                                    // Section 2: ⚙️ DRIVER SETTINGS
+                                    Text("⚙️ DRIVER SETTINGS", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+
+                                    NavigationDrawerItem(
+                                        label = { Text("⚙️ Configure Pay Rates & Home") },
+                                        selected = false,
+                                        onClick = {
+                                            scope.launch { drawerState.close() }
+                                            showConfigureRatesDialog = true
+                                        }
+                                    )
+
+                                    NavigationDrawerItem(
+                                        label = { Text("🎓 Configure Trainer Pay") },
+                                        selected = false,
+                                        onClick = {
+                                            scope.launch { drawerState.close() }
+                                            showTrainerSettingsDialog = true
+                                        }
+                                    )
+
+                                    HorizontalDivider()
+
+                                    // Section 3: 💾 DATA, UTILITIES & DEV
+                                    Text("💾 DATA & UTILITIES", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+
+                                    NavigationDrawerItem(
+                                        label = { Text("📄 Export Settlement Log (CSV)") },
+                                        selected = false,
                                         onClick = {
                                             scope.launch { drawerState.close() }
                                             exportToCsv()
-                                        },
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = MaterialTheme.colorScheme.tertiary
-                                        ),
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
-                                        Text("Export Payload History (CSV)")
-                                    }
+                                        }
+                                    )
 
-                                    HorizontalDivider()
-                                    Button(
-                                        onClick = {
-                                            scope.launch { drawerState.close() }
-                                            val activeLoad = viewModel.allLoads.value.firstOrNull { it.tripState != "COMPLETED" }
-                                            val payload = if (activeLoad != null) {
-                                                WearableDataSyncManager.WearTripStatePayload(
-                                                    proNumber = activeLoad.proNumber,
-                                                    tripState = activeLoad.tripState,
-                                                    bounceMiles = if (activeLoad.bounceMilesEnd > 0) activeLoad.bounceMilesEnd else activeLoad.dispatchedBounceMiles,
-                                                    loadedMiles = if (activeLoad.loadedMilesEnd > 0) activeLoad.loadedMilesEnd else activeLoad.dispatchedLoadedMiles,
-                                                    dockArrivalTime = activeLoad.dockArrivalTime ?: activeLoad.pickupTimestamp
-                                                )
-                                            } else {
-                                                WearableDataSyncManager.WearTripStatePayload(proNumber = "", tripState = "COMPLETED", bounceMiles = 0.0, loadedMiles = 0.0)
-                                            }
-                                            WearableDataSyncManager.syncTripStateToWearable(this@MainActivity, payload)
-                                            Toast.makeText(this@MainActivity, "⚡ Broadcasted active load PRO #${payload.proNumber.ifBlank { "NONE" }} to watch!", Toast.LENGTH_LONG).show()
-                                        },
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = MaterialTheme.colorScheme.primaryContainer,
-                                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                                        ),
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
-                                        Text("⚡ Broadcast Active Load to Watch")
-                                    }
-
-                                    HorizontalDivider()
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
                                         horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -764,90 +575,55 @@ class MainActivity : ComponentActivity() {
                                         }
                                     }
 
-                                    HorizontalDivider()
-                                    Button(
+                                    NavigationDrawerItem(
+                                        label = { Text("⚡ Broadcast Load to Watch") },
+                                        selected = false,
+                                        onClick = {
+                                            scope.launch { drawerState.close() }
+                                            val activeLoad = viewModel.allLoads.value.firstOrNull { it.tripState != "COMPLETED" }
+                                            val payload = if (activeLoad != null) {
+                                                WearableDataSyncManager.WearTripStatePayload(
+                                                    proNumber = activeLoad.proNumber,
+                                                    tripState = activeLoad.tripState,
+                                                    bounceMiles = if (activeLoad.bounceMilesEnd > 0) activeLoad.bounceMilesEnd else activeLoad.dispatchedBounceMiles,
+                                                    loadedMiles = if (activeLoad.loadedMilesEnd > 0) activeLoad.loadedMilesEnd else activeLoad.dispatchedLoadedMiles,
+                                                    dockArrivalTime = activeLoad.dockArrivalTime ?: activeLoad.pickupTimestamp
+                                                )
+                                            } else {
+                                                WearableDataSyncManager.WearTripStatePayload(proNumber = "", tripState = "COMPLETED", bounceMiles = 0.0, loadedMiles = 0.0)
+                                            }
+                                            WearableDataSyncManager.syncTripStateToWearable(this@MainActivity, payload)
+                                            Toast.makeText(this@MainActivity, "⚡ Broadcasted active load PRO #${payload.proNumber.ifBlank { "NONE" }} to watch!", Toast.LENGTH_LONG).show()
+                                        }
+                                    )
+
+                                    NavigationDrawerItem(
+                                        label = { Text("🐛 Report Bug / Feedback") },
+                                        selected = false,
                                         onClick = {
                                             scope.launch { drawerState.close() }
                                             showTesterFeedbackDialog = true
-                                        },
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                                        ),
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
-                                        Icon(Icons.Default.Edit, contentDescription = null)
-                                        Spacer(modifier = Modifier.width(width = 6.dp))
-                                        Text("🐛 Report Bug / Feedback")
-                                    }
+                                        }
+                                    )
 
-                                    HorizontalDivider()
-                                    Button(
-                                        onClick = {
-                                            scope.launch { drawerState.close() }
-                                            triggerHelpView.value = true
-                                        },
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = MaterialTheme.colorScheme.secondary
-                                        ),
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
-                                        Text("Open Driver's Guide")
-                                    }
-
-                                    HorizontalDivider()
-                                    Button(
+                                    NavigationDrawerItem(
+                                        label = { Text("📖 App Technical Specs (README)") },
+                                        selected = false,
                                         onClick = {
                                             scope.launch { drawerState.close() }
                                             showReadmeDialog = true
-                                        },
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                                        ),
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
-                                        Icon(Icons.Default.Info, contentDescription = null)
-                                        Spacer(modifier = Modifier.width(width = 6.dp))
-                                        Text("📖 App Technical Specs (README)")
-                                    }
-
-                                    val hasActiveTrip = savedLoads.any { it.tripState != "COMPLETED" && it.tripState != "NOT_STARTED" }
-                                    if (hasActiveTrip) {
-                                        HorizontalDivider()
-                                        Button(
-                                            onClick = {
-                                                scope.launch { drawerState.close() }
-                                                tripToEdit = null
-                                                isHistoricalEntry = true
-                                                currentScreen = "entry"
-                                            },
-                                            colors = ButtonDefaults.buttonColors(
-                                                containerColor = MaterialTheme.colorScheme.primary,
-                                                contentColor = MaterialTheme.colorScheme.onPrimary
-                                            ),
-                                            modifier = Modifier.fillMaxWidth()
-                                        ) {
-                                            Icon(Icons.Default.Add, contentDescription = null)
-                                            Spacer(modifier = Modifier.width(width = 6.dp))
-                                            Text("➕ Add Historical Completed Load")
                                         }
-                                    }
+                                    )
 
                                     if (isDeviceAuthorized || BuildConfig.DEBUG) {
-                                        Spacer(modifier = Modifier.weight(weight = 1f))
-                                        Button(
-                                            onClick = { showDevOptionsDialog = true },
-                                            colors = ButtonDefaults.buttonColors(
-                                                containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                                                contentColor = MaterialTheme.colorScheme.onSurfaceVariant
-                                            ),
-                                            modifier = Modifier.fillMaxWidth()
-                                        ) {
-                                            Icon(Icons.Default.Build, contentDescription = null)
-                                            Spacer(modifier = Modifier.width(width = 6.dp))
-                                            Text("🛠️ Developer Options")
-                                        }
+                                        NavigationDrawerItem(
+                                            label = { Text("🛠️ Developer Options & Notes") },
+                                            selected = false,
+                                            onClick = {
+                                                scope.launch { drawerState.close() }
+                                                showDevOptionsDialog = true
+                                            }
+                                        )
                                     } else {
                                         Spacer(modifier = Modifier.weight(weight = 1f))
                                         Button(
@@ -1381,6 +1157,138 @@ class MainActivity : ComponentActivity() {
                             confirmButton = {
                                 TextButton(onClick = { showDevOptionsDialog = false }) {
                                     Text("Close")
+                                }
+                            }
+                        )
+                    }
+
+                    if (showConfigureRatesDialog) {
+                        AlertDialog(
+                            onDismissRequest = { showConfigureRatesDialog = false },
+                            title = { Text("⚙️ Configure Pay Rates & Home Base") },
+                            text = {
+                                val ratesScrollState = rememberScrollState()
+                                Column(
+                                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                                    modifier = Modifier.fillMaxWidth().verticalScroll(ratesScrollState)
+                                ) {
+                                    OutlinedTextField(
+                                        value = defPercent,
+                                        onValueChange = { input ->
+                                            val filtered = input.filter { it.isDigit() || it == '.' }
+                                            if (filtered.isEmpty() || filtered == ".") defPercent = filtered
+                                            else if (filtered.count { it == '.' } <= 1) {
+                                                val value = filtered.toDoubleOrNull()
+                                                if ((value != null) && (value >= 0.0) && (value <= 100.0)) defPercent = filtered
+                                            }
+                                        },
+                                        label = { Text("Default Pay Rate (%)") },
+                                        singleLine = true,
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Next),
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+
+                                    OutlinedTextField(
+                                        value = tarp8Pay,
+                                        onValueChange = { input -> tarp8Pay = input.filter { it.isDigit() || it == '.' } },
+                                        label = { Text("8' Drop Tarp Pay ($)") },
+                                        singleLine = true,
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Next),
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+
+                                    OutlinedTextField(
+                                        value = tarp4Pay,
+                                        onValueChange = { input -> tarp4Pay = input.filter { it.isDigit() || it == '.' } },
+                                        label = { Text("4' Drop Tarp Pay ($)") },
+                                        singleLine = true,
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Next),
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+
+                                    OutlinedTextField(
+                                        value = extraStopPay,
+                                        onValueChange = { input -> extraStopPay = input.filter { it.isDigit() || it == '.' } },
+                                        label = { Text("Extra Stop Pay ($)") },
+                                        singleLine = true,
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Next),
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+
+                                    OutlinedTextField(
+                                        value = homeRawPaste,
+                                        onValueChange = {
+                                            homeRawPaste = it
+                                            isHomeVerified = false
+                                            homeLat = null
+                                            homeLong = null
+                                        },
+                                        label = { Text("Home Address (Paste)") },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        minLines = 2
+                                    )
+
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Button(
+                                            onClick = { resolveHomeAddress(homeRawPaste) },
+                                            enabled = homeRawPaste.isNotBlank() && !isHomeVerified,
+                                            modifier = Modifier.weight(1f)
+                                        ) {
+                                            Text(if (isHomeVerified) "Verified ✅" else "Verify Address")
+                                        }
+
+                                        Button(
+                                            onClick = {
+                                                val lastLat = TrackingService.currentLatitude
+                                                val lastLong = TrackingService.currentLongitude
+                                                if (lastLat != null && lastLong != null) {
+                                                    homeLat = lastLat
+                                                    homeLong = lastLong
+                                                    isHomeVerified = true
+                                                }
+                                            },
+                                            colors = ButtonDefaults.buttonColors(
+                                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                                            ),
+                                            modifier = Modifier.weight(1f)
+                                        ) {
+                                            Icon(Icons.Default.LocationOn, contentDescription = null)
+                                            Spacer(Modifier.width(4.dp))
+                                            Text("Pin Current")
+                                        }
+                                    }
+                                }
+                            },
+                            confirmButton = {
+                                Button(
+                                    onClick = {
+                                        savedDefPercent = defPercent
+                                        savedTarp8Pay = tarp8Pay
+                                        savedTarp4Pay = tarp4Pay
+                                        savedExtraStopPay = extraStopPay
+                                        savedHomeRawPaste = homeRawPaste
+                                        devPrefs.edit().apply {
+                                            putString("def_percent", defPercent)
+                                            putString("tarp_8_pay", tarp8Pay)
+                                            putString("tarp_4_pay", tarp4Pay)
+                                            putString("extra_stop_pay", extraStopPay)
+                                            putString("home_raw_paste", homeRawPaste)
+                                            apply()
+                                        }
+                                        resolveHomeAddress(homeRawPaste)
+                                        showConfigureRatesDialog = false
+                                    }
+                                ) {
+                                    Text("Save Changes")
+                                }
+                            },
+                            dismissButton = {
+                                TextButton(onClick = { showConfigureRatesDialog = false }) {
+                                    Text("Cancel")
                                 }
                             }
                         )
