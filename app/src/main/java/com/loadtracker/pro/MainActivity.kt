@@ -51,7 +51,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.AccountBox
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material.icons.filled.Done
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Home
@@ -674,20 +676,50 @@ class MainActivity : ComponentActivity() {
                             val isTablet = configuration.screenWidthDp >= 600
 
                             Scaffold(
-                            topBar = {
-                                TopAppBar(
-                                    title = { Text("Load Tracker Pro") },
-                                    navigationIcon = {
-                                        IconButton(onClick = { scope.launch { drawerState.open() } }) {
-                                            Icon(
-                                                Icons.Default.Menu,
-                                                contentDescription = "Open Configurations"
+                                topBar = {
+                                    TopAppBar(
+                                        title = { Text("Load Tracker Pro") },
+                                        navigationIcon = {
+                                            IconButton(onClick = { scope.launch { drawerState.open() } }) {
+                                                Icon(
+                                                    Icons.Default.Menu,
+                                                    contentDescription = "Open Configurations"
+                                                )
+                                            }
+                                        }
+                                    )
+                                },
+                                bottomBar = {
+                                    if (!isTablet && !isAppStartingUp) {
+                                        NavigationBar {
+                                            NavigationBarItem(
+                                                selected = currentScreen == "dashboard",
+                                                onClick = { currentScreen = "dashboard" },
+                                                icon = { Icon(Icons.Default.Home, contentDescription = "Dashboard") },
+                                                label = { Text("Dashboard") }
+                                            )
+                                            NavigationBarItem(
+                                                selected = currentScreen == "route_map",
+                                                onClick = { tripForMap = null; currentScreen = "route_map" },
+                                                icon = { Icon(Icons.Default.LocationOn, contentDescription = "Live Map") },
+                                                label = { Text("Live Map") }
+                                            )
+                                            NavigationBarItem(
+                                                selected = currentScreen == "fuel_logger",
+                                                onClick = { currentScreen = "fuel_logger" },
+                                                icon = { Icon(Icons.Default.ShoppingCart, contentDescription = "Fuel") },
+                                                label = { Text("Fuel") }
+                                            )
+                                            NavigationBarItem(
+                                                selected = currentScreen == "owner_op",
+                                                onClick = { currentScreen = "owner_op" },
+                                                icon = { Icon(Icons.Default.AccountBox, contentDescription = "Ledger") },
+                                                label = { Text("Ledger") }
                                             )
                                         }
                                     }
-                                )
-                            }
-                        ) { innerPadding ->
+                                }
+                            ) { innerPadding ->
                             Row(
                                 modifier = Modifier
                                     .fillMaxSize()
