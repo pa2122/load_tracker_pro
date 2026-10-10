@@ -15,6 +15,13 @@ object DatabaseBackupManager {
     private const val DB_NAME_V1 = "tmc_loads_local.db"
     private const val DB_NAME_V2 = "load_tracker_local.db"
 
+    data class BackupMetadata(
+        val fileName: String,
+        val formattedDate: String,
+        val sizeKb: Long,
+        val isValid: Boolean
+    )
+
     /**
      * Finds active SQLite database file on device.
      */
@@ -36,6 +43,32 @@ object DatabaseBackupManager {
         } catch (e: Exception) {
             false
         }
+    }
+
+    /**
+     * Finds the latest local backup file in app files directory.
+     */
+    fun getLatestBackupFile(context: Context): File? {
+        val backupDir = File(context.filesDir, "backups")
+        if (!backupDir.exists()) return null
+        return backupDir.listFiles { _, name -> name.startsWith("load_tracker_backup_") && name.endsWith(".db") }
+            ?.maxByOrNull { it.lastModified() }
+    }
+
+    /**
+     * Extracts metadata preview from a backup file.
+     */
+    fun getBackupMetadata(file: File?): BackupMetadata? {
+        if (file == null || !file.exists()) return null
+        val isValid = isValidSqliteDatabase(file)
+        val dateStr = SimpleDateFormat("MMM d, yyyy • h:mm a", Locale.US).format(Date(file.lastModified()))
+        val kb = file.length() / 1024
+        return BackupMetadata(
+            fileName = file.name,
+            formattedDate = dateStr,
+            sizeKb = kb,
+            isValid = isValid
+        )
     }
 
     /**

@@ -538,7 +538,7 @@ class MainActivity : ComponentActivity() {
                                     )
 
                                     NavigationDrawerItem(
-                                        label = { Text("💾 Backup & Restore Data") },
+                                        label = { Text("💾 Export Data") },
                                         selected = false,
                                         onClick = {
                                             scope.launch { drawerState.close() }
@@ -1266,16 +1266,19 @@ class MainActivity : ComponentActivity() {
                     }
 
                     if (showBackupRestoreDialog) {
+                        val latestBackupFile = remember { DatabaseBackupManager.getLatestBackupFile(this@MainActivity) }
+                        val backupMeta = remember { DatabaseBackupManager.getBackupMetadata(latestBackupFile) }
+
                         AlertDialog(
                             onDismissRequest = { showBackupRestoreDialog = false },
-                            title = { Text("💾 Backup & Restore Data") },
+                            title = { Text("💾 Export & Restore Data") },
                             text = {
                                 Column(
-                                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                                    verticalArrangement = Arrangement.spacedBy(10.dp),
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
                                     Text(
-                                        "Safely export a timestamped backup copy of your trip logs, rate confirmations, fuel records, and settings to Documents, Google Drive, or SD Card, or restore from a previous backup file.",
+                                        "Safely export a timestamped backup copy of your trip logs, rate confirmations, fuel records, and settings.",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.secondary
                                     )
@@ -1284,6 +1287,7 @@ class MainActivity : ComponentActivity() {
                                         onClick = {
                                             val (backupFile, msg) = DatabaseBackupManager.createDatabaseBackup(this@MainActivity)
                                             if (backupFile != null) {
+                                                Toast.makeText(this@MainActivity, "✓ Local data backup created!", Toast.LENGTH_SHORT).show()
                                                 val shareUri = DatabaseBackupManager.getShareableUri(this@MainActivity, backupFile)
                                                 val intent = Intent(Intent.ACTION_SEND).apply {
                                                     type = "application/x-sqlite3"
@@ -1291,7 +1295,7 @@ class MainActivity : ComponentActivity() {
                                                     putExtra(Intent.EXTRA_STREAM, shareUri)
                                                     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                                                 }
-                                                startActivity(Intent.createChooser(intent, "Export Data Backup"))
+                                                startActivity(Intent.createChooser(intent, "Share / Send Backup File"))
                                             } else {
                                                 Toast.makeText(this@MainActivity, msg, Toast.LENGTH_SHORT).show()
                                             }
@@ -1299,7 +1303,7 @@ class MainActivity : ComponentActivity() {
                                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                                         modifier = Modifier.fillMaxWidth()
                                     ) {
-                                        Text("📤 Export Data Backup (Drive / Documents)")
+                                        Text("📤 Create Local Data Backup")
                                     }
 
                                     Button(
@@ -1314,6 +1318,34 @@ class MainActivity : ComponentActivity() {
                                         modifier = Modifier.fillMaxWidth()
                                     ) {
                                         Text("📥 Import & Restore Data File")
+                                    }
+
+                                    HorizontalDivider()
+
+                                    // Local Data Backup Metadata Preview Card
+                                    if (backupMeta == null) {
+                                        Text(
+                                            "📍 No local data backup found.",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.error,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    } else {
+                                        Surface(
+                                            color = MaterialTheme.colorScheme.surfaceVariant,
+                                            shape = RoundedCornerShape(8.dp),
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Column(
+                                                modifier = Modifier.padding(10.dp),
+                                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                                            ) {
+                                                Text("📦 Local Data Backup Found:", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                                                Text("• File: ${backupMeta.fileName}", style = MaterialTheme.typography.bodySmall)
+                                                Text("• Date: ${backupMeta.formattedDate}", style = MaterialTheme.typography.bodySmall)
+                                                Text("• Size: ${backupMeta.sizeKb} KB • Validated ✅", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
+                                            }
+                                        }
                                     }
                                 }
                             },
