@@ -39,7 +39,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Scaffold
@@ -157,207 +156,228 @@ fun FuelLoggerScreen(
 
     val displayedStates = if (isIftaExpanded) allStatesList else allStatesList.take(5)
 
-    Scaffold(
-        floatingActionButton = {
-            FloatingActionButton(
-                onClick = { showAddFuelDialog = true },
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(Icons.Default.Add, contentDescription = null)
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("Log Fuel Stop", fontWeight = FontWeight.Bold)
-                }
-            }
-        }
-    ) { innerPadding ->
-        Column(
+    Scaffold { innerPadding ->
+        LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
                 .padding(horizontal = 16.dp, vertical = 2.dp),
+            contentPadding = PaddingValues(bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            // Quarterly Filter Chips Row
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                FilterChip(selected = selectedQuarterFilter == "ALL", onClick = { selectedQuarterFilter = "ALL" }, label = { Text("All") })
-                FilterChip(selected = selectedQuarterFilter == "Q1", onClick = { selectedQuarterFilter = "Q1" }, label = { Text("Q1") })
-                FilterChip(selected = selectedQuarterFilter == "Q2", onClick = { selectedQuarterFilter = "Q2" }, label = { Text("Q2") })
-                FilterChip(selected = selectedQuarterFilter == "Q3", onClick = { selectedQuarterFilter = "Q3" }, label = { Text("Q3") })
-                FilterChip(selected = selectedQuarterFilter == "Q4", onClick = { selectedQuarterFilter = "Q4" }, label = { Text("Q4") })
+            // 1. Quarterly Filter Chips Row
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    FilterChip(selected = selectedQuarterFilter == "ALL", onClick = { selectedQuarterFilter = "ALL" }, label = { Text("All") })
+                    FilterChip(selected = selectedQuarterFilter == "Q1", onClick = { selectedQuarterFilter = "Q1" }, label = { Text("Q1") })
+                    FilterChip(selected = selectedQuarterFilter == "Q2", onClick = { selectedQuarterFilter = "Q2" }, label = { Text("Q2") })
+                    FilterChip(selected = selectedQuarterFilter == "Q3", onClick = { selectedQuarterFilter = "Q3" }, label = { Text("Q3") })
+                    FilterChip(selected = selectedQuarterFilter == "Q4", onClick = { selectedQuarterFilter = "Q4" }, label = { Text("Q4") })
+                }
             }
 
-            // 1. MPG & Fuel Expenditure Analytics Card
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+            // 2. MPG & Fuel Expenditure Analytics Card
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
                 ) {
-                    Text("⚡ Diesel Fuel & MPG Analytics ($selectedQuarterFilter)", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer)
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Column {
-                            Text("Avg Miles/Gallon (MPG)", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onPrimaryContainer)
-                            Text(
-                                if (calculatedMpg > 0) "${String.format(Locale.US, "%.2f", calculatedMpg)} MPG" else "Need 2+ Fill-ups",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                        Column(horizontalAlignment = Alignment.End) {
-                            Text("Avg Price / Gallon", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onPrimaryContainer)
-                            Text("$${String.format(Locale.US, "%.3f", avgPpg)}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.tertiary)
-                        }
-                    }
+                        Text("⚡ Diesel Fuel & MPG Analytics ($selectedQuarterFilter)", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer)
 
-                    HorizontalDivider(color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.2f))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column {
+                                Text("Avg Miles/Gallon (MPG)", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                                Text(
+                                    if (calculatedMpg > 0) "${String.format(Locale.US, "%.2f", calculatedMpg)} MPG" else "Need 2+ Fill-ups",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                            Column(horizontalAlignment = Alignment.End) {
+                                Text("Avg Price / Gallon", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                                Text("$${String.format(Locale.US, "%.3f", avgPpg)}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.tertiary)
+                            }
+                        }
 
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text("Total Gallons: ${String.format(Locale.US, "%.1f", totalGallons)} gal", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer)
-                        Text("Total Cost: $${String.format(Locale.US, "%.2f", totalCost)}", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                        HorizontalDivider(color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.2f))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text("Total Gallons: ${String.format(Locale.US, "%.1f", totalGallons)} gal", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                            Text("Total Cost: $${String.format(Locale.US, "%.2f", totalCost)}", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                        }
                     }
                 }
             }
 
-            // 2. IFTA State Fuel Tax & Mileage Summary Card (Top-Ranked List + Progress Bar)
-            if (allStatesList.isNotEmpty()) {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+            // 3. FULL-WIDTH "LOG FUEL STOP" BUTTON (Directly under MPG Analytics)
+            item {
+                Button(
+                    onClick = { showAddFuelDialog = true },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary
+                    ),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(48.dp)
                 ) {
-                    Column(
-                        modifier = Modifier.padding(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    Icon(Icons.Default.Add, contentDescription = null)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("⛽ Log Fuel Stop", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                }
+            }
+
+            // 4. IFTA State Fuel Tax & Mileage Summary Card (Top-Right Collapse Toggle + Progress Bars)
+            if (allStatesList.isNotEmpty()) {
+                item {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                     ) {
-                        Text("🗺️ IFTA State Tax & Mileage Audit (${allStatesList.size} States)", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            displayedStates.forEachIndexed { index, (stateCode, stateGal, stateMiles) ->
-                                val pct = (stateMiles / totalAllStateMiles).toFloat().coerceIn(0f, 1f)
-                                val pctLabel = (pct * 100).toInt()
-
-                                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
+                        Column(
+                            modifier = Modifier.padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("🗺️ IFTA State Tax Audit (${allStatesList.size} States)", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                                if (allStatesList.size > 5) {
+                                    TextButton(
+                                        onClick = { isIftaExpanded = !isIftaExpanded },
+                                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp)
                                     ) {
-                                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                                            Text("#${index + 1}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary, fontWeight = FontWeight.Bold)
-                                            Surface(
-                                                color = MaterialTheme.colorScheme.primary,
-                                                shape = RoundedCornerShape(4.dp)
-                                            ) {
-                                                Text(stateCode, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
-                                            }
-                                        }
-
                                         Text(
-                                            "Fuel: ${String.format(Locale.US, "%.1f", stateGal)} gal | Miles: ${String.format(Locale.US, "%.1f", stateMiles)} mi ($pctLabel%)",
-                                            style = MaterialTheme.typography.bodySmall,
+                                            text = if (isIftaExpanded) "▲ Top 5" else "▼ View All (${allStatesList.size})",
+                                            style = MaterialTheme.typography.labelSmall,
                                             fontWeight = FontWeight.Bold
                                         )
                                     }
-
-                                    LinearProgressIndicator(
-                                        progress = { pct },
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(4.dp),
-                                        color = MaterialTheme.colorScheme.primary,
-                                        trackColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
-                                    )
                                 }
                             }
-                        }
 
-                        if (allStatesList.size > 5) {
-                            TextButton(
-                                onClick = { isIftaExpanded = !isIftaExpanded },
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text(if (isIftaExpanded) "▲ Show Top 5 Only" else "▼ View All ${allStatesList.size} Active States")
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                displayedStates.forEachIndexed { index, (stateCode, stateGal, stateMiles) ->
+                                    val pct = (stateMiles / totalAllStateMiles).toFloat().coerceIn(0f, 1f)
+                                    val pctLabel = (pct * 100).toInt()
+
+                                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                                                Text("#${index + 1}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary, fontWeight = FontWeight.Bold)
+                                                Surface(
+                                                    color = MaterialTheme.colorScheme.primary,
+                                                    shape = RoundedCornerShape(4.dp)
+                                                ) {
+                                                    Text(stateCode, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
+                                                }
+                                            }
+
+                                            Text(
+                                                "Fuel: ${String.format(Locale.US, "%.1f", stateGal)} gal | Miles: ${String.format(Locale.US, "%.1f", stateMiles)} mi ($pctLabel%)",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+
+                                        LinearProgressIndicator(
+                                            progress = { pct },
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .height(4.dp),
+                                            color = MaterialTheme.colorScheme.primary,
+                                            trackColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
                 }
             }
 
-            HorizontalDivider()
+            item {
+                HorizontalDivider()
+            }
 
-            // 3. Fuel Fill-Up History Ledger
+            // 5. Fuel Fill-Up History Ledger Items
             if (filteredFuelEntries.isEmpty()) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("No fuel stops found for $selectedQuarterFilter.", color = MaterialTheme.colorScheme.secondary)
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 24.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("No fuel stops found for $selectedQuarterFilter.", color = MaterialTheme.colorScheme.secondary)
+                    }
                 }
             } else {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(bottom = 88.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    items(filteredFuelEntries) { entry ->
-                        val dateStr = Instant.ofEpochMilli(entry.timestamp)
-                            .atZone(ZoneId.systemDefault())
-                            .toLocalDate()
-                            .format(DateTimeFormatter.ofPattern("MM/dd/yyyy"))
+                items(filteredFuelEntries) { entry ->
+                    val dateStr = Instant.ofEpochMilli(entry.timestamp)
+                        .atZone(ZoneId.systemDefault())
+                        .toLocalDate()
+                        .format(DateTimeFormatter.ofPattern("MM/dd/yyyy"))
 
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
-                            Column(
-                                modifier = Modifier.padding(12.dp),
-                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                                        Surface(color = MaterialTheme.colorScheme.primary, shape = RoundedCornerShape(4.dp)) {
-                                            Text(entry.state.uppercase(Locale.US), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
-                                        }
-                                        Text(entry.stationName, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Surface(color = MaterialTheme.colorScheme.primary, shape = RoundedCornerShape(4.dp)) {
+                                        Text(entry.state.uppercase(Locale.US), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
                                     }
-                                    Text("$${String.format(Locale.US, "%.2f", entry.totalCost)}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                                    Text(entry.stationName, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
                                 }
+                                Text("$${String.format(Locale.US, "%.2f", entry.totalCost)}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                            }
 
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Text("• ${String.format(Locale.US, "%.1f", entry.gallons)} gal @ $${String.format(Locale.US, "%.3f", entry.pricePerGallon)}/gal", style = MaterialTheme.typography.bodySmall)
-                                    Text("Odo: ${entry.odometer.toInt()} mi", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
-                                }
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text("• ${String.format(Locale.US, "%.1f", entry.gallons)} gal @ $${String.format(Locale.US, "%.3f", entry.pricePerGallon)}/gal", style = MaterialTheme.typography.bodySmall)
+                                Text("Odo: ${entry.odometer.toInt()} mi", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
+                            }
 
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(dateStr, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
-                                    IconButton(onClick = { entryToDelete = entry }) {
-                                        Icon(Icons.Default.Delete, contentDescription = "Delete Fuel Stop", tint = MaterialTheme.colorScheme.error)
-                                    }
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(dateStr, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
+                                IconButton(onClick = { entryToDelete = entry }) {
+                                    Icon(Icons.Default.Delete, contentDescription = "Delete Fuel Stop", tint = MaterialTheme.colorScheme.error)
                                 }
                             }
                         }
