@@ -3,6 +3,11 @@ package com.loadtracker.pro
 import android.content.Context
 import android.content.Intent
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.text.TextRecognition
+import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -356,7 +361,35 @@ fun FuelLoggerScreen(
         var inputDefCost by remember { mutableStateOf("") }
 
         var stationDropdownExpanded by remember { mutableStateOf(false) }
+        var stateDropdownExpanded by remember { mutableStateOf(false) }
         val stationOptions = listOf("Love's", "Pilot Flying J", "TA / Petro", "Speedway", "Kwik Trip", "Other")
+        val usStateList = listOf("AL", "AZ", "AR", "CA", "CO", "CT", "DE", "FL", "GA", "ID", "IL", "IN", "IA", "KS", "KY", "LA", "ME", "MD", "MA", "MI", "MN", "MS", "MO", "MT", "NE", "NV", "NH", "NJ", "NM", "NY", "NC", "ND", "OH", "OK", "OR", "PA", "RI", "SC", "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY")
+
+        val receiptOcrLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+            if (uri != null) {
+                try {
+                    val image = InputImage.fromFilePath(ctx, uri)
+                    val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
+                    recognizer.process(image)
+                        .addOnSuccessListener { visionText ->
+                            val parsed = FuelReceiptOcrParser.parseReceiptText(visionText.text)
+                            if (parsed.gallons != null) inputGallons = parsed.gallons.toString()
+                            if (parsed.pricePerGallon != null) inputPpg = parsed.pricePerGallon.toString()
+                            if (parsed.defGallons != null) inputDefGallons = parsed.defGallons.toString()
+                            if (parsed.defCost != null) inputDefCost = String.format(Locale.US, "%.2f", parsed.defCost)
+                            if (parsed.odometer != null) inputOdometer = parsed.odometer.toInt().toString()
+                            if (parsed.state != null) inputState = parsed.state
+                            if (parsed.stationName != null) inputStation = parsed.stationName
+                            Toast.makeText(ctx, "Receipt screenshot parsed successfully!", Toast.LENGTH_SHORT).show()
+                        }
+                        .addOnFailureListener {
+                            Toast.makeText(ctx, "Failed to scan receipt image.", Toast.LENGTH_SHORT).show()
+                        }
+                } catch (e: Exception) {
+                    Toast.makeText(ctx, "Error opening receipt: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
 
         val galVal = inputGallons.toDoubleOrNull() ?: 0.0
         val ppgVal = inputPpg.toDoubleOrNull() ?: 0.0
@@ -367,6 +400,17 @@ fun FuelLoggerScreen(
             title = { Text("⛽ Log Diesel Fill-Up") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Button(
+                        onClick = { receiptOcrLauncher.launch("image/*") },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("📷 Scan / Attach Receipt Screenshot")
+                    }
+
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedTextField(
                             value = inputGallons,
@@ -389,13 +433,34 @@ fun FuelLoggerScreen(
                     Text("Computed Total Cost: $${String.format(Locale.US, "%.2f", computedTotalCost)}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
 
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedTextField(
-                            value = inputState,
-                            onValueChange = { inputState = it.uppercase(Locale.US).take(2) },
-                            label = { Text("State (e.g. TX)") },
-                            singleLine = true,
+                        ExposedDropdownMenuBox(
+                            expanded = stateDropdownExpanded,
+                            onExpandedChange = { stateDropdownExpanded = !stateDropdownExpanded },
                             modifier = Modifier.weight(1f)
-                        )
+                        ) {
+                            OutlinedTextField(
+                                value = inputState,
+                                onValueChange = {},
+                                readOnly = true,
+                                label = { Text("State") },
+                                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = stateDropdownExpanded) },
+                                modifier = Modifier.menuAnchor(type = MenuAnchorType.PrimaryNotEditable, enabled = true)
+                            )
+                            ExposedDropdownMenu(
+                                expanded = stateDropdownExpanded,
+                                onDismissRequest = { stateDropdownExpanded = false }
+                            ) {
+                                usStateList.forEach { st ->
+                                    DropdownMenuItem(
+                                        text = { Text(st) },
+                                        onClick = {
+                                            inputState = st
+                                            stateDropdownExpanded = false
+                                        }
+                                    )
+                                }
+                            }
+                        }
 
                         ExposedDropdownMenuBox(
                             expanded = stationDropdownExpanded,

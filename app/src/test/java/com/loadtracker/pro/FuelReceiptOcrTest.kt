@@ -54,4 +54,39 @@ class FuelReceiptOcrTest {
         assertEquals(3.450, parsed.pricePerGallon!!, 0.001)
         assertEquals(346.73, parsed.totalCost!!, 0.01)
     }
+
+    @Test
+    fun test3_FuelReceiptOcr_ParsesPilotFlyingJDigitalReceiptScreenshot() {
+        val pilotDigitalReceipt = """
+            Store 1057
+            1305 Pasadena Fwy
+            Pasadena, TX 77506
+            (713) 534-0038
+            10/05/2026
+            
+            Qty Name
+            1 Truck Diesel
+            Pump: 21
+            Gallons: 123.597
+            Price/Gal: $5.859
+            
+            1 DEF Fuel Item
+            Pump: 21
+            Gallons: 10.609
+            Price/Gal: $4.899
+            
+            Vehicle ID: XXXXX
+            Odometer: 242481
+        """.trimIndent()
+
+        val parsed = FuelReceiptOcrParser.parseReceiptText(pilotDigitalReceipt)
+
+        assertNotNull("Parsed data should not be null", parsed)
+        assertEquals(123.597, parsed.gallons!!, 0.001)
+        assertEquals(5.859, parsed.pricePerGallon!!, 0.001)
+        assertEquals(10.609, parsed.defGallons!!, 0.001)
+        assertEquals(51.97, parsed.defCost!!, 0.01)
+        assertEquals(242481.0, parsed.odometer!!, 0.1)
+        assertEquals("TX", parsed.state)
+    }
 }
