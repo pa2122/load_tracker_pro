@@ -131,6 +131,12 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         checkAndRequestPermissions()
+        CrashRecoveryHandler.setupGlobalExceptionHandler(this)
+
+        val recoveryState = CrashRecoveryHandler.checkAndClearCrashRecoveryState(this)
+        if (recoveryState.wasRecovered) {
+            android.widget.Toast.makeText(this, "⚠️ App recovered after unexpected shutdown. Active load tracking resumed.", android.widget.Toast.LENGTH_LONG).show()
+        }
 
         // Activity-level Wear OS Message Listener (Guaranteed active on launch)
         com.google.android.gms.wearable.Wearable.getMessageClient(this).addListener { messageEvent ->
