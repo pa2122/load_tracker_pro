@@ -8,6 +8,7 @@ object WearableDataSyncManager {
 
     const val PATH_ACTIVE_TRIP_STATE = "/active_trip_state"
     const val PATH_WRIST_ACTION = "/wrist_action"
+    const val PATH_REQUEST_ACTIVE_TRIP_STATE = "/request_active_trip_state"
 
     // Wrist Action Commands from Smartwatch
     const val ACTION_ARRIVE_SHIPPER = "ARRIVE_SHIPPER"
