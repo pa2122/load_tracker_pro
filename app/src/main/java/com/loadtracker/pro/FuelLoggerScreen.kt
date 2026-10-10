@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -37,7 +38,11 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -154,23 +159,76 @@ fun FuelLoggerScreen(
         }
     }
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    var isIftaExpanded by remember { mutableStateOf(false) }
+
+    val allStatesList = remember(stateIftaMap, stateMileageMap) {
+        (stateIftaMap.keys + stateMileageMap.keys).toSet()
+            .map { code ->
+                val stateEntries = stateIftaMap[code] ?: emptyList()
+                val gal = stateEntries.sumOf { it.gallons }
+                val miles = stateMileageMap[code] ?: 0.0
+                Triple(code, gal, miles)
+            }
+            .sortedByDescending { it.third } // Rank highest mileage state first
+    }
+
+    val totalAllStateMiles = remember(allStatesList) {
+        allStatesList.sumOf { it.third }.coerceAtLeast(1.0)
+    }
+
+    val displayedStates = if (isIftaExpanded) allStatesList else allStatesList.take(5)
+
+    Scaffold(
+        floatingActionButton = {
+            FloatingActionButton(
+                onClick = { showAddFuelDialog = true },
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = null)
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Log Fuel Stop", fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+    ) { innerPadding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .padding(innerPadding)
                 .padding(horizontal = 16.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // Quarterly Filter Chips Row
+            // Quarterly Filter Chips & Export Button Row
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                FilterChip(selected = selectedQuarterFilter == "ALL", onClick = { selectedQuarterFilter = "ALL" }, label = { Text("All Time") })
-                FilterChip(selected = selectedQuarterFilter == "Q1", onClick = { selectedQuarterFilter = "Q1" }, label = { Text("Q1") })
-                FilterChip(selected = selectedQuarterFilter == "Q2", onClick = { selectedQuarterFilter = "Q2" }, label = { Text("Q2") })
-                FilterChip(selected = selectedQuarterFilter == "Q3", onClick = { selectedQuarterFilter = "Q3" }, label = { Text("Q3") })
-                FilterChip(selected = selectedQuarterFilter == "Q4", onClick = { selectedQuarterFilter = "Q4" }, label = { Text("Q4") })
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    FilterChip(selected = selectedQuarterFilter == "ALL", onClick = { selectedQuarterFilter = "ALL" }, label = { Text("All") })
+                    FilterChip(selected = selectedQuarterFilter == "Q1", onClick = { selectedQuarterFilter = "Q1" }, label = { Text("Q1") })
+                    FilterChip(selected = selectedQuarterFilter == "Q2", onClick = { selectedQuarterFilter = "Q2" }, label = { Text("Q2") })
+                    FilterChip(selected = selectedQuarterFilter == "Q3", onClick = { selectedQuarterFilter = "Q3" }, label = { Text("Q3") })
+                    FilterChip(selected = selectedQuarterFilter == "Q4", onClick = { selectedQuarterFilter = "Q4" }, label = { Text("Q4") })
+                }
+
+                Button(
+                    onClick = { exportIftaCsv() },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                    ),
+                    enabled = filteredFuelEntries.isNotEmpty() || allStatesList.isNotEmpty()
+                ) {
+                    Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Export", style = MaterialTheme.typography.labelMedium)
+                }
             }
 
             // 1. MPG & Fuel Expenditure Analytics Card
@@ -215,73 +273,69 @@ fun FuelLoggerScreen(
                 }
             }
 
-            // 2. IFTA State Fuel Tax & Mileage Summary Card
-            if (stateIftaMap.isNotEmpty() || stateMileageMap.isNotEmpty()) {
+            // 2. IFTA State Fuel Tax & Mileage Summary Card (Top-Ranked List + Progress Bar)
+            if (allStatesList.isNotEmpty()) {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                 ) {
                     Column(
                         modifier = Modifier.padding(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Text("🗺️ IFTA State Tax & Mileage Audit ($selectedQuarterFilter)", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                        
-                        val allStates = (stateIftaMap.keys + stateMileageMap.keys).toSet().sorted()
-                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            allStates.forEach { stateCode ->
-                                val stateEntries = stateIftaMap[stateCode] ?: emptyList()
-                                val stateGal = stateEntries.sumOf { it.gallons }
-                                val stateMiles = stateMileageMap[stateCode] ?: 0.0
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("MAP IFTA State Audit (${allStatesList.size} States)", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                            if (allStatesList.size > 5) {
+                                TextButton(onClick = { isIftaExpanded = !isIftaExpanded }) {
+                                    Text(if (isIftaExpanded) "▲ Top 5" else "▼ View All (${allStatesList.size})")
+                                }
+                            }
+                        }
 
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Surface(
-                                        color = MaterialTheme.colorScheme.primary,
-                                        shape = RoundedCornerShape(4.dp)
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            displayedStates.forEachIndexed { index, (stateCode, stateGal, stateMiles) ->
+                                val pct = (stateMiles / totalAllStateMiles).toFloat().coerceIn(0f, 1f)
+                                val pctLabel = (pct * 100).toInt()
+
+                                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Text(stateCode, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
+                                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                                            Text("#${index + 1}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary, fontWeight = FontWeight.Bold)
+                                            Surface(
+                                                color = MaterialTheme.colorScheme.primary,
+                                                shape = RoundedCornerShape(4.dp)
+                                            ) {
+                                                Text(stateCode, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
+                                            }
+                                        }
+
+                                        Text(
+                                            "Fuel: ${String.format(Locale.US, "%.1f", stateGal)} gal | Miles: ${String.format(Locale.US, "%.1f", stateMiles)} mi ($pctLabel%)",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            fontWeight = FontWeight.Bold
+                                        )
                                     }
-                                    Text(
-                                        "Fuel: ${String.format(Locale.US, "%.1f", stateGal)} gal | Miles: ${String.format(Locale.US, "%.1f", stateMiles)} mi",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        fontWeight = FontWeight.Bold
+
+                                    LinearProgressIndicator(
+                                        progress = { pct },
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(4.dp),
+                                        color = MaterialTheme.colorScheme.primary,
+                                        trackColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
                                     )
                                 }
                             }
                         }
                     }
-                }
-            }
-
-            // 3. Action Buttons Row (Log Fill-Up + Export CSV)
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Button(
-                    onClick = { showAddFuelDialog = true },
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Icon(Icons.Default.Add, contentDescription = null)
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("⛽ Log Fill-Up")
-                }
-
-                Button(
-                    onClick = { exportIftaCsv() },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                    ),
-                    enabled = filteredFuelEntries.isNotEmpty(),
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Icon(Icons.Default.Share, contentDescription = null)
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("📄 Export IFTA CSV")
                 }
             }
 
