@@ -20,7 +20,8 @@ object DatabaseBackupManager {
         val formattedDate: String,
         val sizeKb: Long,
         val absolutePath: String,
-        val isValid: Boolean
+        val isValid: Boolean,
+        val file: File
     )
 
     /**
@@ -47,13 +48,21 @@ object DatabaseBackupManager {
     }
 
     /**
+     * Finds all local backup files in app files directory sorted newest-first.
+     */
+    fun getAllBackupFiles(context: Context): List<File> {
+        val backupDir = File(context.filesDir, "backups")
+        if (!backupDir.exists()) return emptyList()
+        return backupDir.listFiles { _, name -> name.startsWith("load_tracker_backup_") && name.endsWith(".db") }
+            ?.sortedByDescending { it.lastModified() }
+            ?: emptyList()
+    }
+
+    /**
      * Finds the latest local backup file in app files directory.
      */
     fun getLatestBackupFile(context: Context): File? {
-        val backupDir = File(context.filesDir, "backups")
-        if (!backupDir.exists()) return null
-        return backupDir.listFiles { _, name -> name.startsWith("load_tracker_backup_") && name.endsWith(".db") }
-            ?.maxByOrNull { it.lastModified() }
+        return getAllBackupFiles(context).firstOrNull()
     }
 
     /**
@@ -69,7 +78,8 @@ object DatabaseBackupManager {
             formattedDate = dateStr,
             sizeKb = kb,
             absolutePath = file.absolutePath,
-            isValid = isValid
+            isValid = isValid,
+            file = file
         )
     }
 
@@ -125,6 +135,31 @@ object DatabaseBackupManager {
             "${context.packageName}.provider",
             backupFile
         )
+    }
+
+    /**
+     * Restores database directly from a local File instance.
+     */
+    fun restoreDatabaseFromFile(context: Context, backupFile: File): Pair<Boolean, String> {
+        if (!backupFile.exists() || !isValidSqliteDatabase(backupFile)) {
+            return Pair(false, "Invalid database file.")
+        }
+        return try {
+            val activeDb = getActiveDatabaseFile(context)
+            try {
+                AppDatabase.getDatabase(context).close()
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+            FileInputStream(backupFile).use { input ->
+                FileOutputStream(activeDb).use { output ->
+                    input.copyTo(output)
+                }
+            }
+            Pair(true, "Database restored successfully from ${backupFile.name}! Restart app to refresh records.")
+        } catch (e: Exception) {
+            Pair(false, "Restore failed: ${e.localizedMessage}")
+        }
     }
 
     /**

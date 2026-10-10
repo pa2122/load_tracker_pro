@@ -107,6 +107,9 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.ui.unit.sp
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.NavigationDrawerItem
 import androidx.lifecycle.lifecycleScope
 import com.loadtracker.pro.ui.theme.LoadTrackerProTheme
@@ -1267,12 +1270,15 @@ class MainActivity : ComponentActivity() {
                     }
 
                     if (showBackupRestoreDialog) {
-                        val latestBackupFile = remember { DatabaseBackupManager.getLatestBackupFile(this@MainActivity) }
-                        val backupMeta = remember { DatabaseBackupManager.getBackupMetadata(latestBackupFile) }
+                        var backupRefreshKey by remember { mutableIntStateOf(0) }
+                        val backupFiles = remember(backupRefreshKey) { DatabaseBackupManager.getAllBackupFiles(this@MainActivity) }
+                        val latestBackupFile = backupFiles.firstOrNull()
+                        val backupMeta = remember(latestBackupFile) { DatabaseBackupManager.getBackupMetadata(latestBackupFile) }
 
                         val executeBackup: (replace: Boolean) -> Unit = { replace ->
                             val (backupFile, msg) = DatabaseBackupManager.createDatabaseBackup(this@MainActivity, replacePrevious = replace)
                             if (backupFile != null) {
+                                backupRefreshKey++
                                 Toast.makeText(this@MainActivity, "✓ Backup created: ${backupFile.absolutePath}", Toast.LENGTH_LONG).show()
                                 val shareUri = DatabaseBackupManager.getShareableUri(this@MainActivity, backupFile)
                                 val intent = Intent(Intent.ACTION_SEND).apply {
@@ -1291,9 +1297,10 @@ class MainActivity : ComponentActivity() {
                             onDismissRequest = { showBackupRestoreDialog = false },
                             title = { Text("💾 Export & Restore Data") },
                             text = {
+                                val backupScrollState = rememberScrollState()
                                 Column(
                                     verticalArrangement = Arrangement.spacedBy(10.dp),
-                                    modifier = Modifier.fillMaxWidth()
+                                    modifier = Modifier.fillMaxWidth().verticalScroll(backupScrollState)
                                 ) {
                                     Text(
                                         "Safely export a timestamped backup copy of your trip logs, rate confirmations, fuel records, and settings.",
@@ -1326,34 +1333,78 @@ class MainActivity : ComponentActivity() {
                                         ),
                                         modifier = Modifier.fillMaxWidth()
                                     ) {
-                                        Text("📥 Import & Restore Data File")
+                                        Text("📥 Import & Restore External File")
                                     }
 
                                     HorizontalDivider()
 
-                                    // Local Data Backup Metadata Preview Card
-                                    if (backupMeta == null) {
+                                    // Local Data Backup History List
+                                    if (backupFiles.isEmpty()) {
                                         Text(
-                                            "📍 No local data backup found.",
+                                            "📍 No local data backups found.",
                                             style = MaterialTheme.typography.bodySmall,
                                             color = MaterialTheme.colorScheme.error,
                                             fontWeight = FontWeight.Bold
                                         )
                                     } else {
-                                        Surface(
-                                            color = MaterialTheme.colorScheme.surfaceVariant,
-                                            shape = RoundedCornerShape(8.dp),
-                                            modifier = Modifier.fillMaxWidth()
-                                        ) {
-                                            Column(
-                                                modifier = Modifier.padding(10.dp),
-                                                verticalArrangement = Arrangement.spacedBy(4.dp)
-                                            ) {
-                                                Text("📦 Data Backup Found:", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                                                Text("• File: ${backupMeta.fileName}", style = MaterialTheme.typography.bodySmall)
-                                                Text("• Date: ${backupMeta.formattedDate}", style = MaterialTheme.typography.bodySmall)
-                                                Text("• Size: ${backupMeta.sizeKb} KB • Validated ✅", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
-                                                Text("• Path: ${backupMeta.absolutePath}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
+                                        Text(
+                                            "📦 Local Data Backups Saved (${backupFiles.size} Files):",
+                                            style = MaterialTheme.typography.labelMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+
+                                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            backupFiles.forEach { bFile ->
+                                                val meta = DatabaseBackupManager.getBackupMetadata(bFile)
+                                                if (meta != null) {
+                                                    Surface(
+                                                        color = MaterialTheme.colorScheme.surfaceVariant,
+                                                        shape = RoundedCornerShape(8.dp),
+                                                        modifier = Modifier.fillMaxWidth()
+                                                    ) {
+                                                        Column(
+                                                            modifier = Modifier.padding(10.dp),
+                                                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                                                        ) {
+                                                            Text("• ${meta.fileName}", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
+                                                            Text("  Date: ${meta.formattedDate}", style = MaterialTheme.typography.labelSmall)
+                                                            Text("  Size: ${meta.sizeKb} KB • Validated ✅", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
+
+                                                            Row(
+                                                                modifier = Modifier.fillMaxWidth(),
+                                                                horizontalArrangement = Arrangement.End,
+                                                                verticalAlignment = Alignment.CenterVertically
+                                                            ) {
+                                                                Button(
+                                                                    onClick = {
+                                                                        val (success, msg) = DatabaseBackupManager.restoreDatabaseFromFile(this@MainActivity, bFile)
+                                                                        Toast.makeText(this@MainActivity, msg, Toast.LENGTH_LONG).show()
+                                                                        if (success) showBackupRestoreDialog = false
+                                                                    },
+                                                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
+                                                                    modifier = Modifier.height(28.dp),
+                                                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                                                                ) {
+                                                                    Text("Restore", fontSize = 10.sp)
+                                                                }
+
+                                                                Spacer(modifier = Modifier.width(6.dp))
+
+                                                                IconButton(
+                                                                    onClick = {
+                                                                        bFile.delete()
+                                                                        backupRefreshKey++
+                                                                        Toast.makeText(this@MainActivity, "Deleted backup: ${bFile.name}", Toast.LENGTH_SHORT).show()
+                                                                    },
+                                                                    modifier = Modifier.size(28.dp)
+                                                                ) {
+                                                                    Icon(Icons.Default.Delete, contentDescription = "Delete Backup", tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(16.dp))
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
                                             }
                                         }
                                     }
