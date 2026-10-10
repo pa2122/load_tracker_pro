@@ -79,6 +79,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -946,6 +948,19 @@ class MainActivity : ComponentActivity() {
 
                                         "dev_notes" -> {
                                             DevNotesScreen(
+                                                onBack = { currentScreen = "dashboard" }
+                                            )
+                                        }
+
+                                        "fuel_logger" -> {
+                                            FuelLoggerScreen(
+                                                onBack = { currentScreen = "dashboard" }
+                                            )
+                                        }
+
+                                        "owner_op" -> {
+                                            LedgerScreen(
+                                                viewModel = viewModel,
                                                 onBack = { currentScreen = "dashboard" }
                                             )
                                         }
