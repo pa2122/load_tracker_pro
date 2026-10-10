@@ -86,9 +86,13 @@ android {
 
     buildTypes {
         debug {
+            applicationIdSuffix = ".v2"
+            resValue("string", "app_name", "Load Tracker Pro v2")
             signingConfig = signingConfigs.getByName("sharedDebug")
         }
         release {
+            applicationIdSuffix = ".v2"
+            resValue("string", "app_name", "Load Tracker Pro v2")
             signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = false
             ndk {
