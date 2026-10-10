@@ -40,7 +40,9 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.Switch
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
@@ -449,6 +451,14 @@ fun LoadEntryScreen(
 
     var isScanningOcr by remember { mutableStateOf(false) }
 
+    val deleteLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartIntentSenderForResult()
+    ) { result ->
+        if (result.resultCode == android.app.Activity.RESULT_OK) {
+            Toast.makeText(ctx, "Screenshot deleted from gallery", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
@@ -460,10 +470,11 @@ fun LoadEntryScreen(
                 recognizer.process(inputImage)
                     .addOnSuccessListener { visionText ->
                         isScanningOcr = false
-                        val text = visionText.text
+                        val text = OcrHelper.reconstructSpatialText(visionText)
                         if (text.isNotBlank()) {
                             processOcrText(text)
                             Toast.makeText(ctx, "Scan complete! Auto-filled fields from screenshot.", Toast.LENGTH_LONG).show()
+                            OcrHelper.requestScreenshotDeletion(ctx, uri, deleteLauncher)
                         } else {
                             Toast.makeText(ctx, "No text detected in selected image.", Toast.LENGTH_SHORT).show()
                         }
@@ -537,6 +548,22 @@ fun LoadEntryScreen(
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(if (isProUser) "📷 Auto-Fill from Screenshot (Pro)" else "📷 Auto-Fill from Screenshot (Pro Locked)")
                 }
+            }
+
+            var autoDeleteScreenshots by remember { mutableStateOf(OcrHelper.isAutoDeleteEnabled(ctx)) }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text("Auto-delete screenshot after scan", style = MaterialTheme.typography.bodySmall)
+                Switch(
+                    checked = autoDeleteScreenshots,
+                    onCheckedChange = {
+                        autoDeleteScreenshots = it
+                        OcrHelper.setAutoDeleteEnabled(ctx, it)
+                    }
+                )
             }
         }
 

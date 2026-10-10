@@ -42,6 +42,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -49,6 +50,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -403,6 +405,14 @@ fun FuelLoggerScreen(
         val stationOptions = listOf("Love's", "Pilot Flying J", "TA / Petro", "Speedway", "Kwik Trip", "Other")
         val usStateList = listOf("AL", "AZ", "AR", "CA", "CO", "CT", "DE", "FL", "GA", "ID", "IL", "IN", "IA", "KS", "KY", "LA", "ME", "MD", "MA", "MI", "MN", "MS", "MO", "MT", "NE", "NV", "NH", "NJ", "NM", "NY", "NC", "ND", "OH", "OK", "OR", "PA", "RI", "SC", "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY")
 
+        val deleteLauncher = rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.StartIntentSenderForResult()
+        ) { result ->
+            if (result.resultCode == android.app.Activity.RESULT_OK) {
+                Toast.makeText(ctx, "Screenshot deleted from gallery", Toast.LENGTH_SHORT).show()
+            }
+        }
+
         val receiptOcrLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
             if (uri != null) {
                 try {
@@ -410,7 +420,11 @@ fun FuelLoggerScreen(
                     val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
                     recognizer.process(image)
                         .addOnSuccessListener { visionText ->
-                            val parsed = FuelReceiptOcrParser.parseReceiptText(visionText.text)
+                            val finalReconstructedText = OcrHelper.reconstructSpatialText(visionText)
+                            android.util.Log.d("OCR_DEBUG", "RECONSTRUCTED TEXT:\n$finalReconstructedText")
+
+                            val parsed = FuelReceiptOcrParser.parseReceiptText(finalReconstructedText)
+                            android.util.Log.d("OCR_DEBUG", "PARSED DATA: $parsed")
                             if (parsed.gallons != null) inputGallons = parsed.gallons.toString()
                             if (parsed.pricePerGallon != null) inputPpg = parsed.pricePerGallon.toString()
                             if (parsed.defGallons != null) inputDefGallons = parsed.defGallons.toString()
@@ -420,6 +434,8 @@ fun FuelLoggerScreen(
                             if (parsed.stationName != null) inputStation = parsed.stationName
                             if (parsed.dateText != null) inputDateText = parsed.dateText
                             Toast.makeText(ctx, "Receipt screenshot parsed successfully!", Toast.LENGTH_SHORT).show()
+
+                            OcrHelper.requestScreenshotDeletion(ctx, uri, deleteLauncher)
                         }
                         .addOnFailureListener {
                             Toast.makeText(ctx, "Failed to scan receipt image.", Toast.LENGTH_SHORT).show()
@@ -448,6 +464,22 @@ fun FuelLoggerScreen(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text("📷 Scan / Attach Receipt Screenshot")
+                    }
+
+                    var autoDeleteScreenshots by remember { mutableStateOf(OcrHelper.isAutoDeleteEnabled(ctx)) }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("Auto-delete screenshot after scan", style = MaterialTheme.typography.bodySmall)
+                        Switch(
+                            checked = autoDeleteScreenshots,
+                            onCheckedChange = {
+                                autoDeleteScreenshots = it
+                                OcrHelper.setAutoDeleteEnabled(ctx, it)
+                            }
+                        )
                     }
 
                     OutlinedTextField(
@@ -604,7 +636,7 @@ fun FuelLoggerScreen(
                                 timestamp = parsedTimestamp,
                                 gallons = gal,
                                 pricePerGallon = ppg,
-                                totalCost = gal * ppg,
+                                totalCost = (gal * ppg) + defCst,
                                 state = inputState,
                                 stationName = inputStation,
                                 odometer = odo,
