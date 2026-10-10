@@ -201,6 +201,7 @@ class MainActivity : ComponentActivity() {
 
                     var isProUser by remember { mutableStateOf(value = true) }
                     var showConfigureRatesDialog by remember { mutableStateOf(value = false) }
+                    var showBackupRestoreDialog by remember { mutableStateOf(value = false) }
 
                     val devPrefs = remember { getSharedPreferences("dev_prefs", MODE_PRIVATE) }
 
@@ -536,44 +537,14 @@ class MainActivity : ComponentActivity() {
                                         }
                                     )
 
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                    ) {
-                                        Button(
-                                            onClick = {
-                                                scope.launch { drawerState.close() }
-                                                val (backupFile, msg) = DatabaseBackupManager.createDatabaseBackup(this@MainActivity)
-                                                if (backupFile != null) {
-                                                    val shareUri = DatabaseBackupManager.getShareableUri(this@MainActivity, backupFile)
-                                                    val intent = Intent(Intent.ACTION_SEND).apply {
-                                                        type = "application/x-sqlite3"
-                                                        putExtra(Intent.EXTRA_SUBJECT, "Load Tracker Pro Database Backup")
-                                                        putExtra(Intent.EXTRA_STREAM, shareUri)
-                                                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                                    }
-                                                    startActivity(Intent.createChooser(intent, "Backup Database"))
-                                                } else {
-                                                    Toast.makeText(this@MainActivity, msg, Toast.LENGTH_SHORT).show()
-                                                }
-                                            },
-                                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                                            modifier = Modifier.weight(1f)
-                                        ) {
-                                            Text("📤 Backup DB")
+                                    NavigationDrawerItem(
+                                        label = { Text("💾 Backup & Restore Data") },
+                                        selected = false,
+                                        onClick = {
+                                            scope.launch { drawerState.close() }
+                                            showBackupRestoreDialog = true
                                         }
-
-                                        Button(
-                                            onClick = {
-                                                scope.launch { drawerState.close() }
-                                                backupRestoreLauncher.launch("*/*")
-                                            },
-                                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
-                                            modifier = Modifier.weight(1f)
-                                        ) {
-                                            Text("📥 Restore DB")
-                                        }
-                                    }
+                                    )
 
                                     NavigationDrawerItem(
                                         label = { Text("⚡ Broadcast Load to Watch") },
@@ -1289,6 +1260,66 @@ class MainActivity : ComponentActivity() {
                             dismissButton = {
                                 TextButton(onClick = { showConfigureRatesDialog = false }) {
                                     Text("Cancel")
+                                }
+                            }
+                        )
+                    }
+
+                    if (showBackupRestoreDialog) {
+                        AlertDialog(
+                            onDismissRequest = { showBackupRestoreDialog = false },
+                            title = { Text("💾 Backup & Restore Data") },
+                            text = {
+                                Column(
+                                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text(
+                                        "Safely export a timestamped backup copy of your trip logs, rate confirmations, fuel records, and settings to Documents, Google Drive, or SD Card, or restore from a previous backup file.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.secondary
+                                    )
+
+                                    Button(
+                                        onClick = {
+                                            val (backupFile, msg) = DatabaseBackupManager.createDatabaseBackup(this@MainActivity)
+                                            if (backupFile != null) {
+                                                val shareUri = DatabaseBackupManager.getShareableUri(this@MainActivity, backupFile)
+                                                val intent = Intent(Intent.ACTION_SEND).apply {
+                                                    type = "application/x-sqlite3"
+                                                    putExtra(Intent.EXTRA_SUBJECT, "Load Tracker Pro Data Backup")
+                                                    putExtra(Intent.EXTRA_STREAM, shareUri)
+                                                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                                }
+                                                startActivity(Intent.createChooser(intent, "Export Data Backup"))
+                                            } else {
+                                                Toast.makeText(this@MainActivity, msg, Toast.LENGTH_SHORT).show()
+                                            }
+                                        },
+                                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text("📤 Export Data Backup (Drive / Documents)")
+                                    }
+
+                                    Button(
+                                        onClick = {
+                                            showBackupRestoreDialog = false
+                                            backupRestoreLauncher.launch("*/*")
+                                        },
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                                        ),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text("📥 Import & Restore Data File")
+                                    }
+                                }
+                            },
+                            confirmButton = {
+                                TextButton(onClick = { showBackupRestoreDialog = false }) {
+                                    Text("Close")
                                 }
                             }
                         )
