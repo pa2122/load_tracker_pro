@@ -19,6 +19,7 @@ object DatabaseBackupManager {
         val fileName: String,
         val formattedDate: String,
         val sizeKb: Long,
+        val absolutePath: String,
         val isValid: Boolean
     )
 
@@ -67,6 +68,7 @@ object DatabaseBackupManager {
             fileName = file.name,
             formattedDate = dateStr,
             sizeKb = kb,
+            absolutePath = file.absolutePath,
             isValid = isValid
         )
     }
@@ -74,7 +76,7 @@ object DatabaseBackupManager {
     /**
      * Creates a timestamped backup copy of the Room database.
      */
-    fun createDatabaseBackup(context: Context): Pair<File?, String> {
+    fun createDatabaseBackup(context: Context, replacePrevious: Boolean = false): Pair<File?, String> {
         try {
             val activeDb = getActiveDatabaseFile(context)
 
@@ -91,9 +93,15 @@ object DatabaseBackupManager {
                 return Pair(null, "Active database file not found.")
             }
 
+            val backupDir = File(context.filesDir, "backups").apply { mkdirs() }
+
+            if (replacePrevious) {
+                backupDir.listFiles { _, name -> name.startsWith("load_tracker_backup_") && name.endsWith(".db") }
+                    ?.forEach { it.delete() }
+            }
+
             val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
             val backupFileName = "load_tracker_backup_$timestamp.db"
-            val backupDir = File(context.filesDir, "backups").apply { mkdirs() }
             val backupFile = File(backupDir, backupFileName)
 
             FileInputStream(activeDb).use { input ->
@@ -102,7 +110,7 @@ object DatabaseBackupManager {
                 }
             }
 
-            return Pair(backupFile, "Backup created successfully: $backupFileName")
+            return Pair(backupFile, "Backup saved to: ${backupFile.absolutePath}")
         } catch (e: Exception) {
             return Pair(null, "Backup failed: ${e.localizedMessage}")
         }

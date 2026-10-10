@@ -202,6 +202,7 @@ class MainActivity : ComponentActivity() {
                     var isProUser by remember { mutableStateOf(value = true) }
                     var showConfigureRatesDialog by remember { mutableStateOf(value = false) }
                     var showBackupRestoreDialog by remember { mutableStateOf(value = false) }
+                    var showReplaceBackupPrompt by remember { mutableStateOf(value = false) }
 
                     val devPrefs = remember { getSharedPreferences("dev_prefs", MODE_PRIVATE) }
 
@@ -1269,6 +1270,23 @@ class MainActivity : ComponentActivity() {
                         val latestBackupFile = remember { DatabaseBackupManager.getLatestBackupFile(this@MainActivity) }
                         val backupMeta = remember { DatabaseBackupManager.getBackupMetadata(latestBackupFile) }
 
+                        val executeBackup: (replace: Boolean) -> Unit = { replace ->
+                            val (backupFile, msg) = DatabaseBackupManager.createDatabaseBackup(this@MainActivity, replacePrevious = replace)
+                            if (backupFile != null) {
+                                Toast.makeText(this@MainActivity, "✓ Backup created: ${backupFile.absolutePath}", Toast.LENGTH_LONG).show()
+                                val shareUri = DatabaseBackupManager.getShareableUri(this@MainActivity, backupFile)
+                                val intent = Intent(Intent.ACTION_SEND).apply {
+                                    type = "application/x-sqlite3"
+                                    putExtra(Intent.EXTRA_SUBJECT, "Load Tracker Pro Data Backup")
+                                    putExtra(Intent.EXTRA_STREAM, shareUri)
+                                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                }
+                                startActivity(Intent.createChooser(intent, "Share / Save Backup File"))
+                            } else {
+                                Toast.makeText(this@MainActivity, msg, Toast.LENGTH_SHORT).show()
+                            }
+                        }
+
                         AlertDialog(
                             onDismissRequest = { showBackupRestoreDialog = false },
                             title = { Text("💾 Export & Restore Data") },
@@ -1285,25 +1303,16 @@ class MainActivity : ComponentActivity() {
 
                                     Button(
                                         onClick = {
-                                            val (backupFile, msg) = DatabaseBackupManager.createDatabaseBackup(this@MainActivity)
-                                            if (backupFile != null) {
-                                                Toast.makeText(this@MainActivity, "✓ Local data backup created!", Toast.LENGTH_SHORT).show()
-                                                val shareUri = DatabaseBackupManager.getShareableUri(this@MainActivity, backupFile)
-                                                val intent = Intent(Intent.ACTION_SEND).apply {
-                                                    type = "application/x-sqlite3"
-                                                    putExtra(Intent.EXTRA_SUBJECT, "Load Tracker Pro Data Backup")
-                                                    putExtra(Intent.EXTRA_STREAM, shareUri)
-                                                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                                }
-                                                startActivity(Intent.createChooser(intent, "Share / Send Backup File"))
+                                            if (backupMeta != null) {
+                                                showReplaceBackupPrompt = true
                                             } else {
-                                                Toast.makeText(this@MainActivity, msg, Toast.LENGTH_SHORT).show()
+                                                executeBackup(false)
                                             }
                                         },
                                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                                         modifier = Modifier.fillMaxWidth()
                                     ) {
-                                        Text("📤 Create Local Data Backup")
+                                        Text("📤 Create Data Backup")
                                     }
 
                                     Button(
@@ -1340,10 +1349,11 @@ class MainActivity : ComponentActivity() {
                                                 modifier = Modifier.padding(10.dp),
                                                 verticalArrangement = Arrangement.spacedBy(4.dp)
                                             ) {
-                                                Text("📦 Local Data Backup Found:", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                                                Text("📦 Data Backup Found:", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                                                 Text("• File: ${backupMeta.fileName}", style = MaterialTheme.typography.bodySmall)
                                                 Text("• Date: ${backupMeta.formattedDate}", style = MaterialTheme.typography.bodySmall)
                                                 Text("• Size: ${backupMeta.sizeKb} KB • Validated ✅", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
+                                                Text("• Path: ${backupMeta.absolutePath}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
                                             }
                                         }
                                     }
@@ -1355,6 +1365,40 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
                         )
+
+                        if (showReplaceBackupPrompt) {
+                            AlertDialog(
+                                onDismissRequest = { showReplaceBackupPrompt = false },
+                                title = { Text("⚠️ Replace Existing Backup?") },
+                                text = {
+                                    Text(
+                                        "An existing data backup file was found on this device (${backupMeta?.fileName}). Would you like to replace the previous backup or keep both as separate timestamped files?",
+                                        style = MaterialTheme.typography.bodySmall
+                                    )
+                                },
+                                confirmButton = {
+                                    Button(
+                                        onClick = {
+                                            showReplaceBackupPrompt = false
+                                            executeBackup(true)
+                                        },
+                                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                                    ) {
+                                        Text("Replace Previous")
+                                    }
+                                },
+                                dismissButton = {
+                                    Button(
+                                        onClick = {
+                                            showReplaceBackupPrompt = false
+                                            executeBackup(false)
+                                        }
+                                    ) {
+                                        Text("Keep Both (New File)")
+                                    }
+                                }
+                            )
+                        }
                     }
 
                     if (showTesterFeedbackDialog) {
