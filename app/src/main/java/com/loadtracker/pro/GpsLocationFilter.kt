@@ -13,8 +13,15 @@ object GpsLocationFilter {
         lastLong: Double?,
         lastTimeMs: Long?
     ): Boolean {
-        // 1. Accuracy Check: Reject inaccurate fixes (> 50 meters radius)
-        if (currentAccuracy > 50f) {
+        if (!currentLat.isFinite() || !currentLong.isFinite() || currentAccuracy.isNaN() || currentAccuracy.isInfinite()) {
+            return false
+        }
+
+        if (currentLat < -90.0 || currentLat > 90.0 || currentLong < -180.0 || currentLong > 180.0) {
+            return false
+        }
+
+        if (currentAccuracy < 0f || currentAccuracy > 50f) {
             return false
         }
 
@@ -22,17 +29,18 @@ object GpsLocationFilter {
             return true
         }
 
-        // 2. Timestamp Check: Reject stale or out-of-order locations
-        val timeDeltaMs = currentTimeMs - lastTimeMs
-        if (timeDeltaMs <= 0) {
+        if (!lastLat.isFinite() || !lastLong.isFinite() || lastTimeMs < 0L) {
             return false
         }
 
-        // 3. Teleportation / Speed Check: Reject impossible speeds (> 120 mph / ~53.6 m/s)
+        if (currentTimeMs <= lastTimeMs) {
+            return false
+        }
+
+        val timeDeltaMs = currentTimeMs - lastTimeMs
         val distanceMeters = calculateApproxDistance(lastLat, lastLong, currentLat, currentLong)
         val speedMps = distanceMeters / (timeDeltaMs / 1000.0)
 
-        // 53.64 m/s is approx 120 mph
         if (speedMps > 53.64) {
             return false
         }

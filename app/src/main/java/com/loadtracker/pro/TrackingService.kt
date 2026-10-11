@@ -52,7 +52,7 @@ class TrackingService : Service() {
         var targetLong: Double? = null
         var targetName: String? = null
         var isGeofenceActive = false
-        var isProUser = true
+        var isProUser = false
 
         var currentLatitude: Double? = null
         var currentLongitude: Double? = null

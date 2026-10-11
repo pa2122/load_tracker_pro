@@ -3,14 +3,12 @@ package com.loadtracker.pro
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.location.Geocoder
 import android.os.Build
 import android.net.TrafficStats
 import android.os.Bundle
 import android.os.Process
 import android.provider.Settings
 import android.widget.Toast
-import org.json.JSONArray
 import java.net.HttpURLConnection
 import java.net.URL
 import androidx.compose.ui.text.font.FontWeight
@@ -82,7 +80,6 @@ import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -202,7 +199,6 @@ class MainActivity : ComponentActivity() {
                         }
                     }
 
-                    var isProUser by remember { mutableStateOf(value = true) }
                     var showConfigureRatesDialog by remember { mutableStateOf(value = false) }
                     var showBackupRestoreDialog by remember { mutableStateOf(value = false) }
                     var showReplaceBackupPrompt by remember { mutableStateOf(value = false) }
@@ -228,6 +224,8 @@ class MainActivity : ComponentActivity() {
                     var homeLat by remember { mutableStateOf<Double?>(value = 32.3021) }
                     var homeLong by remember { mutableStateOf<Double?>(value = -96.1116) }
                     var isHomeVerified by remember { mutableStateOf(value = true) }
+                    var isResolvingHomeAddress by remember { mutableStateOf(value = false) }
+                    val scope = rememberCoroutineScope()
 
                     var savedDefPercent by remember { mutableStateOf(initDefPercent) }
                     var savedTarp8Pay by remember { mutableStateOf(initTarp8) }
@@ -259,31 +257,58 @@ class MainActivity : ComponentActivity() {
                         }
                     }
 
-                    var isDeviceAuthorized by remember {
-                        val savedAuthorizedDevices = devPrefs.getStringSet("authorized_devices", emptySet()) ?: emptySet()
+                    var locallyAuthorizedDevices by remember {
                         mutableStateOf(
-                            BuildConfig.DEBUG || savedAuthorizedDevices.contains(currentDeviceId)
+                            (devPrefs.getStringSet("authorized_devices", emptySet()) ?: emptySet()).toSet()
                         )
                     }
+                    var remoteAuthorizedDevices by remember {
+                        mutableStateOf(
+                            (devPrefs.getStringSet("remote_authorized_devices", emptySet()) ?: emptySet()).toSet()
+                        )
+                    }
+                    val isTesterAllowlisted = BuildConfig.DEBUG ||
+                            currentDeviceId in remoteAuthorizedDevices
+                    val isDeveloperAuthorized = DeveloperAccessResolver.hasAccess(
+                        isDebugBuild = BuildConfig.DEBUG,
+                        isDeveloperDeviceAllowlisted = currentDeviceId in locallyAuthorizedDevices
+                    )
+                    val isProUser = ProEntitlementResolver.resolve(
+                        hasVerifiedPurchase = false,
+                        isTesterAllowlisted = isTesterAllowlisted
+                    ).hasProAccess
                     var newTesterDeviceId by remember { mutableStateOf(value = "") }
 
-                    fun resolveHomeAddress(input: String) {
-                        val lines = input.lines().filter { it.isNotBlank() }
-                        if (lines.isEmpty()) return
-                        val addressPart = lines.joinToString(separator = ", ").trim()
-                        try {
-                            val geocoder = Geocoder(this@MainActivity, Locale.US)
-                            @Suppress("DEPRECATION")
-                            val results = geocoder.getFromLocationName(addressPart, 1)
-                            if (!results.isNullOrEmpty()) {
-                                val loc = results[0]
-                                homeLat = loc.latitude
-                                homeLong = loc.longitude
-                                isHomeVerified = true
-                                if (lines.size > 1) homeBase = lines[0].trim()
+                    fun resolveHomeAddress(input: String, showErrors: Boolean = false) {
+                        val query = HomeAddressResolver.createQuery(input) ?: return
+                        scope.launch {
+                            isResolvingHomeAddress = true
+                            try {
+                                val location = HomeAddressResolver.resolve(this@MainActivity, query)
+                                if (homeRawPaste == input && location != null) {
+                                    homeLat = location.latitude
+                                    homeLong = location.longitude
+                                    isHomeVerified = true
+                                    location.displayName?.let { homeBase = it }
+                                } else if (showErrors && homeRawPaste == input) {
+                                    Toast.makeText(
+                                        this@MainActivity,
+                                        "Address could not be verified.",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                }
+                            } catch (e: Exception) {
+                                android.util.Log.e("MainActivity", "Unable to resolve home address", e)
+                                if (showErrors && homeRawPaste == input) {
+                                    Toast.makeText(
+                                        this@MainActivity,
+                                        "Address lookup failed. Check your connection and try again.",
+                                        Toast.LENGTH_LONG
+                                    ).show()
+                                }
+                            } finally {
+                                isResolvingHomeAddress = false
                             }
-                        } catch (e: Exception) {
-                            e.printStackTrace()
                         }
                     }
 
@@ -291,30 +316,21 @@ class MainActivity : ComponentActivity() {
                         TrackingService.isProUser = isProUser
                     }
 
-                    LaunchedEffect(currentDeviceId) {
-                        withContext(Dispatchers.IO) {
-                            try {
-                                val url = URL("https://raw.githubusercontent.com/pa2122/load_tracker_pro/master/authorized_devs.json")
-                                val conn = url.openConnection() as HttpURLConnection
-                                conn.requestMethod = "GET"
-                                conn.connectTimeout = 5000
-                                conn.readTimeout = 5000
-                                if (conn.responseCode == 200) {
-                                    val jsonText = conn.inputStream.bufferedReader().use { it.readText() }
-                                    val array = JSONArray(jsonText)
-                                    val remoteIds = mutableSetOf<String>()
-                                    for (i in 0 until array.length()) {
-                                        remoteIds.add(array.getString(i).trim())
-                                    }
-                                    withContext(Dispatchers.Main) {
-                                        if (remoteIds.contains(currentDeviceId) || BuildConfig.DEBUG) {
-                                            isDeviceAuthorized = true
-                                        }
-                                    }
-                                }
-                            } catch (e: Exception) {
-                                e.printStackTrace()
-                            }
+                    LaunchedEffect(Unit) {
+                        try {
+                            val remoteIds = TesterAllowlistRepository.fetch()
+                            remoteAuthorizedDevices = remoteIds
+                            devPrefs.edit()
+                                .putStringSet("remote_authorized_devices", remoteIds)
+                                .apply()
+                        } catch (e: kotlinx.coroutines.CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            android.util.Log.w(
+                                "MainActivity",
+                                "Unable to refresh tester allowlist; using cached access",
+                                e
+                            )
                         }
                     }
 
@@ -338,17 +354,15 @@ class MainActivity : ComponentActivity() {
 
                     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
                     val drawerScrollState = rememberScrollState()
-                    val scope = rememberCoroutineScope()
-
                     val savedLoads by viewModel.allLoads.collectAsState(initial = emptyList())
 
-                    val currentTargetFriday = remember {
-                        getPayPeriodDate(System.currentTimeMillis())
+                    val currentPayrollWeekStart = remember {
+                        getPayrollWeekStartDate(System.currentTimeMillis())
                     }
 
-                    val currentWeekHasTrainingLoad = remember(savedLoads, currentTargetFriday) {
+                    val currentWeekHasTrainingLoad = remember(savedLoads, currentPayrollWeekStart) {
                         savedLoads.any { load ->
-                            (getPayPeriodDate(load.pickupTimestamp) == currentTargetFriday) && load.isTrainingWeek
+                            (load.payrollWeekStartDate() == currentPayrollWeekStart) && load.isTrainingWeek
                         }
                     }
 
@@ -603,7 +617,7 @@ class MainActivity : ComponentActivity() {
                                         }
                                     )
 
-                                    if (isDeviceAuthorized || BuildConfig.DEBUG) {
+                                    if (isDeveloperAuthorized) {
                                         NavigationDrawerItem(
                                             label = { Text("🛠️ Developer Options & Notes") },
                                             selected = false,
@@ -724,15 +738,25 @@ class MainActivity : ComponentActivity() {
                                         NavigationRailItem(
                                             selected = currentScreen == "route_map",
                                             onClick = {
-                                                tripForMap = null
-                                                currentScreen = "route_map"
+                                                if (isProUser) {
+                                                    tripForMap = null
+                                                    currentScreen = "route_map"
+                                                } else {
+                                                    showProUpgradeDialog = true
+                                                }
                                             },
                                             icon = { Icon(Icons.Default.LocationOn, contentDescription = "Heatmap") },
                                             label = { Text("Heatmap") }
                                         )
                                         NavigationRailItem(
                                             selected = currentScreen == "facility_search",
-                                            onClick = { currentScreen = "facility_search" },
+                                            onClick = {
+                                                if (isProUser) {
+                                                    currentScreen = "facility_search"
+                                                } else {
+                                                    showProUpgradeDialog = true
+                                                }
+                                            },
                                             icon = { Icon(Icons.Default.Search, contentDescription = "Facilities") },
                                             label = { Text("Facilities") }
                                         )
@@ -742,7 +766,7 @@ class MainActivity : ComponentActivity() {
                                             icon = { Icon(Icons.Default.Edit, contentDescription = "Feedback") },
                                             label = { Text("Feedback") }
                                         )
-                                        if (isDeviceAuthorized || BuildConfig.DEBUG) {
+                                        if (isDeveloperAuthorized) {
                                             NavigationRailItem(
                                                 selected = false,
                                                 onClick = { showDevOptionsDialog = true },
@@ -923,7 +947,7 @@ class MainActivity : ComponentActivity() {
                                                         isGoingHome = finalizedLoadEntity.isGoingHome,
                                                         tripState = if (isHistoricalEntry) "COMPLETED" else finalizedLoadEntity.tripState,
                                                         tripNotes = finalizedLoadEntity.tripNotes,
-                                                        deliveryTimestamp = if (isHistoricalEntry) finalizedLoadEntity.pickupTimestamp + 86400000L else finalizedLoadEntity.deliveryTimestamp,
+                                                        deliveryTimestamp = finalizedLoadEntity.deliveryTimestamp,
                                                         shipperName = finalizedLoadEntity.shipperName,
                                                         shipperLat = finalizedLoadEntity.shipperLat,
                                                         shipperLong = finalizedLoadEntity.shipperLong,
@@ -1004,10 +1028,11 @@ class MainActivity : ComponentActivity() {
                                         modifier = Modifier.fillMaxWidth(),
                                         horizontalArrangement = Arrangement.SpaceBetween,
                                     ) {
-                                        Text("Developer Mode (Pro Unlocked)", style = MaterialTheme.typography.bodyMedium)
-                                        Switch(
-                                            checked = isProUser,
-                                            onCheckedChange = { isProUser = it },
+                                        Text("Pro access", style = MaterialTheme.typography.bodyMedium)
+                                        Text(
+                                            if (isProUser) "Granted" else "Not granted",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = if (isProUser) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
                                         )
                                     }
 
@@ -1093,7 +1118,7 @@ class MainActivity : ComponentActivity() {
 
                                     HorizontalDivider()
 
-                                    Text("Device Authorization", style = MaterialTheme.typography.titleSmall)
+                                    Text("Developer Device Authorization", style = MaterialTheme.typography.titleSmall)
                                     Text(
                                         "Device ID: $currentDeviceId",
                                         style = MaterialTheme.typography.bodySmall,
@@ -1102,25 +1127,31 @@ class MainActivity : ComponentActivity() {
 
                                     Button(
                                         onClick = {
-                                            val currentSet = devPrefs.getStringSet("authorized_devices", emptySet())?.toMutableSet() ?: mutableSetOf()
-                                            if (isDeviceAuthorized && !BuildConfig.DEBUG) {
+                                            val currentSet = locallyAuthorizedDevices.toMutableSet()
+                                            if (currentDeviceId in currentSet) {
                                                 currentSet.remove(currentDeviceId)
-                                                isDeviceAuthorized = false
-                                                Toast.makeText(this@MainActivity, "Device Deauthorized", Toast.LENGTH_SHORT).show()
+                                                Toast.makeText(this@MainActivity, "Developer access removed", Toast.LENGTH_SHORT).show()
                                             } else {
                                                 currentSet.add(currentDeviceId)
-                                                isDeviceAuthorized = true
-                                                Toast.makeText(this@MainActivity, "This Device Authorized for Dev Mode!", Toast.LENGTH_SHORT).show()
+                                                Toast.makeText(this@MainActivity, "Developer access authorized for this device", Toast.LENGTH_SHORT).show()
                                             }
+                                            locallyAuthorizedDevices = currentSet.toSet()
                                             devPrefs.edit().putStringSet("authorized_devices", currentSet).apply()
                                         },
+                                        enabled = !BuildConfig.DEBUG,
                                         colors = ButtonDefaults.buttonColors(
-                                            containerColor = if (isDeviceAuthorized) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.secondaryContainer,
-                                            contentColor = if (isDeviceAuthorized) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSecondaryContainer
+                                            containerColor = if (isDeveloperAuthorized) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.secondaryContainer,
+                                            contentColor = if (isDeveloperAuthorized) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSecondaryContainer
                                         ),
                                         modifier = Modifier.fillMaxWidth()
                                     ) {
-                                        Text(if (isDeviceAuthorized) "✅ Device Authorized (Tap to Toggle)" else "📱 Authorize This Device")
+                                        Text(
+                                            when {
+                                                BuildConfig.DEBUG -> "✅ Developer access enabled in debug build"
+                                                currentDeviceId in locallyAuthorizedDevices -> "✅ Developer access enabled (Tap to revoke)"
+                                                else -> "📱 Enable Developer Options on this device"
+                                            }
+                                        )
                                     }
 
                                     OutlinedTextField(
@@ -1137,6 +1168,7 @@ class MainActivity : ComponentActivity() {
                                             onClick = {
                                                 val currentSet = devPrefs.getStringSet("authorized_devices", emptySet())?.toMutableSet() ?: mutableSetOf()
                                                 currentSet.add(newTesterDeviceId.trim())
+                                                locallyAuthorizedDevices = currentSet.toSet()
                                                 devPrefs.edit().putStringSet("authorized_devices", currentSet).apply()
                                                 Toast.makeText(this@MainActivity, "Authorized Tester Device: ${newTesterDeviceId.trim()}", Toast.LENGTH_SHORT).show()
                                                 newTesterDeviceId = ""
@@ -1227,11 +1259,17 @@ class MainActivity : ComponentActivity() {
                                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                                     ) {
                                         Button(
-                                            onClick = { resolveHomeAddress(homeRawPaste) },
-                                            enabled = homeRawPaste.isNotBlank() && !isHomeVerified,
+                                            onClick = { resolveHomeAddress(homeRawPaste, showErrors = true) },
+                                            enabled = homeRawPaste.isNotBlank() && !isHomeVerified && !isResolvingHomeAddress,
                                             modifier = Modifier.weight(1f)
                                         ) {
-                                            Text(if (isHomeVerified) "Verified ✅" else "Verify Address")
+                                            Text(
+                                                when {
+                                                    isResolvingHomeAddress -> "Verifying..."
+                                                    isHomeVerified -> "Verified ✅"
+                                                    else -> "Verify Address"
+                                                }
+                                            )
                                         }
 
                                         Button(
@@ -1273,7 +1311,7 @@ class MainActivity : ComponentActivity() {
                                             putString("home_raw_paste", homeRawPaste)
                                             apply()
                                         }
-                                        resolveHomeAddress(homeRawPaste)
+                                        resolveHomeAddress(homeRawPaste, showErrors = true)
                                         showConfigureRatesDialog = false
                                     }
                                 ) {
@@ -1546,9 +1584,12 @@ class MainActivity : ComponentActivity() {
                     if (showProUpgradeDialog) {
                         ProPaywallDialog(
                             onUnlockClick = {
-                                isProUser = true
                                 showProUpgradeDialog = false
-                                Toast.makeText(this@MainActivity, "🎉 Pro Features Unlocked!", Toast.LENGTH_LONG).show()
+                                Toast.makeText(
+                                    this@MainActivity,
+                                    "Google Play billing is not available yet.",
+                                    Toast.LENGTH_LONG
+                                ).show()
                             },
                             onDismiss = { showProUpgradeDialog = false }
                         )

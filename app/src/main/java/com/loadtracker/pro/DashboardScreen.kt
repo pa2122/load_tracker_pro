@@ -55,7 +55,6 @@ import dev.jeziellago.compose.markdowntext.MarkdownText
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
-import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
@@ -80,9 +79,9 @@ fun DashboardScreen(
 ) {
     val activeTrip = pastLoads.find { it.tripState != "COMPLETED" }
     val ctx = LocalContext.current
-    val currentTargetFriday = getPayPeriodDate(System.currentTimeMillis())
+    val currentPayrollWeekStart = getPayrollWeekStartDate(System.currentTimeMillis())
     val completedLoads = pastLoads.asSequence()
-        .filter { (it.tripState == "COMPLETED") && (getPayPeriodDate(it.pickupTimestamp) == currentTargetFriday) }
+        .filter { it.payrollWeekStartDate() == currentPayrollWeekStart }
         .sortedByDescending { it.pickupTimestamp }
         .toList()
 
@@ -92,7 +91,7 @@ fun DashboardScreen(
     var selectedTripData by remember { mutableStateOf<CurrentLoad?>(null) }
     var showActiveOptionsDialog by remember { mutableStateOf(value = false) }
     var showStatementHistoryDialog by remember { mutableStateOf(value = false) }
-    var selectedWeekFriday by remember { mutableStateOf(value = null as LocalDate?) }
+    var selectedWeekStart by remember { mutableStateOf(value = null as LocalDate?) }
     var showDeleteConfirmation by remember { mutableStateOf(value = false) }
     var tripToDelete by remember { mutableStateOf(value = null as CurrentLoad?) }
     var showProUpgradeDialog by remember { mutableStateOf(value = false) }
@@ -668,11 +667,15 @@ fun DashboardScreen(
                     }
                 } else {
                     items(items = completedLoads) { load ->
-                        val dateLabel = remember(key1 = load.pickupTimestamp) {
-                            val instant = Instant.ofEpochMilli(load.pickupTimestamp)
+                        val dateLabel = remember(key1 = load.deliveryTimestamp) {
                             val formatter =
                                 DateTimeFormatter.ofPattern("MM/dd/yyyy")
-                            instant.atZone(ZoneOffset.UTC).toLocalDate().format(formatter)
+                            load.deliveryTimestamp?.let { deliveryTimestamp ->
+                                Instant.ofEpochMilli(deliveryTimestamp)
+                                    .atZone(ZoneId.systemDefault())
+                                    .toLocalDate()
+                                    .format(formatter)
+                            }.orEmpty()
                         }
 
                         Card(
@@ -702,7 +705,7 @@ fun DashboardScreen(
                                         style = MaterialTheme.typography.titleMedium
                                     )
                                     Text(
-                                        text = dateLabel,
+                                        text = "Delivered $dateLabel",
                                         style = MaterialTheme.typography.bodyMedium,
                                         color = MaterialTheme.colorScheme.primary
                                     )
@@ -1029,10 +1032,10 @@ fun DashboardScreen(
             onDismissRequest = { showWeeklyBreakdownDialog = false },
             title = { Text("Weekly Earnings Breakdown") },
             text = {
-                val currentTargetFriday = getPayPeriodDate(System.currentTimeMillis())
+                val currentPayrollWeekStart = getPayrollWeekStartDate(System.currentTimeMillis())
 
                 val weeklyTrips = pastLoads.filter { load ->
-                    getPayPeriodDate(load.pickupTimestamp) == currentTargetFriday && load.tripState == "COMPLETED"
+                    load.payrollWeekStartDate() == currentPayrollWeekStart
                 }
 
                 LazyColumn(
@@ -1269,8 +1272,9 @@ fun DashboardScreen(
 
     if (showStatementHistoryDialog) {
         val grouped = remember(key1 = pastLoads) {
-            pastLoads.asSequence().filter { it.tripState == "COMPLETED" }
-                .groupBy { load -> getPayPeriodDate(load.pickupTimestamp) }
+            pastLoads.asSequence()
+                .mapNotNull { load -> load.payrollWeekStartDate()?.let { it to load } }
+                .groupBy({ it.first }, { it.second })
                 .toSortedMap(reverseOrder())
         }
 
@@ -1283,7 +1287,7 @@ fun DashboardScreen(
                         if (grouped.isEmpty()) {
                             item { Text("No historical records found.") }
                         } else {
-                            grouped.forEach { (friday, loads) ->
+                            grouped.forEach { (weekStart, loads) ->
                                 item {
                                     val totalWeekGross = loads.sumOf { it.loadPay }
                                     val weekTrainerAddon = loads.maxOfOrNull { it.trainerPayRate }?.takeIf { it > 0.0 }
@@ -1301,7 +1305,7 @@ fun DashboardScreen(
                                     } + weekTrainerAddon
                                     Card(
                                         modifier = Modifier.fillMaxWidth().clickable {
-                                            selectedWeekFriday = friday
+                                            selectedWeekStart = weekStart
                                         },
                                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                                     ) {
@@ -1310,8 +1314,11 @@ fun DashboardScreen(
                                             horizontalArrangement = Arrangement.SpaceBetween
                                         ) {
                                             Column {
-                                                Text("Week Ending:", style = MaterialTheme.typography.labelSmall)
-                                                Text(friday.format(DateTimeFormatter.ofPattern("MM/dd/yyyy")), style = MaterialTheme.typography.titleMedium)
+                                                Text("Pay Week:", style = MaterialTheme.typography.labelSmall)
+                                                Text(
+                                                    "${weekStart.format(DateTimeFormatter.ofPattern("MM/dd"))} - ${weekStart.plusDays(6).format(DateTimeFormatter.ofPattern("MM/dd/yyyy"))}",
+                                                    style = MaterialTheme.typography.titleMedium
+                                                )
                                                 Text("${loads.size} load(s) • Gross: $${String.format(Locale.US, "%.2f", totalWeekGross)}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
                                             }
                                             Column(horizontalAlignment = Alignment.End) {
@@ -1332,10 +1339,10 @@ fun DashboardScreen(
         )
     }
 
-    if (selectedWeekFriday != null) {
-        val weekFriday = selectedWeekFriday!!
+    if (selectedWeekStart != null) {
+        val weekStart = selectedWeekStart!!
         val weeklyTrips = pastLoads.filter { load ->
-            getPayPeriodDate(load.pickupTimestamp) == weekFriday && load.tripState == "COMPLETED"
+            load.payrollWeekStartDate() == weekStart
         }
 
         val totalGross = weeklyTrips.sumOf { it.loadPay }
@@ -1357,8 +1364,13 @@ fun DashboardScreen(
         val totalNetPay = totalDriverBase + totalTarpPay + totalBouncePay + totalTrainerPay
 
         AlertDialog(
-            onDismissRequest = { selectedWeekFriday = null },
-            title = { Text("Statement: ${weekFriday.format(DateTimeFormatter.ofPattern("MM/dd/yyyy"))}") },
+            onDismissRequest = { selectedWeekStart = null },
+            title = {
+                Text(
+                    "Statement: ${weekStart.format(DateTimeFormatter.ofPattern("MM/dd"))} - " +
+                            weekStart.plusDays(6).format(DateTimeFormatter.ofPattern("MM/dd/yyyy"))
+                )
+            },
             text = {
                 Box(modifier = Modifier.heightIn(max = 500.dp)) {
                     LazyColumn(verticalArrangement = Arrangement.spacedBy(space = 10.dp)) {
@@ -1473,7 +1485,7 @@ fun DashboardScreen(
                 }
             },
             confirmButton = {
-                TextButton(onClick = { selectedWeekFriday = null }) { Text("Back to List") }
+                TextButton(onClick = { selectedWeekStart = null }) { Text("Back to List") }
             }
         )
     }

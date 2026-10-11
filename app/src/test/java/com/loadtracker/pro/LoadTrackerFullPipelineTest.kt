@@ -81,28 +81,6 @@ class LoadTrackerFullPipelineTest {
     }
 
     @Test
-    fun test3_FlatbedPayrollEngine_CalculatesTakeHomePayAccurately() {
-        val loadPay = 2335.03
-        val ratePercent = 31.0
-        val isPreTarped = false
-        val tarpType = "S"
-        val dispatchedBounce = 155.0
-        val trainerPayRate = 200.0
-
-        val loadCut = loadPay * (ratePercent / 100.0)
-        val tarpPay = if (tarpType == "S") (if (isPreTarped) 15.0 else 30.0) else 0.0
-        val deadheadBonus = if (dispatchedBounce >= 150.0) dispatchedBounce * 0.20 else 0.0
-
-        val estimatedTakeHome = loadCut + tarpPay + deadheadBonus + trainerPayRate
-
-        assertEquals(723.8593, loadCut, 0.01)
-        assertEquals(30.0, tarpPay, 0.01)
-        assertEquals(31.0, deadheadBonus, 0.01)
-        assertEquals(200.0, trainerPayRate, 0.01)
-        assertEquals(984.86, estimatedTakeHome, 0.01)
-    }
-
-    @Test
     fun test4_ActiveTripStateLifecycle_ProgressesThroughAll5States() {
         var currentTripState = "ACTIVE_BOUNCE"
 

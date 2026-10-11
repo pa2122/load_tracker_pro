@@ -15,6 +15,55 @@ abstract class AppDatabase : RoomDatabase() {
     companion object {
         @Volatile
         private var INSTANCE: AppDatabase? = null
+        internal val ALL_MIGRATIONS: Array<Migration>
+            get() = arrayOf(
+                MIGRATION_1_2,
+                MIGRATION_2_3,
+                MIGRATION_3_4,
+                MIGRATION_4_5,
+                MIGRATION_5_6,
+                MIGRATION_6_7,
+                MIGRATION_7_8,
+                MIGRATION_8_9,
+                MIGRATION_9_10
+            )
+
+        private fun hasTable(db: SupportSQLiteDatabase, tableName: String): Boolean {
+            val cursor = db.query(
+                "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
+                arrayOf(tableName)
+            )
+            return try {
+                cursor.moveToFirst() && cursor.count > 0
+            } finally {
+                cursor.close()
+            }
+        }
+
+        private fun hasColumn(db: SupportSQLiteDatabase, tableName: String, columnName: String): Boolean {
+            val cursor = db.query(
+                "PRAGMA table_info($tableName)",
+                emptyArray()
+            )
+            return try {
+                while (cursor.moveToNext()) {
+                    val nameIndex = cursor.getColumnIndexOrThrow("name")
+                    if (cursor.getString(nameIndex) == columnName) {
+                        return true
+                    }
+                }
+                false
+            } finally {
+                cursor.close()
+            }
+        }
+
+        private fun addColumnIfMissing(db: SupportSQLiteDatabase, tableName: String, columnDefinition: String) {
+            val columnName = columnDefinition.substringBefore(' ').trim()
+            if (!hasColumn(db, tableName, columnName)) {
+                db.execSQL("ALTER TABLE $tableName ADD COLUMN $columnDefinition")
+            }
+        }
 
         private val MIGRATION_1_2 = object : Migration(1, 2) {
             override fun migrate(db: SupportSQLiteDatabase) {}
@@ -26,66 +75,70 @@ abstract class AppDatabase : RoomDatabase() {
 
         private val MIGRATION_3_4 = object : Migration(3, 4) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("ALTER TABLE trucking_loads ADD COLUMN tripNotes TEXT")
-                db.execSQL("ALTER TABLE trucking_loads ADD COLUMN deliveryTimestamp INTEGER")
+                addColumnIfMissing(db, "trucking_loads", "tripNotes TEXT")
+                addColumnIfMissing(db, "trucking_loads", "deliveryTimestamp INTEGER")
             }
         }
 
         private val MIGRATION_4_5 = object : Migration(4, 5) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("ALTER TABLE trucking_loads ADD COLUMN shipperName TEXT")
-                db.execSQL("ALTER TABLE trucking_loads ADD COLUMN shipperLat REAL")
-                db.execSQL("ALTER TABLE trucking_loads ADD COLUMN shipperLong REAL")
-                db.execSQL("ALTER TABLE trucking_loads ADD COLUMN consigneeName TEXT")
-                db.execSQL("ALTER TABLE trucking_loads ADD COLUMN consigneeLat REAL")
-                db.execSQL("ALTER TABLE trucking_loads ADD COLUMN consigneeLong REAL")
+                addColumnIfMissing(db, "trucking_loads", "shipperName TEXT")
+                addColumnIfMissing(db, "trucking_loads", "shipperLat REAL")
+                addColumnIfMissing(db, "trucking_loads", "shipperLong REAL")
+                addColumnIfMissing(db, "trucking_loads", "consigneeName TEXT")
+                addColumnIfMissing(db, "trucking_loads", "consigneeLat REAL")
+                addColumnIfMissing(db, "trucking_loads", "consigneeLong REAL")
             }
         }
 
         private val MIGRATION_5_6 = object : Migration(5, 6) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("""
-                    CREATE TABLE IF NOT EXISTS trip_breadcrumbs (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-                        proNumber TEXT NOT NULL,
-                        latitude REAL NOT NULL,
-                        longitude REAL NOT NULL,
-                        timestamp INTEGER NOT NULL
-                    )
-                """.trimIndent())
+                if (!hasTable(db, "trip_breadcrumbs")) {
+                    db.execSQL("""
+                        CREATE TABLE IF NOT EXISTS trip_breadcrumbs (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                            proNumber TEXT NOT NULL,
+                            latitude REAL NOT NULL,
+                            longitude REAL NOT NULL,
+                            timestamp INTEGER NOT NULL
+                        )
+                    """.trimIndent())
+                }
             }
         }
 
         private val MIGRATION_6_7 = object : Migration(6, 7) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("ALTER TABLE trucking_loads ADD COLUMN isTrainingWeek INTEGER NOT NULL DEFAULT 0")
+                addColumnIfMissing(db, "trucking_loads", "isTrainingWeek INTEGER NOT NULL DEFAULT 0")
             }
         }
 
         private val MIGRATION_7_8 = object : Migration(7, 8) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("ALTER TABLE trucking_loads ADD COLUMN trainerPayRate REAL NOT NULL DEFAULT 0.0")
+                addColumnIfMissing(db, "trucking_loads", "trainerPayRate REAL NOT NULL DEFAULT 0.0")
             }
         }
 
         private val MIGRATION_8_9 = object : Migration(8, 9) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("UPDATE trucking_loads SET shipperName = NULL WHERE LOWER(shipperName) IN ('origin', 'pickup', 'shipper', '')")
-                db.execSQL("UPDATE trucking_loads SET consigneeName = NULL WHERE LOWER(consigneeName) IN ('final dropoff', 'dropoff', 'drop', 'consignee', 'delivery', '')")
+                if (hasTable(db, "trucking_loads")) {
+                    db.execSQL("UPDATE trucking_loads SET shipperName = NULL WHERE LOWER(CAST(shipperName AS TEXT)) IN ('origin', 'pickup', 'shipper', '')")
+                    db.execSQL("UPDATE trucking_loads SET consigneeName = NULL WHERE LOWER(CAST(consigneeName AS TEXT)) IN ('final dropoff', 'dropoff', 'drop', 'consignee', 'delivery', '')")
+                }
             }
         }
 
         private val MIGRATION_9_10 = object : Migration(9, 10) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("ALTER TABLE trucking_loads ADD COLUMN pickupApptText TEXT")
-                db.execSQL("ALTER TABLE trucking_loads ADD COLUMN pickupApptTimestamp INTEGER")
-                db.execSQL("ALTER TABLE trucking_loads ADD COLUMN pickupApptType TEXT")
-                db.execSQL("ALTER TABLE trucking_loads ADD COLUMN consigneeApptText TEXT")
-                db.execSQL("ALTER TABLE trucking_loads ADD COLUMN consigneeApptTimestamp INTEGER")
-                db.execSQL("ALTER TABLE trucking_loads ADD COLUMN consigneeApptType TEXT")
-                db.execSQL("ALTER TABLE trucking_loads ADD COLUMN dockArrivalTime INTEGER")
-                db.execSQL("ALTER TABLE trucking_loads ADD COLUMN detentionHoursLogged REAL NOT NULL DEFAULT 0.0")
-                db.execSQL("ALTER TABLE trucking_loads ADD COLUMN detentionFlatPay REAL NOT NULL DEFAULT 0.0")
+                addColumnIfMissing(db, "trucking_loads", "pickupApptText TEXT")
+                addColumnIfMissing(db, "trucking_loads", "pickupApptTimestamp INTEGER")
+                addColumnIfMissing(db, "trucking_loads", "pickupApptType TEXT")
+                addColumnIfMissing(db, "trucking_loads", "consigneeApptText TEXT")
+                addColumnIfMissing(db, "trucking_loads", "consigneeApptTimestamp INTEGER")
+                addColumnIfMissing(db, "trucking_loads", "consigneeApptType TEXT")
+                addColumnIfMissing(db, "trucking_loads", "dockArrivalTime INTEGER")
+                addColumnIfMissing(db, "trucking_loads", "detentionHoursLogged REAL NOT NULL DEFAULT 0.0")
+                addColumnIfMissing(db, "trucking_loads", "detentionFlatPay REAL NOT NULL DEFAULT 0.0")
             }
         }
 
@@ -108,7 +161,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "load_tracker_local.db"
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10)
+                    .addMigrations(*ALL_MIGRATIONS)
                     .build()
                 INSTANCE = instance
                 instance

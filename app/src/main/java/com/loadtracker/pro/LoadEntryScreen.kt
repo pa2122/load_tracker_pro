@@ -69,7 +69,6 @@ import java.time.DayOfWeek
 import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZoneId
-import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
@@ -130,12 +129,31 @@ fun LoadEntryScreen(
     var matchDispatched by remember { mutableStateOf(value = editingLoad == null) }
 
     var showDatePicker by remember { mutableStateOf(value = false) }
+    var showDeliveryDatePicker by remember { mutableStateOf(value = false) }
     var showProPaywallDialog by remember { mutableStateOf(value = false) }
-    var selectedDateMillis by remember { mutableLongStateOf(value = editingLoad?.pickupTimestamp ?: System.currentTimeMillis()) }
+    var selectedDateMillis by remember(editingLoad) {
+        mutableLongStateOf(value = editingLoad?.pickupTimestamp ?: System.currentTimeMillis())
+    }
+    var selectedDeliveryDateMillis by remember(editingLoad) {
+        mutableLongStateOf(
+            value = editingLoad?.deliveryTimestamp
+                ?: editingLoad?.pickupTimestamp
+                ?: selectedDateMillis
+        )
+    }
     val dateLabel = remember(key1 = selectedDateMillis) {
-        val instant = Instant.ofEpochMilli(selectedDateMillis)
         val formatter = DateTimeFormatter.ofPattern("MM/dd/yyyy")
-        instant.atZone(ZoneOffset.UTC).toLocalDate().format(formatter)
+        Instant.ofEpochMilli(selectedDateMillis)
+            .atZone(ZoneId.systemDefault())
+            .toLocalDate()
+            .format(formatter)
+    }
+    val deliveryDateLabel = remember(key1 = selectedDeliveryDateMillis) {
+        val formatter = DateTimeFormatter.ofPattern("MM/dd/yyyy")
+        Instant.ofEpochMilli(selectedDeliveryDateMillis)
+            .atZone(ZoneId.systemDefault())
+            .toLocalDate()
+            .format(formatter)
     }
 
     var sRawPaste by remember { mutableStateOf(value = editingLoad?.shipperName ?: "") }
@@ -218,6 +236,9 @@ fun LoadEntryScreen(
 
     fun processOcrText(rawText: String) {
         val lines = rawText.lines().map { it.trim() }.filter { it.isNotBlank() }
+        OcrDateParser.extractDeliveryDateMillis(rawText)?.let {
+            selectedDeliveryDateMillis = it
+        }
 
         // 1. Extract PRO #
         val proRegex = Regex("""\b(?:PRO|Order|Load|Trip)\s*(?:Number|No|Num)?\s*#?\s*:?\s*(\d{4,12})""", RegexOption.IGNORE_CASE)
@@ -337,14 +358,10 @@ fun LoadEntryScreen(
             isGoingHome = homeMatch.groupValues[1].equals("Y", ignoreCase = true)
         }
 
-        // 6. Extract Tarp type
-        val tarpMatch = Regex("""Tarp\s*[:=\-\s]*([SLN])""", RegexOption.IGNORE_CASE).find(rawText)
-        if (tarpMatch != null && tarpMatch.groupValues.size > 1) {
-            selectedTarp = when (tarpMatch.groupValues[1].uppercase(Locale.US)) {
-                "S" -> "4' Drop"
-                "L" -> "8' Drop"
-                else -> "None"
-            }
+        // P indicates pre-tarped but doesn't identify the drop size.
+        OcrTarpParser.parse(rawText)?.let { tarpInfo ->
+            tarpInfo.tarpType?.let { selectedTarp = it }
+            tarpInfo.isPreTarped?.let { isPreTarped = it }
         }
 
         // 7. Extract Optional Facility Instructions, Directions & Parking Info
@@ -693,6 +710,20 @@ fun LoadEntryScreen(
                         .fillMaxWidth()
                         .clickable { showDatePicker = true }
                 )
+                OutlinedTextField(
+                    value = deliveryDateLabel,
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text("Delivery Date (verify OCR suggestion)") },
+                    trailingIcon = {
+                        IconButton(onClick = { showDeliveryDatePicker = true }) {
+                            Icon(Icons.Default.DateRange, contentDescription = "Select Delivery Date")
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { showDeliveryDatePicker = true }
+                )
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(checked = matchDispatched, onCheckedChange = { matchDispatched = it })
                     Text("Match Dispatched Miles")
@@ -719,16 +750,47 @@ fun LoadEntryScreen(
         }
 
         if (showDatePicker) {
-            val datePickerState = rememberDatePickerState(initialSelectedDateMillis = selectedDateMillis)
+            val datePickerState = rememberDatePickerState(
+                initialSelectedDateMillis = OcrDateParser.datePickerMillisForTimestamp(
+                    selectedDateMillis,
+                    ZoneId.systemDefault()
+                )
+            )
             DatePickerDialog(
                 onDismissRequest = { showDatePicker = false },
                 confirmButton = {
                     TextButton(onClick = {
                         val picked = datePickerState.selectedDateMillis
                         if (picked != null) {
-                            selectedDateMillis = picked + (12 * 3600 * 1000L)
+                            selectedDateMillis = OcrDateParser.timestampForDatePickerMillis(
+                                picked,
+                                ZoneId.systemDefault()
+                            )
                         }
                         showDatePicker = false
+                    }) { Text("OK") }
+                }
+            ) { DatePicker(state = datePickerState) }
+        }
+
+        if (showDeliveryDatePicker) {
+            val datePickerState = rememberDatePickerState(
+                initialSelectedDateMillis = OcrDateParser.datePickerMillisForTimestamp(
+                    selectedDeliveryDateMillis,
+                    ZoneId.systemDefault()
+                )
+            )
+            DatePickerDialog(
+                onDismissRequest = { showDeliveryDatePicker = false },
+                confirmButton = {
+                    TextButton(onClick = {
+                        datePickerState.selectedDateMillis?.let { picked ->
+                            selectedDeliveryDateMillis = OcrDateParser.timestampForDatePickerMillis(
+                                picked,
+                                ZoneId.systemDefault()
+                            )
+                        }
+                        showDeliveryDatePicker = false
                     }) { Text("OK") }
                 }
             ) { DatePicker(state = datePickerState) }
@@ -784,6 +846,13 @@ fun LoadEntryScreen(
                     )
                 }
             }
+            if (isPreTarped && selectedTarp == "None") {
+                Text(
+                    "Screenshot indicates pre-tarped (P). Select the 4' or 8' drop size to record tarp pay correctly.",
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
         }
 
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -800,7 +869,8 @@ fun LoadEntryScreen(
                 dBounce.toDoubleOrNull() != null &&
                 dLoaded.toDoubleOrNull() != null &&
                 sLat != null &&
-                cLat != null
+                cLat != null &&
+                (!isPreTarped || selectedTarp != "None")
 
         fun processSave(loadToSave: CurrentLoad) {
             if (editingLoad == null && existingProNumbers.contains(loadToSave.proNumber)) {
@@ -850,7 +920,7 @@ fun LoadEntryScreen(
                         pickupTimestamp = selectedDateMillis,
                         tripState = "COMPLETED",
                         tripNotes = tripNotes.ifBlank { null },
-                        deliveryTimestamp = selectedDateMillis + 3600000,
+                        deliveryTimestamp = selectedDeliveryDateMillis,
                         shipperName = if (sRawPaste.isNotBlank()) sRawPaste.trim() else sName,
                         shipperLat = sLat,
                         shipperLong = sLong,
