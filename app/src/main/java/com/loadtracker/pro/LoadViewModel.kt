@@ -93,6 +93,7 @@ class LoadViewModel(application: Application) :
         detentionFlatPay: Double = 0.0
     ) {
         viewModelScope.launch {
+            DatabaseBackupManager.createDailyBackupBeforeMutation(getApplication())
             val newLoad = CurrentLoad(
                 proNumber = proNumber,
                 dispatchedBounceMiles = dispBounce,
@@ -144,6 +145,7 @@ class LoadViewModel(application: Application) :
 
     fun deleteLoad(load: CurrentLoad) {
         viewModelScope.launch {
+            DatabaseBackupManager.createDailyBackupBeforeMutation(getApplication())
             loadDao.deleteLoad(load)
             notifyWearableOfTripState(load.proNumber, "COMPLETED")
         }
@@ -151,6 +153,7 @@ class LoadViewModel(application: Application) :
 
     fun updateTripState(proNumber: String, newState: String) {
         viewModelScope.launch {
+            DatabaseBackupManager.createDailyBackupBeforeMutation(getApplication())
             loadDao.updateTripState(proNumber, newState)
             notifyWearableOfTripState(proNumber, newState)
         }

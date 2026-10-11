@@ -21,18 +21,22 @@ class WearableMessageReceiverService : WearableListenerService() {
                 val dao = AppDatabase.getDatabase(applicationContext).loadDao()
                 when (actionCommand) {
                     WearableDataSyncManager.ACTION_ARRIVE_SHIPPER -> {
+                        DatabaseBackupManager.createDailyBackupBeforeMutation(applicationContext)
                         dao.updateTripState(activePro, "ACTIVE_SHIPPER")
                         TrackingService.activeSegment = "Paused"
                     }
                     WearableDataSyncManager.ACTION_DEPART_SHIPPER -> {
+                        DatabaseBackupManager.createDailyBackupBeforeMutation(applicationContext)
                         dao.updateTripState(activePro, "ACTIVE_LOADED")
                         TrackingService.activeSegment = "Loaded"
                     }
                     WearableDataSyncManager.ACTION_ARRIVE_CONSIGNEE -> {
+                        DatabaseBackupManager.createDailyBackupBeforeMutation(applicationContext)
                         dao.updateTripState(activePro, "ACTIVE_CONSIGNEE")
                         TrackingService.activeSegment = "Paused"
                     }
                     WearableDataSyncManager.ACTION_COMPLETE_LOAD -> {
+                        DatabaseBackupManager.createDailyBackupBeforeMutation(applicationContext)
                         dao.updateTripState(activePro, "COMPLETED")
                         TrackingService.activeSegment = "Paused"
                         TrackingService.activeProNumber = null

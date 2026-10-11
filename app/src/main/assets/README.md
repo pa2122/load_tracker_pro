@@ -54,7 +54,12 @@
 * **GitHub Issues API Sync**: Push bugs and feature requests directly to your GitHub repository (`pa2122/android_apps`) as official GitHub Issues.
 * **Read-Only GitHub Issue Reader**: Browse, filter (Open, Closed, All), and read repository issues directly inside the app.
 * **Guided Verification Queue**: Complete one version-scoped issue checklist at a time; shared issues remain open until all applicable versions pass and you confirm closure.
+* **One-Time Screenshot Batch Import**: Developer-only OCR review for importing a single batch of screenshots as completed historical loads; duplicate PRO numbers are rejected.
 * **Connection Tester**: Live connection status indicator (🟢 Connected / 🔴 Failed) with a 1-tap test button.
+
+### 💾 Local Data Protection
+* A private on-device database snapshot is created just before the first database change each day, retaining up to 14 daily snapshots so the day starts with a recovery point.
+* These automatic snapshots are excluded from Android cloud backup and device transfer. They do not protect against losing the phone, uninstalling the app, or clearing app data; use **Export Data** to create and share an off-device copy.
 
 ---
 

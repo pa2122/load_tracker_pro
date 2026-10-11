@@ -2,18 +2,27 @@ package com.loadtracker.pro
 
 import android.content.Context
 import android.net.Uri
+import android.util.Log
 import androidx.core.content.FileProvider
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.text.SimpleDateFormat
+import java.time.LocalDate
 import java.util.Date
 import java.util.Locale
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 object DatabaseBackupManager {
 
     private const val DB_NAME_V1 = "tmc_loads_local.db"
     private const val DB_NAME_V2 = "load_tracker_local.db"
+    private const val AUTO_BACKUP_PREFIX = "load_tracker_auto_backup_"
+    private const val AUTO_BACKUP_SUFFIX = ".db"
+    private const val AUTO_BACKUP_RETENTION_DAYS = 14
+    const val AUTO_BACKUP_ERROR_KEY = "automatic_backup_error"
+    private val automaticBackupLock = Any()
 
     data class BackupMetadata(
         val fileName: String,
@@ -28,9 +37,9 @@ object DatabaseBackupManager {
      * Finds active SQLite database file on device.
      */
     fun getActiveDatabaseFile(context: Context): File {
-        val db1 = context.getDatabasePath(DB_NAME_V1)
-        if (db1.exists()) return db1
-        return context.getDatabasePath(DB_NAME_V2)
+        val currentDatabase = context.getDatabasePath(DB_NAME_V2)
+        if (currentDatabase.exists()) return currentDatabase
+        return context.getDatabasePath(DB_NAME_V1)
     }
 
     /**
@@ -53,16 +62,30 @@ object DatabaseBackupManager {
     fun getAllBackupFiles(context: Context): List<File> {
         val backupDir = File(context.filesDir, "backups")
         if (!backupDir.exists()) return emptyList()
-        return backupDir.listFiles { _, name -> name.startsWith("load_tracker_backup_") && name.endsWith(".db") }
-            ?.sortedByDescending { it.lastModified() }
-            ?: emptyList()
+        val manualFiles = backupDir.listFiles { _, name ->
+            name.startsWith("load_tracker_backup_") && name.endsWith(".db")
+        }?.toList().orEmpty()
+        return (manualFiles + getAutomaticBackupFiles(context))
+            .sortedByDescending { it.lastModified() }
     }
 
     /**
      * Finds the latest local backup file in app files directory.
      */
     fun getLatestBackupFile(context: Context): File? {
-        return getAllBackupFiles(context).firstOrNull()
+        return File(context.filesDir, "backups").listFiles { _, name ->
+            name.startsWith("load_tracker_backup_") && name.endsWith(".db")
+        }?.maxByOrNull { it.lastModified() }
+    }
+
+    fun getLatestAutomaticBackupFile(context: Context): File? =
+        getAutomaticBackupFiles(context).firstOrNull()
+
+    private fun getAutomaticBackupFiles(context: Context): List<File> {
+        val backupDir = File(context.filesDir, "backups")
+        return backupDir.listFiles { _, name ->
+            name.startsWith(AUTO_BACKUP_PREFIX) && name.endsWith(AUTO_BACKUP_SUFFIX)
+        }?.sortedByDescending { it.name } ?: emptyList()
     }
 
     /**
@@ -91,14 +114,7 @@ object DatabaseBackupManager {
         try {
             val activeDb = getActiveDatabaseFile(context)
 
-            // Force SQLite WAL checkpoint to flush journal logs into main DB file
-            try {
-                val db = AppDatabase.getDatabase(context)
-                val supportDb = db.openHelper.writableDatabase
-                supportDb.query("PRAGMA wal_checkpoint(FULL)").close()
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
+            checkpointDatabase(context)
 
             if (!activeDb.exists()) {
                 return Pair(null, "Active database file not found.")
@@ -125,6 +141,75 @@ object DatabaseBackupManager {
             return Pair(backupFile, "Backup saved to: ${backupFile.absolutePath}")
         } catch (e: Exception) {
             return Pair(null, "Backup failed: ${e.localizedMessage}")
+        }
+    }
+
+    /**
+     * Saves one private on-device snapshot immediately before the first database write each day.
+     * Automatic snapshots are kept separately from manually created/exported backups.
+     */
+    suspend fun createDailyBackupBeforeMutation(context: Context): Boolean = withContext(Dispatchers.IO) {
+        synchronized(automaticBackupLock) {
+            val today = LocalDate.now().toString().replace("-", "")
+            val backupDir = File(context.filesDir, "backups")
+            val backupFile = File(backupDir, "$AUTO_BACKUP_PREFIX$today$AUTO_BACKUP_SUFFIX")
+            if (backupFile.exists() && isValidSqliteDatabase(backupFile)) {
+                context.getSharedPreferences("app_settings", Context.MODE_PRIVATE)
+                    .edit().remove(AUTO_BACKUP_ERROR_KEY).apply()
+                return@synchronized true
+            }
+
+            try {
+                check(backupDir.exists() || backupDir.mkdirs()) { "Unable to create the local backups directory." }
+                checkpointDatabase(context)
+                val activeDb = getActiveDatabaseFile(context)
+                check(activeDb.exists()) { "Active database file not found." }
+
+                val tempFile = File(backupDir, "${backupFile.name}.tmp")
+                FileInputStream(activeDb).use { input ->
+                    FileOutputStream(tempFile).use { output -> input.copyTo(output) }
+                }
+                check(isValidSqliteDatabase(tempFile)) { "Automatic backup failed SQLite validation." }
+                check(!backupFile.exists() || backupFile.delete()) {
+                    "Could not replace the invalid automatic backup."
+                }
+                check(tempFile.renameTo(backupFile)) { "Unable to finalize the automatic backup file." }
+
+                val cutoff = LocalDate.now().minusDays(AUTO_BACKUP_RETENTION_DAYS.toLong() - 1)
+                    .format(java.time.format.DateTimeFormatter.BASIC_ISO_DATE)
+                val automaticFiles = getAutomaticBackupFiles(context)
+                automaticFiles.forEach { file ->
+                    val date = file.name.removePrefix(AUTO_BACKUP_PREFIX).removeSuffix(AUTO_BACKUP_SUFFIX)
+                    if (date < cutoff && !file.delete()) {
+                        Log.w("DatabaseBackupManager", "Could not prune old automatic backup ${file.name}")
+                    }
+                }
+                getAutomaticBackupFiles(context).drop(AUTO_BACKUP_RETENTION_DAYS).forEach { file ->
+                    if (!file.delete()) {
+                        Log.w("DatabaseBackupManager", "Could not prune excess automatic backup ${file.name}")
+                    }
+                }
+                context.getSharedPreferences("app_settings", Context.MODE_PRIVATE)
+                    .edit().remove(AUTO_BACKUP_ERROR_KEY).apply()
+                true
+            } catch (e: Exception) {
+                Log.e("DatabaseBackupManager", "Could not create automatic local database backup", e)
+                context.getSharedPreferences("app_settings", Context.MODE_PRIVATE)
+                    .edit().putString(
+                        AUTO_BACKUP_ERROR_KEY,
+                        e.localizedMessage ?: e.javaClass.simpleName
+                    ).apply()
+                false
+            }
+        }
+    }
+
+    private fun checkpointDatabase(context: Context) {
+        val supportDb = AppDatabase.getDatabase(context).openHelper.writableDatabase
+        supportDb.query("PRAGMA wal_checkpoint(FULL)").use { cursor ->
+            if (cursor.moveToFirst() && cursor.getInt(0) != 0) {
+                error("SQLite could not checkpoint the database WAL.")
+            }
         }
     }
 

@@ -1390,6 +1390,7 @@ fun DevNotesScreen(
                         )
 
                         scope.launch(Dispatchers.IO) {
+                            DatabaseBackupManager.createDailyBackupBeforeMutation(ctx)
                             if (currentDbEdit.proNumber != updated.proNumber) {
                                 db.loadDao().deleteLoad(currentDbEdit)
                             }
@@ -1420,6 +1421,7 @@ fun DevNotesScreen(
                 Button(
                     onClick = {
                         scope.launch(Dispatchers.IO) {
+                            DatabaseBackupManager.createDailyBackupBeforeMutation(ctx)
                             db.loadDao().deleteLoad(loadToDelete)
                             withContext(Dispatchers.Main) {
                                 Toast.makeText(ctx, "Deleted PRO #${loadToDelete.proNumber}!", Toast.LENGTH_SHORT).show()
@@ -1445,6 +1447,7 @@ fun DevNotesScreen(
                 Button(
                     onClick = {
                         scope.launch(Dispatchers.IO) {
+                            DatabaseBackupManager.createDailyBackupBeforeMutation(ctx)
                             db.loadDao().clearAllBreadcrumbs()
                             withContext(Dispatchers.Main) {
                                 Toast.makeText(ctx, "All GPS breadcrumbs cleared!", Toast.LENGTH_SHORT).show()

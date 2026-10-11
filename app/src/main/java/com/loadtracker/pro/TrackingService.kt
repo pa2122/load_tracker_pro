@@ -203,6 +203,7 @@ class TrackingService : Service() {
         serviceScope.launch {
             try {
                 val db = AppDatabase.getDatabase(applicationContext)
+                DatabaseBackupManager.createDailyBackupBeforeMutation(applicationContext)
                 db.loadDao().insertBreadcrumb(
                     TripBreadcrumb(
                         proNumber = pro,
@@ -236,6 +237,7 @@ class TrackingService : Service() {
                     serviceScope.launch {
                         try {
                             val dao = AppDatabase.getDatabase(applicationContext).loadDao()
+                            DatabaseBackupManager.createDailyBackupBeforeMutation(applicationContext)
                             dao.updateTripState(pro, "PAUSED_AT_HOME")
                             // 📍 STOP SERVICE TO SAVE BATTERY & PRIVACY
                             stopSelf()
@@ -274,8 +276,10 @@ class TrackingService : Service() {
                     try {
                         val dao = AppDatabase.getDatabase(applicationContext).loadDao()
                         if (previousSegment == "Bounce") {
+                            DatabaseBackupManager.createDailyBackupBeforeMutation(applicationContext)
                             dao.updateTripState(pro, "ACTIVE_SHIPPER")
                         } else if (previousSegment == "Loaded") {
+                            DatabaseBackupManager.createDailyBackupBeforeMutation(applicationContext)
                             dao.updateTripState(pro, "ACTIVE_CONSIGNEE")
                         }
                     } catch (e: Exception) {

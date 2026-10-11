@@ -5,6 +5,7 @@ import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -13,6 +14,29 @@ interface LoadDao {
     // Saves a load record. If the Pro # already exists, it cleanly overwrites it with your new edits.
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertLoad(load: CurrentLoad)
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertLoadsIgnoringConflicts(loads: List<CurrentLoad>): List<Long>
+
+    @Query("SELECT proNumber FROM trucking_loads")
+    suspend fun getAllProNumbers(): List<String>
+
+    @Transaction
+    suspend fun insertHistoricalBatchIfNoConflicts(loads: List<CurrentLoad>) {
+        require(loads.isNotEmpty()) { "The import batch is empty." }
+        val batchNumbers = loads.map { it.proNumber }
+        require(batchNumbers.distinct().size == batchNumbers.size) {
+            "The import batch contains duplicate PRO numbers."
+        }
+        val existing = getAllProNumbers().toSet()
+        val conflict = batchNumbers.firstOrNull { it in existing }
+        check(conflict == null) { "PRO #$conflict already exists. No loads were imported." }
+
+        val insertedIds = insertLoadsIgnoringConflicts(loads)
+        check(insertedIds.size == loads.size && insertedIds.none { it == -1L }) {
+            "A PRO number conflict prevented the batch from being fully imported."
+        }
+    }
 
     // Fetches all past records from your phone's drive, sorting the newest loads to the top by pickup date.
     @Query("SELECT * FROM trucking_loads ORDER BY pickupTimestamp DESC")

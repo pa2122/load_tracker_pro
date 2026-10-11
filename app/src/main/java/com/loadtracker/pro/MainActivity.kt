@@ -619,6 +619,14 @@ class MainActivity : ComponentActivity() {
 
                                     if (isDeveloperAuthorized) {
                                         NavigationDrawerItem(
+                                            label = { Text("📥 One-time Screenshot Load Import") },
+                                            selected = currentScreen == "batch_import",
+                                            onClick = {
+                                                scope.launch { drawerState.close() }
+                                                currentScreen = "batch_import"
+                                            }
+                                        )
+                                        NavigationDrawerItem(
                                             label = { Text("🛠️ Developer Options & Notes") },
                                             selected = false,
                                             onClick = {
@@ -978,6 +986,18 @@ class MainActivity : ComponentActivity() {
                                             )
                                         }
 
+                                        "batch_import" -> {
+                                            if (isDeveloperAuthorized) {
+                                                ScreenshotBatchImportScreen(
+                                                    existingProNumbers = savedLoads.map { it.proNumber }.toSet(),
+                                                    defaultPercentage = defPercent,
+                                                    onBack = { currentScreen = "dashboard" }
+                                                )
+                                            } else {
+                                                currentScreen = "dashboard"
+                                            }
+                                        }
+
                                         "facility_search" -> {
                                             FacilitySearchScreen(
                                                 viewModel = viewModel,
@@ -1329,8 +1349,13 @@ class MainActivity : ComponentActivity() {
                     if (showBackupRestoreDialog) {
                         var backupRefreshKey by remember { mutableIntStateOf(0) }
                         val backupFiles = remember(backupRefreshKey) { DatabaseBackupManager.getAllBackupFiles(this@MainActivity) }
-                        val latestBackupFile = backupFiles.firstOrNull()
+                        val latestBackupFile = DatabaseBackupManager.getLatestBackupFile(this@MainActivity)
                         val backupMeta = remember(latestBackupFile) { DatabaseBackupManager.getBackupMetadata(latestBackupFile) }
+                        val latestAutomaticBackup = DatabaseBackupManager.getBackupMetadata(
+                            DatabaseBackupManager.getLatestAutomaticBackupFile(this@MainActivity)
+                        )
+                        val automaticBackupError = getSharedPreferences("app_settings", MODE_PRIVATE)
+                            .getString(DatabaseBackupManager.AUTO_BACKUP_ERROR_KEY, null)
 
                         val executeBackup: (replace: Boolean) -> Unit = { replace ->
                             val (backupFile, msg) = DatabaseBackupManager.createDatabaseBackup(this@MainActivity, replacePrevious = replace)
@@ -1357,6 +1382,19 @@ class MainActivity : ComponentActivity() {
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.secondary
                                     )
+                                    Text(
+                                        latestAutomaticBackup?.let {
+                                            "Automatic on-device snapshot: ${it.formattedDate}. Up to 14 daily snapshots are retained; they stay on this phone."
+                                        } ?: "Automatic on-device snapshot: none yet. A snapshot is created before the first database change each day.",
+                                        style = MaterialTheme.typography.bodySmall
+                                    )
+                                    automaticBackupError?.let {
+                                        Text(
+                                            "The latest automatic snapshot attempt failed: $it",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.error
+                                        )
+                                    }
 
                                     Button(
                                         onClick = {
