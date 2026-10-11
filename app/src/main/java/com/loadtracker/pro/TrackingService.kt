@@ -279,11 +279,18 @@ class TrackingService : Service() {
                             DatabaseBackupManager.createDailyBackupBeforeMutation(applicationContext)
                             dao.updateTripState(pro, "ACTIVE_SHIPPER")
                         } else if (previousSegment == "Loaded") {
+                            val load = requireNotNull(dao.getLoadByProNumber(pro)) {
+                                "Active load $pro disappeared before destination arrival."
+                            }
+                            val arrivedLoad = load.recordLoadedArrival(
+                                cumulativeLoadedMiles = totalLoadedMilesTracked.value,
+                                arrivalTimestamp = System.currentTimeMillis()
+                            )
                             DatabaseBackupManager.createDailyBackupBeforeMutation(applicationContext)
-                            dao.updateTripState(pro, "ACTIVE_CONSIGNEE")
+                            dao.insertLoad(arrivedLoad)
                         }
                     } catch (e: Exception) {
-                        e.printStackTrace()
+                        android.util.Log.e("TrackingService", "Unable to save destination arrival", e)
                     }
                 }
             }

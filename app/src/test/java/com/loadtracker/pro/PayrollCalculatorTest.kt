@@ -105,6 +105,29 @@ class PayrollCalculatorTest {
     }
 
     @Test
+    fun includesExtraStopPayAtConfiguredRatePerStopOff() {
+        val load = load(
+            proNumber = "EXTRA-STOPS",
+            pickupDate = LocalDate.of(2026, 10, 7),
+            percentageRate = 100.0,
+            loadPay = 100.0,
+            extraStopCount = 2
+        )
+
+        val summary = PayrollCalculator.calculateWeekSummary(
+            loads = listOf(load),
+            targetWeekStart = targetWeekStart,
+            lumberRate = 0.0,
+            steelRate = 0.0,
+            extraStopRate = 25.0,
+            isTrainingGlobal = false,
+            trainerRate = 0.0
+        )
+
+        assertEquals(150.0, summary.weeklyPay, 0.001)
+    }
+
+    @Test
     fun assignsLoadsToDeliveryWeekNotPickupWeek() {
         val thursdayPickupFridayDelivery = load(
             proNumber = "THU-FRI",
@@ -191,7 +214,8 @@ class PayrollCalculatorTest {
         isPreTarped: Boolean = false,
         isGoingHome: Boolean = false,
         isTrainingWeek: Boolean = false,
-        trainerPayRate: Double = 0.0
+        trainerPayRate: Double = 0.0,
+        extraStopCount: Int = 0
     ) = CurrentLoad(
         proNumber = proNumber,
         dispatchedBounceMiles = dispatchedBounceMiles,
@@ -213,6 +237,7 @@ class PayrollCalculatorTest {
             null
         },
         isTrainingWeek = isTrainingWeek,
-        trainerPayRate = trainerPayRate
+        trainerPayRate = trainerPayRate,
+        extraStopCount = extraStopCount
     )
 }

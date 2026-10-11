@@ -42,6 +42,9 @@ interface LoadDao {
     @Query("SELECT * FROM trucking_loads ORDER BY pickupTimestamp DESC")
     fun getAllLoads(): Flow<List<CurrentLoad>>
 
+    @Query("SELECT * FROM trucking_loads WHERE proNumber = :pro LIMIT 1")
+    suspend fun getLoadByProNumber(pro: String): CurrentLoad?
+
     // Deletes an entry permanently from your phone's local storage file.
     @Delete
     suspend fun deleteLoad(load: CurrentLoad)

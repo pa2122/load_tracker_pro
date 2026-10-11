@@ -48,6 +48,7 @@ import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -96,6 +97,25 @@ fun LoadEntryScreen(
     var dLoaded by remember { mutableStateOf(value = editingLoad?.dispatchedLoadedMiles?.toString() ?: "") }
     var ratePct by remember { mutableStateOf(value = editingLoad?.percentageRate?.toString() ?: initialPercentage) }
     var loadPay by remember { mutableStateOf(value = editingLoad?.loadPay?.toString() ?: "") }
+    var extraStopCount by remember {
+        mutableStateOf(value = editingLoad?.extraStopCount?.toString() ?: "0")
+    }
+    val stopDrafts = remember(editingLoad) {
+        mutableStateListOf<LoadStopDraft>().apply {
+            addAll(
+                LoadStopCodec.decode(editingLoad?.stopOffsData.orEmpty()).map { stop ->
+                    LoadStopDraft(
+                        name = stop.name,
+                        address = stop.address,
+                        latitude = stop.latitude,
+                        longitude = stop.longitude,
+                        dispatchedLegMiles = stop.dispatchedLegMiles.toString(),
+                        actualLegMiles = stop.actualLegMiles
+                    )
+                }
+            )
+        }
+    }
 
     var expanded by remember { mutableStateOf(value = false) }
     val tarpOpts = listOf("None", "4' Drop", "8' Drop")
@@ -214,6 +234,52 @@ fun LoadEntryScreen(
         }
     }
 
+    fun verifyStopAddress(index: Int) {
+        val stop = stopDrafts.getOrNull(index) ?: return
+        if (stop.address.isBlank()) {
+            stopDrafts[index] = stop.copy(lookupError = "Enter a stop address before verifying.")
+            return
+        }
+        stopDrafts[index] = stop.copy(isResolving = true, lookupError = null)
+        scope.launch {
+            try {
+                val location = withContext(Dispatchers.IO) {
+                    @Suppress("DEPRECATION")
+                    Geocoder(ctx, Locale.US).getFromLocationName(stop.address, 1)
+                        ?.firstOrNull()
+                }
+                if (index < stopDrafts.size) {
+                    stopDrafts[index] = if (stopDrafts[index].address != stop.address) {
+                        stopDrafts[index].copy(
+                            isResolving = false,
+                            lookupError = "Address changed during lookup. Verify the new address."
+                        )
+                    } else if (location == null) {
+                        stopDrafts[index].copy(
+                            isResolving = false,
+                            lookupError = "Address could not be verified. Check the address and try again."
+                        )
+                    } else {
+                        stopDrafts[index].copy(
+                            latitude = location.latitude,
+                            longitude = location.longitude,
+                            isResolving = false,
+                            lookupError = null
+                        )
+                    }
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("LoadEntryScreen", "Unable to verify stop address", e)
+                if (index < stopDrafts.size) {
+                    stopDrafts[index] = stopDrafts[index].copy(
+                        isResolving = false,
+                        lookupError = "Address lookup failed. Check your connection and try again."
+                    )
+                }
+            }
+        }
+    }
+
     var showFridayReminder by remember { mutableStateOf(value = false) }
     var pendingLoadSave by remember { mutableStateOf<CurrentLoad?>(value = null) }
 
@@ -236,6 +302,10 @@ fun LoadEntryScreen(
 
     fun processOcrText(rawText: String) {
         val lines = rawText.lines().map { it.trim() }.filter { it.isNotBlank() }
+        StopOffParser.parseCount(rawText)?.let { extraStopCount = it.toString() }
+        if (stopDrafts.isEmpty()) {
+            stopDrafts.addAll(StopOffParser.parseRouteStops(rawText))
+        }
         OcrDateParser.extractDeliveryDateMillis(rawText)?.let {
             selectedDeliveryDateMillis = it
         }
@@ -385,6 +455,9 @@ fun LoadEntryScreen(
                 currentField = ""
             } else if (lower.contains("consignee") || lower.contains("delivery") || lower.contains("destination") || lower.contains("drop")) {
                 currentFacility = "consignee"
+                currentField = ""
+            } else if (StopOffParser.isLabelLine(line)) {
+                currentFacility = ""
                 currentField = ""
             } else if (lower.contains("pro number") || lower.contains("load number") || lower.contains("gross:") || lower.contains("additional load notes")) {
                 currentFacility = ""
@@ -815,6 +888,149 @@ fun LoadEntryScreen(
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Done)
             )
         }
+        OutlinedTextField(
+            value = extraStopCount,
+            onValueChange = { input ->
+                if (input.all { it.isDigit() }) extraStopCount = input
+            },
+            label = { Text("Stop Offs (payable extra stops)") },
+            supportingText = { Text("Enter the Stop Offs count shown on the load paperwork.") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(
+                keyboardType = KeyboardType.Number,
+                imeAction = ImeAction.Next
+            )
+        )
+        if (!isManualEntry && extraStopCount.toIntOrNull() != stopDrafts.size) {
+            Text(
+                "The payable Stop Off count must match the destinations entered below for an active load.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error
+            )
+        }
+        Text(
+            "Route stop-offs (in travel order)",
+            style = MaterialTheme.typography.titleMedium
+        )
+        Text(
+            "Add each intermediate destination before the final consignee. Leg miles are from the previous destination. OCR suggests stops only when the screenshot labels them as “Stop Off 1 Name/Address/Miles”.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.secondary
+        )
+        stopDrafts.forEachIndexed { index, stop ->
+            val alreadyVisited =
+                editingLoad != null && index < editingLoad.currentStopIndex
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Stop Off ${index + 1}", style = MaterialTheme.typography.titleSmall)
+                OutlinedTextField(
+                    value = stop.name,
+                    onValueChange = { stopDrafts[index] = stopDrafts[index].copy(name = it) },
+                    label = { Text("Stop name") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    readOnly = alreadyVisited
+                )
+                OutlinedTextField(
+                    value = stop.address,
+                    onValueChange = {
+                        stopDrafts[index] = stopDrafts[index].copy(
+                            address = it,
+                            latitude = null,
+                            longitude = null,
+                            lookupError = null
+                        )
+                    },
+                    label = { Text("Stop address") },
+                    modifier = Modifier.fillMaxWidth(),
+                    minLines = 2,
+                    readOnly = alreadyVisited
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = stop.dispatchedLegMiles,
+                        onValueChange = { value ->
+                            val filtered = value.filter { it.isDigit() || it == '.' }
+                            if (filtered.count { it == '.' } <= 1) {
+                                stopDrafts[index] =
+                                    stopDrafts[index].copy(dispatchedLegMiles = filtered)
+                            }
+                        },
+                        label = { Text("Dispatched leg miles") },
+                        modifier = Modifier.weight(1f),
+                        singleLine = true,
+                        readOnly = alreadyVisited,
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Decimal,
+                            imeAction = ImeAction.Next
+                        )
+                    )
+                    TextButton(
+                        onClick = { verifyStopAddress(index) },
+                        enabled = !alreadyVisited && !stop.isResolving && stop.address.isNotBlank()
+                    ) {
+                        if (stop.isResolving) {
+                            CircularProgressIndicator(modifier = Modifier.size(18.dp))
+                        } else {
+                            Text(if (stop.latitude != null) "Verified" else "Verify")
+                        }
+                    }
+                }
+                if (stop.dispatchedLegMiles.toDoubleOrNull()?.let { it > 0.0 } != true) {
+                    Text(
+                        "Enter positive dispatched miles for this leg.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+                if (stop.latitude != null && stop.longitude != null) {
+                    Text(
+                        "Coordinates verified; GPS arrival tracking is available.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+                stop.lookupError?.let {
+                    Text(it, color = MaterialTheme.colorScheme.error)
+                }
+                TextButton(
+                    onClick = {
+                        stopDrafts.removeAt(index)
+                        extraStopCount = stopDrafts.size.toString()
+                    },
+                    enabled = !alreadyVisited && stopDrafts.none { it.isResolving }
+                ) {
+                    Text("Remove Stop Off")
+                }
+                HorizontalDivider()
+            }
+        }
+        TextButton(
+            onClick = {
+                stopDrafts.add(
+                    LoadStopDraft(
+                        name = "",
+                        address = "",
+                        latitude = null,
+                        longitude = null,
+                        dispatchedLegMiles = ""
+                    )
+                )
+                extraStopCount = stopDrafts.size.toString()
+            },
+            enabled = stopDrafts.size < 20 && stopDrafts.none { it.isResolving }
+        ) {
+            Text("Add Stop Off")
+        }
+        val plannedStopMiles =
+            stopDrafts.sumOf { it.dispatchedLegMiles.toDoubleOrNull() ?: 0.0 }
+        if (plannedStopMiles > (dLoaded.toDoubleOrNull() ?: 0.0)) {
+            Text(
+                "Stop-leg miles cannot exceed the load’s total dispatched loaded miles.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error
+            )
+        }
 
         ExposedDropdownMenuBox(
             expanded = expanded,
@@ -868,6 +1084,13 @@ fun LoadEntryScreen(
                 loadPay.toDoubleOrNull() != null &&
                 dBounce.toDoubleOrNull() != null &&
                 dLoaded.toDoubleOrNull() != null &&
+                (extraStopCount.isBlank() || extraStopCount.toIntOrNull()?.let { it in 0..20 } == true) &&
+                (isManualEntry || extraStopCount.toIntOrNull() == stopDrafts.size) &&
+                stopDrafts.all { it.toLoadStopOrNull() != null } &&
+                stopDrafts.sumOf { it.dispatchedLegMiles.toDoubleOrNull() ?: 0.0 } <=
+                        (dLoaded.toDoubleOrNull() ?: 0.0) &&
+                (editingLoad == null ||
+                        editingLoad.currentStopIndex <= stopDrafts.size) &&
                 sLat != null &&
                 cLat != null &&
                 (!isPreTarped || selectedTarp != "None")
@@ -917,6 +1140,12 @@ fun LoadEntryScreen(
                         isGoingHome = isGoingHome,
                         isTrainingWeek = isTrainingWeek,
                         trainerPayRate = resolvedTrainerRate,
+                        extraStopCount = extraStopCount.toIntOrNull() ?: 0,
+                        stopOffsData = LoadStopCodec.encode(
+                            stopDrafts.mapNotNull { it.toLoadStopOrNull() }
+                        ),
+                        currentStopIndex = editingLoad?.currentStopIndex ?: 0,
+                        lastStopLoadedMiles = editingLoad?.lastStopLoadedMiles ?: 0.0,
                         pickupTimestamp = selectedDateMillis,
                         tripState = "COMPLETED",
                         tripNotes = tripNotes.ifBlank { null },
@@ -954,6 +1183,12 @@ fun LoadEntryScreen(
                         isGoingHome = isGoingHome,
                         isTrainingWeek = isTrainingWeek,
                         trainerPayRate = resolvedTrainerRate,
+                        extraStopCount = extraStopCount.toIntOrNull() ?: 0,
+                        stopOffsData = LoadStopCodec.encode(
+                            stopDrafts.mapNotNull { it.toLoadStopOrNull() }
+                        ),
+                        currentStopIndex = editingLoad?.currentStopIndex ?: 0,
+                        lastStopLoadedMiles = editingLoad?.lastStopLoadedMiles ?: 0.0,
                         pickupTimestamp = editingLoad?.pickupTimestamp ?: System.currentTimeMillis(),
                         tripState = editingLoad?.tripState ?: "ACTIVE_BOUNCE",
                         tripNotes = tripNotes.ifBlank { null },

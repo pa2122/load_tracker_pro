@@ -2,8 +2,8 @@ package com.loadtracker.pro
 
 import java.time.LocalDate
 import java.time.ZoneId
-import java.time.Instant
 import java.time.DayOfWeek
+import java.time.Instant
 import java.time.temporal.TemporalAdjusters
 
 object PayrollCalculator {
@@ -14,7 +14,8 @@ object PayrollCalculator {
         lumberRate: Double,
         steelRate: Double,
         isTrainingGlobal: Boolean,
-        trainerRate: Double
+        trainerRate: Double,
+        extraStopRate: Double = 0.0
     ): WeekSummary {
         var totalPayCents = 0L
         var totalActualMiles = 0.0
@@ -39,7 +40,9 @@ object PayrollCalculator {
             } else {
                 0.0
             }
-            totalPayCents += baseSplitCents + tarpPay.toCents() + bounceBonus.toCents()
+            val extraStopPayCents = load.extraStopPayCents(extraStopRate)
+            totalPayCents += baseSplitCents + tarpPay.toCents() +
+                    bounceBonus.toCents() + extraStopPayCents
 
             val actualMiles = (load.bounceMilesEnd - load.bounceMilesStart) +
                     (load.loadedMilesEnd - load.loadedMilesStart)

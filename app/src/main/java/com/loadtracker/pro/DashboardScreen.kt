@@ -74,6 +74,7 @@ fun DashboardScreen(
     liveLoadedMiles: Double,
     isTrainingActive: Boolean,
     flatTrainerPayRate: Double,
+    extraStopRate: Double,
     showHelpOnLaunch: Boolean,
     onDismissHelpDialog: () -> Unit,
 ) {
@@ -182,10 +183,16 @@ fun DashboardScreen(
                                 .clickable { showActiveOptionsDialog = true },
                             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer)
                         ) {
+                            val activeStops = remember(activeTrip.stopOffsData) {
+                                LoadStopCodec.decode(activeTrip.stopOffsData)
+                            }
+                            val arrivedStop = activeStops.getOrNull(activeTrip.currentStopIndex - 1)
+                            val nextStop = activeStops.getOrNull(activeTrip.currentStopIndex)
                             val label = when (activeTrip.tripState) {
                                 "ACTIVE_BOUNCE" -> "En Route to: ${activeTrip.shipperName ?: "Shipper"}"
                                 "ACTIVE_SHIPPER" -> "Arrived at: ${activeTrip.shipperName ?: "Shipper"}"
-                                "ACTIVE_LOADED" -> "En Route to: ${activeTrip.consigneeName ?: "Consignee"}"
+                                "ACTIVE_LOADED" -> "En Route to: ${nextStop?.name ?: activeTrip.consigneeName ?: "Consignee"}"
+                                "ACTIVE_STOP" -> "Arrived at: ${arrivedStop?.name ?: "Stop Off"}"
                                 "ACTIVE_CONSIGNEE" -> "Arrived at: ${activeTrip.consigneeName ?: "Consignee"}"
                                 "PAUSED_AT_HOME" -> "🏠 PARKED AT HOME BASE"
                                 else -> "Active Journey"
@@ -202,6 +209,20 @@ fun DashboardScreen(
                             }
 
                             val displayLoadedMiles = maxOf(liveLoadedMiles, activeTrip.loadedMilesEnd)
+                            val loadedLegPlan = when (activeTrip.tripState) {
+                                "ACTIVE_STOP" -> arrivedStop?.dispatchedLegMiles ?: 0.0
+                                "ACTIVE_CONSIGNEE" -> activeTrip.plannedCurrentLoadedLegMiles()
+                                else -> activeTrip.plannedCurrentLoadedLegMiles()
+                            }
+                            val loadedLegActual = when (activeTrip.tripState) {
+                                "ACTIVE_STOP" -> arrivedStop?.actualLegMiles ?: 0.0
+                                "ACTIVE_CONSIGNEE" ->
+                                    (displayLoadedMiles - activeTrip.lastStopLoadedMiles).coerceAtLeast(0.0)
+                                else -> (displayLoadedMiles - activeTrip.lastStopLoadedMiles).coerceAtLeast(0.0)
+                            }
+                            val loadedLegOor = (loadedLegActual - loadedLegPlan).coerceAtLeast(0.0)
+                            val loadedLegOorPercent =
+                                if (loadedLegPlan > 0.0) loadedLegOor / loadedLegPlan * 100.0 else 0.0
                             val loadedOorPct = if (activeTrip.isGoingHome || activeTrip.dispatchedLoadedMiles <= 0.0) {
                                 0.0
                             } else {
@@ -245,12 +266,62 @@ fun DashboardScreen(
                                         )
                                     }
                                 }
+                                if (activeTrip.tripState.startsWith("ACTIVE_LOADED") ||
+                                    activeTrip.tripState == "ACTIVE_STOP" ||
+                                    activeTrip.tripState == "ACTIVE_CONSIGNEE"
+                                ) {
+                                    Text(
+                                        "Current loaded leg: ${String.format(Locale.US, "%.1f", loadedLegActual)} / ${String.format(Locale.US, "%.1f", loadedLegPlan)} dispatched mi • " +
+                                                "${String.format(Locale.US, "%.1f", loadedLegOor)} mi OOR (${String.format(Locale.US, "%.1f", loadedLegOorPercent)}%)",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = if (loadedLegOor > 0.0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onTertiaryContainer
+                                    )
+                                    if (arrivedStop != null && activeTrip.tripState == "ACTIVE_STOP") {
+                                        Text(
+                                            "Stop Off ${activeTrip.currentStopIndex} leg recorded: ${String.format(Locale.US, "%.1f", arrivedStop.actualLegMiles ?: 0.0)} / ${String.format(Locale.US, "%.1f", arrivedStop.dispatchedLegMiles)} mi",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.secondary
+                                        )
+                                    }
+                                    activeStops.forEachIndexed { index, stop ->
+                                        val actual = stop.actualLegMiles
+                                        val stopStatus = when {
+                                            actual != null ->
+                                                "${String.format(Locale.US, "%.1f", actual)} / ${String.format(Locale.US, "%.1f", stop.dispatchedLegMiles)} mi • ${String.format(Locale.US, "%.1f", (actual - stop.dispatchedLegMiles).coerceAtLeast(0.0))} mi OOR"
+                                            activeTrip.tripState == "ACTIVE_LOADED" &&
+                                                    index == activeTrip.currentStopIndex -> "Currently tracking"
+                                            else -> "Upcoming"
+                                        }
+                                        Text(
+                                            "Stop Off ${index + 1}: ${stop.name} — $stopStatus",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = if (actual != null &&
+                                                actual > stop.dispatchedLegMiles
+                                            ) MaterialTheme.colorScheme.error
+                                            else MaterialTheme.colorScheme.onTertiaryContainer
+                                        )
+                                    }
+                                    if (activeTrip.tripState == "ACTIVE_CONSIGNEE") {
+                                        Text(
+                                            "Final consignee leg: ${String.format(Locale.US, "%.1f", loadedLegActual)} / ${String.format(Locale.US, "%.1f", loadedLegPlan)} mi • ${String.format(Locale.US, "%.1f", loadedLegOor)} mi OOR",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = if (loadedLegOor > 0.0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onTertiaryContainer
+                                        )
+                                    }
+                                }
                                 Spacer(modifier = Modifier.height(16.dp))
                                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.2f))
 
                                 val (targetLat, targetLong, targetName) = when (activeTrip.tripState) {
-                                    "ACTIVE_BOUNCE", "ACTIVE_SHIPPER" -> Triple(activeTrip.shipperLat, activeTrip.shipperLong, activeTrip.shipperName ?: "Shipper")
-                                    else -> Triple(activeTrip.consigneeLat, activeTrip.consigneeLong, activeTrip.consigneeName ?: "Consignee")
+                                    "ACTIVE_BOUNCE", "ACTIVE_SHIPPER" ->
+                                        Triple(activeTrip.shipperLat, activeTrip.shipperLong, activeTrip.shipperName ?: "Shipper")
+                                    "ACTIVE_STOP" ->
+                                        Triple(arrivedStop?.latitude, arrivedStop?.longitude, arrivedStop?.name ?: "Stop Off")
+                                    else -> Triple(
+                                        nextStop?.latitude ?: activeTrip.consigneeLat,
+                                        nextStop?.longitude ?: activeTrip.consigneeLong,
+                                        nextStop?.name ?: activeTrip.consigneeName ?: "Consignee"
+                                    )
                                 }
 
                                 if (targetLat != null && targetLong != null) {
@@ -289,7 +360,12 @@ fun DashboardScreen(
                                     }
                                 }
 
-                                if (activeTrip.tripState != "ACTIVE_BOUNCE" && activeTrip.tripState != "PAUSED_AT_HOME") {
+                                if (activeTrip.tripState in setOf(
+                                        "ACTIVE_LOADED",
+                                        "ACTIVE_SHIPPER",
+                                        "ACTIVE_CONSIGNEE"
+                                    )
+                                ) {
                                     OutlinedButton(
                                         onClick = {
                                             when (activeTrip.tripState) {
@@ -324,10 +400,12 @@ fun DashboardScreen(
                                         Button(
                                             onClick = {
                                                 TrackingService.activeSegment = "Loaded"
-                                                TrackingService.targetLat = activeTrip.consigneeLat
-                                                TrackingService.targetLong = activeTrip.consigneeLong
-                                                TrackingService.targetName = activeTrip.consigneeName ?: "Consignee"
-                                                TrackingService.isGeofenceActive = activeTrip.consigneeLat != null
+                                                val destination = activeTrip.nextLoadedDestination()
+                                                TrackingService.targetLat = destination?.latitude ?: activeTrip.consigneeLat
+                                                TrackingService.targetLong = destination?.longitude ?: activeTrip.consigneeLong
+                                                TrackingService.targetName =
+                                                    destination?.name ?: activeTrip.consigneeName ?: "Consignee"
+                                                TrackingService.isGeofenceActive = TrackingService.targetLat != null
                                                 onUpdateTripClick(activeTrip.copy(tripState = "ACTIVE_LOADED"))
                                             },
                                             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
@@ -464,15 +542,54 @@ fun DashboardScreen(
                                         Button(
                                             onClick = {
                                                 TrackingService.activeSegment = "Loaded"
-                                                TrackingService.targetLat = activeTrip.consigneeLat
-                                                TrackingService.targetLong = activeTrip.consigneeLong
-                                                TrackingService.targetName = activeTrip.consigneeName ?: "Consignee"
-                                                TrackingService.isGeofenceActive = activeTrip.consigneeLat != null
+                                                val destination = activeTrip.nextLoadedDestination()
+                                                TrackingService.targetLat = destination?.latitude ?: activeTrip.consigneeLat
+                                                TrackingService.targetLong = destination?.longitude ?: activeTrip.consigneeLong
+                                                TrackingService.targetName =
+                                                    destination?.name ?: activeTrip.consigneeName ?: "Consignee"
+                                                TrackingService.isGeofenceActive = TrackingService.targetLat != null
                                                 TrackingService.departureGraceTimeMs = System.currentTimeMillis()
                                                 onUpdateTripClick(activeTrip.copy(tripState = "ACTIVE_LOADED", dockArrivalTime = null))
                                             },
                                             modifier = Modifier.fillMaxWidth()
                                         ) { Text("Depart Shipper (Loaded)") }
+                                    }
+
+                                    "ACTIVE_STOP" -> {
+                                        val stop = activeStops.getOrNull(activeTrip.currentStopIndex - 1)
+                                        val actualLeg = stop?.actualLegMiles ?: 0.0
+                                        val dispatchedLeg = stop?.dispatchedLegMiles ?: 0.0
+                                        val legOor = (actualLeg - dispatchedLeg).coerceAtLeast(0.0)
+                                        Text(
+                                            "This stop leg: ${String.format(Locale.US, "%.1f", actualLeg)} tracked / ${String.format(Locale.US, "%.1f", dispatchedLeg)} dispatched mi. OOR: ${String.format(Locale.US, "%.1f", legOor)} mi.",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = if (legOor > 0.0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+                                        )
+                                        Button(
+                                            onClick = {
+                                                val destination = activeTrip.nextLoadedDestination()
+                                                TrackingService.activeSegment = "Loaded"
+                                                TrackingService.targetLat = destination?.latitude ?: activeTrip.consigneeLat
+                                                TrackingService.targetLong = destination?.longitude ?: activeTrip.consigneeLong
+                                                TrackingService.targetName =
+                                                    destination?.name ?: activeTrip.consigneeName ?: "Consignee"
+                                                TrackingService.isGeofenceActive = TrackingService.targetLat != null
+                                                TrackingService.departureGraceTimeMs = System.currentTimeMillis()
+                                                onUpdateTripClick(
+                                                    activeTrip.copy(
+                                                        tripState = "ACTIVE_LOADED",
+                                                        dockArrivalTime = null
+                                                    )
+                                                )
+                                            },
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Text(
+                                                "Depart ${stop?.name ?: "Stop Off"} → " +
+                                                        (activeTrip.nextLoadedDestination()?.name
+                                                            ?: activeTrip.consigneeName ?: "Consignee")
+                                            )
+                                        }
                                     }
 
                                     "ACTIVE_LOADED", "ACTIVE_CONSIGNEE" -> {
@@ -590,19 +707,37 @@ fun DashboardScreen(
 
                                         Button(
                                             onClick = {
-                                                TrackingService.isGeofenceActive = false
-                                                selectedTripData = activeTrip.copy(
-                                                    tripState = "COMPLETED",
-                                                    loadedMilesEnd = liveLoadedMiles,
-                                                    deliveryTimestamp = System.currentTimeMillis()
-                                                )
-                                                showCompletionDialog = true
+                                                if (activeTrip.tripState == "ACTIVE_LOADED") {
+                                                    TrackingService.activeSegment = "Paused"
+                                                    TrackingService.isGeofenceActive = false
+                                                    onUpdateTripClick(
+                                                        activeTrip.recordLoadedArrival(
+                                                            cumulativeLoadedMiles = liveLoadedMiles,
+                                                            arrivalTimestamp = System.currentTimeMillis()
+                                                        )
+                                                    )
+                                                } else {
+                                                    TrackingService.isGeofenceActive = false
+                                                    selectedTripData = activeTrip.copy(
+                                                        tripState = "COMPLETED",
+                                                        loadedMilesEnd = liveLoadedMiles,
+                                                        deliveryTimestamp = System.currentTimeMillis()
+                                                    )
+                                                    showCompletionDialog = true
+                                                }
                                             },
                                             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
                                             modifier = Modifier.fillMaxWidth()
                                         ) {
                                             Text(
-                                                if (activeTrip.tripState == "ACTIVE_CONSIGNEE") "Complete Load & File Settlement" else "Arrive at Consignee"
+                                                when {
+                                                    activeTrip.tripState == "ACTIVE_CONSIGNEE" ->
+                                                        "Complete Load & File Settlement"
+                                                    activeTrip.tripState == "ACTIVE_LOADED" &&
+                                                            activeTrip.nextLoadedDestination() != null ->
+                                                        "Arrive at ${activeTrip.nextLoadedDestination()?.name}"
+                                                    else -> "Arrive at Consignee"
+                                                }
                                             )
                                         }
                                     }
@@ -757,7 +892,8 @@ fun DashboardScreen(
                 if (trip.isPreTarped) tarp /= 2.0
                 val dhBonus =
                     if (trip.dispatchedBounceMiles >= 150.0) trip.dispatchedBounceMiles * 0.20 else 0.0
-                val finalNet = baseCut + tarp + dhBonus
+                val extraStopsPay = trip.extraStopPayCents(extraStopRate).toDollars()
+                val finalNet = baseCut + tarp + dhBonus + extraStopsPay
 
                 AlertDialog(
                     onDismissRequest = { },
@@ -794,6 +930,15 @@ fun DashboardScreen(
                                 ) {
                                     Text("Long Deadhead Bonus:")
                                     Text("+$${String.format(Locale.US, "%.2f", dhBonus)}")
+                                }
+                            }
+                            if (extraStopsPay > 0.0) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text("Extra Stop Pay (${trip.extraStopCount} × $${String.format(Locale.US, "%.2f", extraStopRate)}):")
+                                    Text("+$${String.format(Locale.US, "%.2f", extraStopsPay)}")
                                 }
                             }
                             HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
@@ -840,7 +985,14 @@ fun DashboardScreen(
                 if (trip.isPreTarped) tarp /= 2.0
                 val dhBonus =
                     if (trip.dispatchedBounceMiles >= 150.0) trip.dispatchedBounceMiles * 0.20 else 0.0
-                val finalNet = baseCut + tarp + dhBonus
+                val extraStopsPay = trip.extraStopPayCents(extraStopRate).toDollars()
+                val finalNet = baseCut + tarp + dhBonus + extraStopsPay
+                val routeStops = LoadStopCodec.decode(trip.stopOffsData)
+                val finalLegPlan =
+                    (trip.dispatchedLoadedMiles - routeStops.sumOf { it.dispatchedLegMiles })
+                        .coerceAtLeast(0.0)
+                val finalLegActual =
+                    (trip.loadedMilesEnd - trip.lastStopLoadedMiles).coerceAtLeast(0.0)
 
                 val actualBounceRun = trip.bounceMilesEnd - trip.bounceMilesStart
                 val actualLoadedRun = trip.loadedMilesEnd - trip.loadedMilesStart
@@ -872,6 +1024,35 @@ fun DashboardScreen(
                                 Text("Consignee:")
                                 Text(trip.consigneeName?.trim()?.ifBlank { "Not Specified" } ?: "Not Specified")
                             }
+
+                            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                            Text(
+                                "Route Stops & Out-of-Route Miles",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            routeStops.forEachIndexed { index, stop ->
+                                val actual = stop.actualLegMiles
+                                val stopOor = actual?.let {
+                                    (it - stop.dispatchedLegMiles).coerceAtLeast(0.0)
+                                }
+                                Text(
+                                    "Stop Off ${index + 1}: ${stop.name} — dispatched ${String.format(Locale.US, "%.1f", stop.dispatchedLegMiles)} mi; " +
+                                            (actual?.let {
+                                                "tracked ${String.format(Locale.US, "%.1f", it)} mi; OOR ${String.format(Locale.US, "%.1f", stopOor ?: 0.0)} mi"
+                                            } ?: "actual leg mileage not recorded"),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = if ((stopOor ?: 0.0) > 0.0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                            val finalLegOor = (finalLegActual - finalLegPlan).coerceAtLeast(0.0)
+                            Text(
+                                "Final consignee: dispatched ${String.format(Locale.US, "%.1f", finalLegPlan)} mi; " +
+                                        "tracked ${String.format(Locale.US, "%.1f", finalLegActual)} mi; " +
+                                        "OOR ${String.format(Locale.US, "%.1f", finalLegOor)} mi",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = if (finalLegOor > 0.0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
+                            )
 
                             HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
 
@@ -910,6 +1091,15 @@ fun DashboardScreen(
                                 ) {
                                     Text("Deadhead Bonus Pay:")
                                     Text("+$${String.format(Locale.US, "%.2f", dhBonus)}")
+                                }
+                            }
+                            if (extraStopsPay > 0.0) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text("Extra Stop Pay (${trip.extraStopCount} × $${String.format(Locale.US, "%.2f", extraStopRate)}):")
+                                    Text("+$${String.format(Locale.US, "%.2f", extraStopsPay)}")
                                 }
                             }
                             Row(
@@ -1072,7 +1262,9 @@ fun DashboardScreen(
                             if (trip.isPreTarped) tarpAddon /= 2.0
                             val bounceBonus =
                                 if (trip.dispatchedBounceMiles >= 150.0) trip.dispatchedBounceMiles * 0.20 else 0.0
-                            val totalTripPay = baseDriverCut + tarpAddon + bounceBonus
+                            val extraStopsPay = trip.extraStopPayCents(extraStopRate).toDollars()
+                            val totalTripPay =
+                                baseDriverCut + tarpAddon + bounceBonus + extraStopsPay
 
                             Card(
                                 modifier = Modifier.fillMaxWidth(),
@@ -1120,6 +1312,15 @@ fun DashboardScreen(
                                             style = MaterialTheme.typography.bodyMedium,
                                             color = MaterialTheme.colorScheme.primary
                                         )
+                                    }
+                                    if (trip.extraStopCount > 0) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Text("Extra Stop Pay (${trip.extraStopCount}):", style = MaterialTheme.typography.bodySmall)
+                                            Text("+$${String.format(Locale.US, "%.2f", extraStopsPay)}", style = MaterialTheme.typography.bodySmall)
+                                        }
                                     }
                                 }
                             }
@@ -1301,7 +1502,8 @@ fun DashboardScreen(
                                         }
                                         if (load.isPreTarped) tarp /= 2.0
                                         val bonus = if (load.dispatchedBounceMiles >= 150.0) load.dispatchedBounceMiles * 0.20 else 0.0
-                                        base + tarp + bonus
+                                        base + tarp + bonus +
+                                                load.extraStopPayCents(extraStopRate).toDollars()
                                     } + weekTrainerAddon
                                     Card(
                                         modifier = Modifier.fillMaxWidth().clickable {
@@ -1359,9 +1561,13 @@ fun DashboardScreen(
         val totalBouncePay = weeklyTrips.sumOf { load ->
             if (load.dispatchedBounceMiles >= 150.0) load.dispatchedBounceMiles * 0.20 else 0.0
         }
+        val totalExtraStopPay = weeklyTrips.sumOf {
+            it.extraStopPayCents(extraStopRate).toDollars()
+        }
         val totalTrainerPay = weeklyTrips.maxOfOrNull { it.trainerPayRate }?.takeIf { it > 0.0 }
             ?: if (weeklyTrips.any { it.isTrainingWeek }) flatTrainerPayRate else 0.0
-        val totalNetPay = totalDriverBase + totalTarpPay + totalBouncePay + totalTrainerPay
+        val totalNetPay = totalDriverBase + totalTarpPay + totalBouncePay +
+                totalExtraStopPay + totalTrainerPay
 
         AlertDialog(
             onDismissRequest = { selectedWeekStart = null },
@@ -1418,6 +1624,13 @@ fun DashboardScreen(
                                         Text("Deadhead Pay:", style = MaterialTheme.typography.bodySmall)
                                         Text("$${String.format(Locale.US, "%.2f", totalBouncePay)}", style = MaterialTheme.typography.bodySmall)
                                     }
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text("Extra Stop Pay:", style = MaterialTheme.typography.bodySmall)
+                                        Text("$${String.format(Locale.US, "%.2f", totalExtraStopPay)}", style = MaterialTheme.typography.bodySmall)
+                                    }
                                     if (totalTrainerPay > 0.0) {
                                         Row(
                                             modifier = Modifier.fillMaxWidth(),
@@ -1461,7 +1674,8 @@ fun DashboardScreen(
                             if (trip.isPreTarped) tarp /= 2.0
                             val bounce = if (trip.dispatchedBounceMiles >= 150.0) trip.dispatchedBounceMiles * 0.20 else 0.0
                             val baseCut = trip.loadPay * (trip.percentageRate / 100.0)
-                            val tripNet = baseCut + tarp + bounce
+                            val extraStopsPay = trip.extraStopPayCents(extraStopRate).toDollars()
+                            val tripNet = baseCut + tarp + bounce + extraStopsPay
 
                             Card(
                                 modifier = Modifier.fillMaxWidth().clickable {

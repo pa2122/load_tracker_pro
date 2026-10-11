@@ -2,6 +2,7 @@ package com.loadtracker.pro
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -18,6 +19,7 @@ class ScreenshotBatchParserTest {
                 Gross Pay: $2,750.00
                 Bounce Miles: 150
                 Loaded Miles: 1,025
+                Stop Offs: 2
                 Tarp: P
                 Shipper: North Yard
                 Consignee: South Yard
@@ -32,6 +34,7 @@ class ScreenshotBatchParserTest {
         assertEquals("2750.00", draft.grossPay)
         assertEquals("150", draft.bounceMiles)
         assertEquals("1025", draft.loadedMiles)
+        assertEquals("2", draft.extraStopCount)
         assertEquals("31.0", draft.percentageRate)
         assertEquals("None", draft.tarpType)
         assertTrue(draft.isPreTarped)
@@ -49,6 +52,29 @@ class ScreenshotBatchParserTest {
         )
 
         assertEquals("", draft.pickupDate)
+        assertEquals("0", draft.extraStopCount)
         assertFalse(draft.isPreTarped)
+    }
+
+    @Test
+    fun parsesStopOffsEvenWhenTheCountIsOnTheNextLine() {
+        assertEquals(3, requireNotNull(StopOffParser.parseCount("Stop Offs\n3")))
+        assertNull(StopOffParser.parseCount("No stops listed"))
+    }
+
+    @Test
+    fun parsesNumberedStopOffDestinationFieldsFromScreenshotText() {
+        val stop = StopOffParser.parseRouteStops(
+            """
+                Stop Offs: 1
+                Stop Off 1 Name: North Yard
+                Stop Off 1 Address: 12 Main St, Dallas, TX
+                Stop Off 1 Dispatched Leg Miles: 42
+            """.trimIndent()
+        ).single()
+
+        assertEquals("North Yard", stop.name)
+        assertEquals("12 Main St, Dallas, TX", stop.address)
+        assertEquals("42", stop.dispatchedLegMiles)
     }
 }

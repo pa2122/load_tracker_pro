@@ -97,6 +97,15 @@ fun RouteMapScreen(
                     }
 
                     if (load != null) {
+                        LoadStopCodec.decode(load.stopOffsData).forEachIndexed { index, stop ->
+                            Marker(
+                                state = MarkerState(
+                                    position = LatLng(stop.latitude, stop.longitude)
+                                ),
+                                title = "Stop Off ${index + 1}: ${stop.name}",
+                                snippet = "${stop.dispatchedLegMiles} dispatched leg mi"
+                            )
+                        }
                         load.shipperLat?.let { lat ->
                             load.shipperLong?.let { lng ->
                                 Marker(

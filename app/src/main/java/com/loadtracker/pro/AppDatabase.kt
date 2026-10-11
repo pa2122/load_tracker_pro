@@ -7,7 +7,7 @@ import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
-@Database(entities = [CurrentLoad::class, TripBreadcrumb::class], version = 10, exportSchema = true)
+@Database(entities = [CurrentLoad::class, TripBreadcrumb::class], version = 12, exportSchema = true)
 abstract class AppDatabase : RoomDatabase() {
 
     abstract fun loadDao(): LoadDao
@@ -25,7 +25,9 @@ abstract class AppDatabase : RoomDatabase() {
                 MIGRATION_6_7,
                 MIGRATION_7_8,
                 MIGRATION_8_9,
-                MIGRATION_9_10
+                MIGRATION_9_10,
+                MIGRATION_10_11,
+                MIGRATION_11_12
             )
 
         private fun hasTable(db: SupportSQLiteDatabase, tableName: String): Boolean {
@@ -139,6 +141,24 @@ abstract class AppDatabase : RoomDatabase() {
                 addColumnIfMissing(db, "trucking_loads", "dockArrivalTime INTEGER")
                 addColumnIfMissing(db, "trucking_loads", "detentionHoursLogged REAL NOT NULL DEFAULT 0.0")
                 addColumnIfMissing(db, "trucking_loads", "detentionFlatPay REAL NOT NULL DEFAULT 0.0")
+            }
+        }
+
+        private val MIGRATION_10_11 = object : Migration(10, 11) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                addColumnIfMissing(
+                    db,
+                    "trucking_loads",
+                    "extraStopCount INTEGER NOT NULL DEFAULT 0"
+                )
+            }
+        }
+
+        private val MIGRATION_11_12 = object : Migration(11, 12) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                addColumnIfMissing(db, "trucking_loads", "stopOffsData TEXT NOT NULL DEFAULT ''")
+                addColumnIfMissing(db, "trucking_loads", "currentStopIndex INTEGER NOT NULL DEFAULT 0")
+                addColumnIfMissing(db, "trucking_loads", "lastStopLoadedMiles REAL NOT NULL DEFAULT 0.0")
             }
         }
 

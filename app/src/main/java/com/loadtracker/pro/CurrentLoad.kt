@@ -1,5 +1,6 @@
 package com.loadtracker.pro
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 
@@ -41,8 +42,19 @@ data class CurrentLoad(
     val consigneeApptType: String? = null,
     val dockArrivalTime: Long? = null,
     val detentionHoursLogged: Double = 0.0,
-    val detentionFlatPay: Double = 0.0
+    val detentionFlatPay: Double = 0.0,
+    @ColumnInfo(defaultValue = "0")
+    val extraStopCount: Int = 0,
+    @ColumnInfo(defaultValue = "''")
+    val stopOffsData: String = "",
+    @ColumnInfo(defaultValue = "0")
+    val currentStopIndex: Int = 0,
+    @ColumnInfo(defaultValue = "0")
+    val lastStopLoadedMiles: Double = 0.0
 )
+
+internal fun CurrentLoad.extraStopPayCents(ratePerStop: Double): Long =
+    Math.round(ratePerStop * 100.0) * extraStopCount.toLong()
 
 @Entity(tableName = "trip_breadcrumbs")
 data class TripBreadcrumb(

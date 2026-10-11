@@ -398,10 +398,14 @@ class MainActivity : ComponentActivity() {
                                     TrackingService.targetName = active.shipperName ?: "Shipper"
                                     TrackingService.isGeofenceActive = active.shipperLat != null
                                 } else if (active.tripState == "ACTIVE_LOADED") {
-                                    TrackingService.targetLat = active.consigneeLat
-                                    TrackingService.targetLong = active.consigneeLong
-                                    TrackingService.targetName = active.consigneeName ?: "Consignee"
-                                    TrackingService.isGeofenceActive = active.consigneeLat != null
+                                    val nextStop = active.nextLoadedDestination()
+                                    TrackingService.targetLat = nextStop?.latitude ?: active.consigneeLat
+                                    TrackingService.targetLong = nextStop?.longitude ?: active.consigneeLong
+                                    TrackingService.targetName =
+                                        nextStop?.name ?: active.consigneeName ?: "Consignee"
+                                    TrackingService.isGeofenceActive =
+                                        TrackingService.targetLat != null &&
+                                                TrackingService.targetLong != null
                                 }
 
                                 ContextCompat.startForegroundService(
@@ -423,6 +427,7 @@ class MainActivity : ComponentActivity() {
                         defPercent,
                         tarp8Pay,
                         tarp4Pay,
+                        extraStopPay,
                         isTrainingActive,
                         calculatedTrainerPay,
                     ) {
@@ -430,6 +435,7 @@ class MainActivity : ComponentActivity() {
                             viewModel.getCurrentWeekSummary(
                                 lumberRate = tarp8Pay.toDoubleOrNull() ?: 0.0,
                                 steelRate = tarp4Pay.toDoubleOrNull() ?: 0.0,
+                                extraStopRate = extraStopPay.toDoubleOrNull() ?: 0.0,
                                 isTrainingGlobal = isTrainingActive,
                                 trainerRate = calculatedTrainerPay
                             )
@@ -869,6 +875,7 @@ class MainActivity : ComponentActivity() {
                                                 liveLoadedMiles = liveLoaded,
                                                 isTrainingActive = isTrainingActive,
                                                 flatTrainerPayRate = calculatedTrainerPay,
+                                                extraStopRate = extraStopPay.toDoubleOrNull() ?: 0.0,
                                                 showHelpOnLaunch = triggerHelpView.value,
                                                 onDismissHelpDialog = {
                                                     triggerHelpView.value = false
@@ -920,7 +927,11 @@ class MainActivity : ComponentActivity() {
                                                         consigneeApptType = updatedTripEntity.consigneeApptType,
                                                         dockArrivalTime = updatedTripEntity.dockArrivalTime,
                                                         detentionHoursLogged = updatedTripEntity.detentionHoursLogged,
-                                                        detentionFlatPay = updatedTripEntity.detentionFlatPay
+                                                        detentionFlatPay = updatedTripEntity.detentionFlatPay,
+                                                        extraStopCount = updatedTripEntity.extraStopCount,
+                                                        stopOffsData = updatedTripEntity.stopOffsData,
+                                                        currentStopIndex = updatedTripEntity.currentStopIndex,
+                                                        lastStopLoadedMiles = updatedTripEntity.lastStopLoadedMiles
                                                     )
                                                 }
                                             )
@@ -972,7 +983,11 @@ class MainActivity : ComponentActivity() {
                                                         consigneeApptType = finalizedLoadEntity.consigneeApptType,
                                                         dockArrivalTime = finalizedLoadEntity.dockArrivalTime,
                                                         detentionHoursLogged = finalizedLoadEntity.detentionHoursLogged,
-                                                        detentionFlatPay = finalizedLoadEntity.detentionFlatPay
+                                                        detentionFlatPay = finalizedLoadEntity.detentionFlatPay,
+                                                        extraStopCount = finalizedLoadEntity.extraStopCount,
+                                                        stopOffsData = finalizedLoadEntity.stopOffsData,
+                                                        currentStopIndex = finalizedLoadEntity.currentStopIndex,
+                                                        lastStopLoadedMiles = finalizedLoadEntity.lastStopLoadedMiles
                                                     )
                                                     tripToEdit = null
                                                     isHistoricalEntry = false
@@ -1255,10 +1270,15 @@ class MainActivity : ComponentActivity() {
                                     OutlinedTextField(
                                         value = extraStopPay,
                                         onValueChange = { input -> extraStopPay = input.filter { it.isDigit() || it == '.' } },
-                                        label = { Text("Extra Stop Pay ($)") },
+                                        label = { Text("Extra Stop Pay per Stop Off ($)") },
                                         singleLine = true,
                                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Next),
                                         modifier = Modifier.fillMaxWidth()
+                                    )
+                                    Text(
+                                        "This rate is added once for each Stop Off recorded on a load.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.secondary
                                     )
 
                                     OutlinedTextField(
@@ -1871,7 +1891,10 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun exportToCsv() {
-        val csvContent = viewModel.generateCsvContent()
+        val extraStopRate = getSharedPreferences("dev_prefs", MODE_PRIVATE)
+            .getString("extra_stop_pay", "0.0")
+            ?.toDoubleOrNull() ?: 0.0
+        val csvContent = viewModel.generateCsvContent(extraStopRate)
         val file = File(cacheDir, "Load_Tracker_Export.csv")
         try {
             FileOutputStream(file).use {

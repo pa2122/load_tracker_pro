@@ -90,7 +90,11 @@ class LoadViewModel(application: Application) :
         consigneeApptType: String? = null,
         dockArrivalTime: Long? = null,
         detentionHoursLogged: Double = 0.0,
-        detentionFlatPay: Double = 0.0
+        detentionFlatPay: Double = 0.0,
+        extraStopCount: Int = 0,
+        stopOffsData: String = "",
+        currentStopIndex: Int = 0,
+        lastStopLoadedMiles: Double = 0.0
     ) {
         viewModelScope.launch {
             DatabaseBackupManager.createDailyBackupBeforeMutation(getApplication())
@@ -127,7 +131,11 @@ class LoadViewModel(application: Application) :
                 consigneeApptType = consigneeApptType,
                 dockArrivalTime = dockArrivalTime,
                 detentionHoursLogged = detentionHoursLogged,
-                detentionFlatPay = detentionFlatPay
+                detentionFlatPay = detentionFlatPay,
+                extraStopCount = extraStopCount,
+                stopOffsData = stopOffsData,
+                currentStopIndex = currentStopIndex,
+                lastStopLoadedMiles = lastStopLoadedMiles
             )
             loadDao.insertLoad(newLoad)
         }
@@ -162,6 +170,7 @@ class LoadViewModel(application: Application) :
     fun getCurrentWeekSummary(
         lumberRate: Double,
         steelRate: Double,
+        extraStopRate: Double,
         isTrainingGlobal: Boolean,
         trainerRate: Double
     ): WeekSummary {
@@ -170,15 +179,16 @@ class LoadViewModel(application: Application) :
             targetWeekStart = getPayrollWeekStartDate(System.currentTimeMillis()),
             lumberRate = lumberRate,
             steelRate = steelRate,
+            extraStopRate = extraStopRate,
             isTrainingGlobal = isTrainingGlobal,
             trainerRate = trainerRate
         )
     }
 
-    fun generateCsvContent(): String {
+    fun generateCsvContent(extraStopRate: Double = 0.0): String {
         val sb = StringBuilder()
         // CSV Header
-        sb.append("PRO Number,Pickup Date,Dispatched Bounce,Dispatched Loaded,Actual Bounce,Actual Loaded,Pay Split (%),Gross Pay,Tarp Type,Pre-Tarped,Going Home,Trip Notes,Net Pay\n")
+        sb.append("PRO Number,Pickup Date,Dispatched Bounce,Dispatched Loaded,Actual Bounce,Actual Loaded,Pay Split (%),Gross Pay,Tarp Type,Pre-Tarped,Extra Stops,Extra Stop Pay,Going Home,Trip Notes,Net Pay\n")
 
         _allLoads.value.forEach { load ->
             val date = Instant.ofEpochMilli(load.pickupTimestamp)
@@ -193,7 +203,8 @@ class LoadViewModel(application: Application) :
             val grossCents = load.loadPay.toCents()
             val baseSplitCents = Math.round(grossCents * (load.percentageRate / 100.0))
             val bounceBonusCents = (if (load.dispatchedBounceMiles >= 150.0) load.dispatchedBounceMiles * 0.20 else 0.0).toCents()
-            val netPayEstimate = (baseSplitCents + bounceBonusCents).toDollars()
+            val extraStopPayCents = load.extraStopPayCents(extraStopRate)
+            val netPayEstimate = (baseSplitCents + bounceBonusCents + extraStopPayCents).toDollars()
 
             sb.append("${load.proNumber},")
             sb.append("$date,")
@@ -205,6 +216,8 @@ class LoadViewModel(application: Application) :
             sb.append("${String.format(Locale.US, "%.2f", load.loadPay)},")
             sb.append("${load.tarpType},")
             sb.append("${load.isPreTarped},")
+            sb.append("${load.extraStopCount},")
+            sb.append("${String.format(Locale.US, "%.2f", load.extraStopPayCents(extraStopRate).toDollars())},")
             sb.append("${load.isGoingHome},")
             sb.append("\"${(load.tripNotes ?: "").replace("\"", "\"\"")}\",")
             sb.append("${String.format(Locale.US, "%.2f", netPayEstimate)}\n")

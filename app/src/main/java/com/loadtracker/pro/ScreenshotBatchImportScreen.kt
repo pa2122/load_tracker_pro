@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -34,6 +35,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.google.mlkit.vision.common.InputImage
@@ -66,7 +68,8 @@ internal data class BatchScreenshot(
     val isGoingHome: Boolean,
     val shipperName: String,
     val consigneeName: String,
-    val error: String? = null
+    val error: String? = null,
+    val extraStopCount: String = "0"
 )
 
 private data class ImageDocument(val uri: Uri, val name: String, val mimeType: String)
@@ -130,6 +133,8 @@ fun ScreenshotBatchImportScreen(
                 draft.bounceMiles.toDoubleOrNull() != null &&
                 draft.loadedMiles.toDoubleOrNull() != null &&
                 draft.percentageRate.toDoubleOrNull() != null &&
+                (draft.extraStopCount.isBlank() ||
+                        draft.extraStopCount.toIntOrNull()?.let { it >= 0 } == true) &&
                 (!draft.isPreTarped || draft.tarpType != "None") &&
                 draft.proNumber !in existingProNumbers &&
                 proNumberCounts[draft.proNumber.trim()] == 1
@@ -251,6 +256,13 @@ fun ScreenshotBatchImportScreen(
                             drafts[index] = draft.copy(loadedMiles = it)
                         }
                     }
+                    BatchField(
+                        "Stop Offs (payable extra stops)",
+                        draft.extraStopCount,
+                        keyboardType = KeyboardType.Number
+                    ) {
+                        drafts[index] = draft.copy(extraStopCount = it)
+                    }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         listOf("None", "4' Drop", "8' Drop").forEach { option ->
                             TextButton(onClick = { drafts[index] = draft.copy(tarpType = option) }) {
@@ -358,6 +370,7 @@ private fun BatchField(
     label: String,
     value: String,
     modifier: Modifier = Modifier.fillMaxWidth(),
+    keyboardType: KeyboardType = KeyboardType.Text,
     onValueChange: (String) -> Unit
 ) {
     OutlinedTextField(
@@ -365,7 +378,8 @@ private fun BatchField(
         onValueChange = onValueChange,
         label = { Text(label) },
         modifier = modifier,
-        singleLine = true
+        singleLine = true,
+        keyboardOptions = KeyboardOptions(keyboardType = keyboardType)
     )
 }
 
@@ -512,6 +526,7 @@ internal object ScreenshotBatchParser {
                         lower.startsWith("pickup appointment") || lower.startsWith("delivery date") ||
                         lower.startsWith("delivery appt") || lower.startsWith("delivery appointment") ||
                         lower.startsWith("going home") || lower.startsWith("home run") ||
+                        StopOffParser.isLabelLine(trimmed) ||
                         lower.startsWith("tarp") ->
                     currentFacility = null
                 shipperHeader != null -> {
@@ -541,6 +556,7 @@ internal object ScreenshotBatchParser {
         ).find(rawText)?.groupValues?.get(1)?.equals("Y", ignoreCase = true) == true
 
         val tarp = OcrTarpParser.parse(rawText)
+        val extraStopCount = StopOffParser.parseCount(rawText) ?: 0
         val tarpType = when (tarp?.tarpType) {
             "4' Drop" -> "4' Drop"
             "8' Drop" -> "8' Drop"
@@ -561,7 +577,8 @@ internal object ScreenshotBatchParser {
             isPreTarped = tarp?.isPreTarped == true,
             isGoingHome = goingHome,
             shipperName = shipperName.toString().trim(),
-            consigneeName = consigneeName.toString().trim()
+            consigneeName = consigneeName.toString().trim(),
+            extraStopCount = extraStopCount.toString()
         )
     }
 }
@@ -584,6 +601,7 @@ private fun emptyDraft(fileName: String, defaultPercentage: String, error: Strin
         isGoingHome = false,
         shipperName = "",
         consigneeName = "",
+        extraStopCount = "0",
         error = error
     )
 
@@ -625,6 +643,7 @@ private fun BatchScreenshot.toHistoricalLoad(): CurrentLoad {
         isGoingHome = isGoingHome,
         tripState = "COMPLETED",
         tripNotes = "Imported from screenshot batch: $fileName",
+        extraStopCount = extraStopCount.toIntOrNull() ?: 0,
         deliveryTimestamp = deliveryDate.toLocalDateOrNull()?.atTime(12, 0)
             ?.atZone(ZoneId.systemDefault())?.toInstant()?.toEpochMilli(),
         shipperName = shipperName.ifBlank { null },
