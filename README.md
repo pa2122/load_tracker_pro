@@ -53,6 +53,7 @@
 * **Local Scratchpad (`dev_notes.txt`)**: Full-screen developer notes pad to jot down bugs and feature ideas, saved locally on your device.
 * **GitHub Issues API Sync**: Push bugs and feature requests directly to your GitHub repository (`pa2122/android_apps`) as official GitHub Issues.
 * **Read-Only GitHub Issue Reader**: Browse, filter (Open, Closed, All), and read repository issues directly inside the app.
+* **Guided Verification Queue**: Complete one version-scoped issue checklist at a time; shared issues remain open until all applicable versions pass and you confirm closure.
 * **Connection Tester**: Live connection status indicator (🟢 Connected / 🔴 Failed) with a 1-tap test button.
 
 ---
@@ -64,7 +65,7 @@
 * **Machine Learning**: Google ML Kit Text Recognition (On-Device, 100% Offline).
 * **Location & Maps**: Google Play Services Fused Location Client & Google Maps Compose SDK.
 * **Version Management**: Centralized Gradle Version Catalog (`gradle/libs.versions.toml`) + dynamic `version.properties` auto-versioning.
-* **Security**: `local.properties` token injection (`BuildConfig.DEFAULT_GITHUB_TOKEN`) ensuring API keys are never exposed in Git control.
+* **Security**: GitHub credentials are entered in Developer Notes and encrypted with an Android Keystore key; credentials are not embedded in the APK.
 
 ---
 
@@ -83,11 +84,8 @@
    cd android_apps
    ```
 
-2. **Configure Local Properties** *(Optional for GitHub Sync)*:
-   Create or open `local.properties` in the project root and add your GitHub token:
-   ```properties
-   GITHUB_TOKEN=github_pat_...
-   ```
+2. **Configure GitHub Sync** *(Optional)*:
+   Enter your repository and a GitHub token in **Developer Notes → GitHub Sync**. The app encrypts the token using Android Keystore before saving it on the device. Use a token with only the repository permissions you need.
 
 3. **Build & Run**:
    Open the project in Android Studio, select the `:app` module, and click **Run (Shift + F10)**.

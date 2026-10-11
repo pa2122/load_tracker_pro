@@ -53,8 +53,8 @@ fun TesterFeedbackDialog(
     val scope = rememberCoroutineScope()
     val prefs = remember { ctx.getSharedPreferences("dev_prefs", Context.MODE_PRIVATE) }
 
-    val savedToken = prefs.getString("gh_token", "") ?: ""
-    val token = if (savedToken.isNotBlank()) savedToken else BuildConfig.DEFAULT_GITHUB_TOKEN
+    val tokenResult = remember { GitHubTokenStore.load(ctx) }
+    val token = tokenResult.token
     val repo = prefs.getString("gh_repo", BuildConfig.DEFAULT_GITHUB_REPO) ?: BuildConfig.DEFAULT_GITHUB_REPO
 
     var selectedCategory by remember { mutableStateOf("bug") } // "bug", "enhancement", "feedback"

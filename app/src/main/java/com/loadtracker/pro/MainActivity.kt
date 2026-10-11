@@ -1703,9 +1703,19 @@ class MainActivity : ComponentActivity() {
                                         }
                                         isSubmitting = true
                                         val repo = devPrefs.getString("gh_repo", BuildConfig.DEFAULT_GITHUB_REPO) ?: BuildConfig.DEFAULT_GITHUB_REPO
-                                        val token = devPrefs.getString("gh_token", "")?.ifBlank { BuildConfig.DEFAULT_GITHUB_TOKEN } ?: BuildConfig.DEFAULT_GITHUB_TOKEN
+                                        val tokenResult = GitHubTokenStore.load(this@MainActivity)
+                                        val token = tokenResult.token
 
                                         scope.launch {
+                                            if (tokenResult.error != null) {
+                                                isSubmitting = false
+                                                Toast.makeText(
+                                                    this@MainActivity,
+                                                    tokenResult.error,
+                                                    Toast.LENGTH_LONG
+                                                ).show()
+                                                return@launch
+                                            }
                                             val (success, message) = submitDevAccessRequest(
                                                 repo = repo,
                                                 token = token,

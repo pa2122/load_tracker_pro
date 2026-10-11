@@ -80,6 +80,7 @@ import androidx.core.content.FileProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
@@ -94,6 +95,9 @@ data class GitHubIssue(
     val labels: List<String>,
     val createdAt: String
 )
+
+private val CURRENT_VERIFICATION_VERSION =
+    if (BuildConfig.VERSION_NAME.startsWith("2.")) "v2.0" else "v1.x"
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -112,15 +116,12 @@ fun DevNotesScreen(
     val devFile = remember { File(ctx.filesDir, "dev_notes.txt") }
 
     // Tab 2: GitHub Issues Sync
-    val savedToken = prefs.getString("gh_token", "") ?: ""
+    val tokenLoadResult = remember { GitHubTokenStore.load(ctx) }
     var githubRepo by remember { 
         mutableStateOf(prefs.getString("gh_repo", BuildConfig.DEFAULT_GITHUB_REPO) ?: BuildConfig.DEFAULT_GITHUB_REPO) 
     }
-    var githubToken by remember {
-        mutableStateOf(
-            savedToken.ifBlank { BuildConfig.DEFAULT_GITHUB_TOKEN }
-        )
-    }
+    var githubToken by remember { mutableStateOf(tokenLoadResult.token) }
+    var tokenStorageError by remember { mutableStateOf(tokenLoadResult.error.orEmpty()) }
     var issueTitle by remember { mutableStateOf("") }
     var issueBody by remember { mutableStateOf("") }
     var selectedLabel by remember { mutableStateOf("bug") }
@@ -136,6 +137,10 @@ fun DevNotesScreen(
     var issuesFilterState by remember { mutableStateOf("open") } // "all", "open", "closed"
     var expandedIssueNumber by remember { mutableIntStateOf(-1) }
     var isIssueReaderExpanded by remember { mutableStateOf(false) }
+    var isVerificationQueueExpanded by remember { mutableStateOf(true) }
+    var isUpdatingVerification by remember { mutableStateOf(false) }
+    var verificationStatusText by remember { mutableStateOf(tokenStorageError) }
+    var issuePendingVerification by remember { mutableStateOf<GitHubIssue?>(null) }
     var showNewIssueDialog by remember { mutableStateOf(false) }
     var labelDropdownExpanded by remember { mutableStateOf(false) }
 
@@ -223,11 +228,18 @@ fun DevNotesScreen(
         }
     }
 
-    fun saveGithubPrefs() {
+    fun saveGithubPrefs(): Boolean {
+        val tokenResult = GitHubTokenStore.save(ctx, githubToken)
+        tokenStorageError = tokenResult.error.orEmpty()
+        if (tokenResult.error != null) {
+            verificationStatusText = tokenResult.error
+            Toast.makeText(ctx, tokenResult.error, Toast.LENGTH_LONG).show()
+            return false
+        }
         prefs.edit()
             .putString("gh_repo", githubRepo.trim())
-            .putString("gh_token", githubToken.trim())
             .apply()
+        return true
     }
 
     BackHandler {
@@ -375,7 +387,7 @@ fun DevNotesScreen(
                         value = githubRepo,
                         onValueChange = {
                             githubRepo = it
-                            saveGithubPrefs()
+                            prefs.edit().putString("gh_repo", it.trim()).apply()
                         },
                         label = { Text("GitHub Repository (owner/repo)") },
                         singleLine = true,
@@ -386,7 +398,6 @@ fun DevNotesScreen(
                         value = githubToken,
                         onValueChange = {
                             githubToken = it
-                            saveGithubPrefs()
                         },
                         label = { Text("GitHub Personal Access Token (PAT)") },
                         placeholder = { Text("ghp_... or github_pat_...") },
@@ -443,6 +454,218 @@ fun DevNotesScreen(
                             }
                         }
                     }
+
+                    HorizontalDivider()
+
+                    val verificationIssues = githubIssues
+                        .asSequence()
+                        .filter { it.state == "open" && "needs-verification" in it.labels }
+                        .mapNotNull { issue ->
+                            val section = VerificationChecklist.sections(issue.body)
+                                .firstOrNull { it.version == CURRENT_VERIFICATION_VERSION }
+                            if (section == null || section.status == "N/A") null else issue to section
+                        }
+                        .sortedBy { it.first.number }
+                        .toList()
+                    val blockedVerificationCount =
+                        verificationIssues.count { it.second.status == "BLOCKED" }
+                    val actionableVerificationIssues = verificationIssues.filter { (issue, section) ->
+                        section.status == "READY" &&
+                                (section.steps.any { !it.isComplete } ||
+                                        VerificationChecklist.allApplicableVersionsComplete(issue.body))
+                    }
+                    val waitingForOtherVersionCount = verificationIssues.count { (issue, section) ->
+                        section.status == "READY" &&
+                                section.steps.isNotEmpty() &&
+                                section.steps.all { it.isComplete } &&
+                                !VerificationChecklist.allApplicableVersionsComplete(issue.body)
+                    }
+                    val selectedVerification = actionableVerificationIssues.firstOrNull()
+
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                isVerificationQueueExpanded = !isVerificationQueueExpanded
+                            },
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer
+                        )
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(14.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    "Device Verification Queue ($CURRENT_VERIFICATION_VERSION)",
+                                    style = MaterialTheme.typography.titleMedium
+                                )
+                                Text(
+                                    "${actionableVerificationIssues.size} to test • $waitingForOtherVersionCount awaiting other version • $blockedVerificationCount blocked",
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                            Icon(
+                                if (isVerificationQueueExpanded) Icons.Default.KeyboardArrowUp
+                                else Icons.Default.KeyboardArrowDown,
+                                contentDescription = null
+                            )
+                        }
+                    }
+
+                    if (isVerificationQueueExpanded) {
+                        Text(
+                            "Work through one issue at a time. Your checks sync to GitHub; shared issues stay open until every applicable app version passes.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.secondary
+                        )
+                        if (githubToken.isBlank()) {
+                            Text(
+                                "Add a GitHub token with repository issue-write permission to save checks.",
+                                color = MaterialTheme.colorScheme.error,
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                        if (verificationStatusText.isNotBlank()) {
+                            Text(
+                                verificationStatusText,
+                                color = if (verificationStatusText.contains("failed", ignoreCase = true) ||
+                                    verificationStatusText.contains("error", ignoreCase = true)
+                                ) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.secondary,
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                        if (verificationIssues.isEmpty() && !isFetchingIssues) {
+                            Text(
+                                "No open issues with a $CURRENT_VERIFICATION_VERSION verification checklist were found. Refresh the issue list.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.secondary
+                            )
+                        }
+
+                        val selectedPair = selectedVerification
+                        if (selectedPair != null) {
+                            val (issue, section) = selectedPair
+                            val issueSections = VerificationChecklist.sections(issue.body)
+                            val isCompleteAcrossVersions =
+                                VerificationChecklist.allApplicableVersionsComplete(issue.body)
+                            val otherVersionNeedsChecks = issueSections.any { other ->
+                                other.version != CURRENT_VERIFICATION_VERSION &&
+                                        other.status != "N/A" &&
+                                        (other.status != "READY" ||
+                                                other.steps.isEmpty() ||
+                                                other.steps.any { !it.isComplete })
+                            }
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.surface
+                                )
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(12.dp),
+                                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Text(
+                                        "#${issue.number} ${issue.title}",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                    Text(
+                                        "${section.status} • ${section.steps.count { it.isComplete }}/${section.steps.size} $CURRENT_VERIFICATION_VERSION checks complete",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = if (section.status == "BLOCKED") {
+                                            MaterialTheme.colorScheme.error
+                                        } else {
+                                            MaterialTheme.colorScheme.secondary
+                                        }
+                                    )
+                                    section.blockedReason?.let {
+                                        Text(
+                                            it,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.error
+                                        )
+                                    }
+
+                                    section.steps.forEachIndexed { stepIndex, step ->
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Checkbox(
+                                                checked = step.isComplete,
+                                                enabled = githubToken.isNotBlank() && !isUpdatingVerification,
+                                                onCheckedChange = { checked ->
+                                                    scope.launch {
+                                                        isUpdatingVerification = true
+                                                        val result = GitHubVerificationApi.updateStep(
+                                                            repo = githubRepo,
+                                                            token = githubToken,
+                                                            issueNumber = issue.number,
+                                                            version = CURRENT_VERIFICATION_VERSION,
+                                                            stepIndex = stepIndex,
+                                                            expectedStepText = step.text,
+                                                            isComplete = checked
+                                                        )
+                                                        isUpdatingVerification = false
+                                                        verificationStatusText = result.message
+                                                        result.issue?.let { updated ->
+                                                            githubIssues = githubIssues.map {
+                                                                if (it.number == updated.number) updated else it
+                                                            }
+                                                        }
+                                                        if (!result.success) {
+                                                            Toast.makeText(
+                                                                ctx,
+                                                                result.message,
+                                                                Toast.LENGTH_LONG
+                                                            ).show()
+                                                        }
+                                                    }
+                                                }
+                                            )
+                                            Text(
+                                                step.text,
+                                                modifier = Modifier.weight(1f),
+                                                style = MaterialTheme.typography.bodySmall
+                                            )
+                                        }
+                                    }
+
+                                    if (otherVersionNeedsChecks) {
+                                        Text(
+                                            "This issue also requires verification in another app version. It will stay open until that version passes.",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.tertiary
+                                        )
+                                    }
+
+                                    if (isCompleteAcrossVersions) {
+                                        Button(
+                                            onClick = { issuePendingVerification = issue },
+                                            enabled = githubToken.isNotBlank() && !isUpdatingVerification,
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Text("Review and mark verified")
+                                        }
+                                    }
+                                }
+                            }
+                            } else if (!isFetchingIssues && verificationIssues.isNotEmpty()) {
+                                Text(
+                                    if (waitingForOtherVersionCount > 0) {
+                                        "Your $CURRENT_VERIFICATION_VERSION checks are complete. The remaining shared issues need verification in the other app version."
+                                    } else {
+                                        "No $CURRENT_VERIFICATION_VERSION issues are currently ready for testing. Blocked items are listed in the GitHub Issue Reader."
+                                    },
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.secondary
+                                )
+                            }
+                        }
 
                     HorizontalDivider()
 
@@ -925,6 +1148,88 @@ fun DevNotesScreen(
         )
     }
 
+    val pendingVerification = issuePendingVerification
+    if (pendingVerification != null) {
+        val verificationSections = VerificationChecklist.sections(pendingVerification.body)
+            .filter { it.status != "N/A" }
+        AlertDialog(
+            onDismissRequest = {
+                if (!isUpdatingVerification) issuePendingVerification = null
+            },
+            title = { Text("Mark #${pendingVerification.number} verified?") },
+            text = {
+                Column(
+                    modifier = Modifier
+                        .heightIn(max = 420.dp)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        "This will post the completed checklist to GitHub, add the verified label, remove needs-verification, and close the issue."
+                    )
+                    verificationSections.forEach { section ->
+                        Text(
+                            "${section.version} — ${section.steps.size} checks passed",
+                            style = MaterialTheme.typography.titleSmall
+                        )
+                        section.steps.forEach { step ->
+                            Text("• ${step.text}", style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                    Text(
+                        "This action is recorded on GitHub and should only be confirmed after you have completed every test.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        scope.launch {
+                            if (!saveGithubPrefs()) return@launch
+                            isUpdatingVerification = true
+                            val result = GitHubVerificationApi.closeAsVerified(
+                                repo = githubRepo,
+                                token = githubToken,
+                                issueNumber = pendingVerification.number
+                            )
+                            isUpdatingVerification = false
+                            verificationStatusText = result.message
+                            issuePendingVerification = null
+                            if (result.success) {
+                                Toast.makeText(ctx, result.message, Toast.LENGTH_LONG).show()
+                                loadIssues()
+                            } else {
+                                Toast.makeText(ctx, result.message, Toast.LENGTH_LONG).show()
+                            }
+                        }
+                    },
+                    enabled = !isUpdatingVerification && githubToken.isNotBlank(),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error
+                    )
+                ) {
+                    if (isUpdatingVerification) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.onError
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                    }
+                    Text(if (isUpdatingVerification) "Updating GitHub..." else "Confirm and close issue")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { issuePendingVerification = null },
+                    enabled = !isUpdatingVerification
+                ) { Text("Keep Open") }
+            }
+        )
+    }
+
     val currentDbEdit = editingDbLoad
     if (currentDbEdit != null) {
         var editPro by remember { mutableStateOf(currentDbEdit.proNumber) }
@@ -1165,7 +1470,7 @@ private suspend fun fetchGitHubIssues(
         val cleanRepo = repo.trim().removePrefix("https://github.com/").removeSuffix(".git").removeSuffix("/")
         if (cleanRepo.isBlank()) return@withContext Pair(emptyList(), "Repo name cannot be blank.")
 
-        val url = URL("https://api.github.com/repos/$cleanRepo/issues?state=all&per_page=30")
+        val url = URL("https://api.github.com/repos/$cleanRepo/issues?state=all&per_page=100")
         val conn = url.openConnection() as HttpURLConnection
         conn.requestMethod = "GET"
         if (token.trim().isNotBlank()) {
@@ -1189,54 +1494,32 @@ private suspend fun fetchGitHubIssues(
 }
 
 private fun parseGitHubIssuesJson(jsonText: String): List<GitHubIssue> {
-    val list = mutableListOf<GitHubIssue>()
     try {
-        val items = jsonText.trim().removePrefix("[").removeSuffix("]").split(Regex("""\}\s*,\s*\{(?=\s*"url")"""))
-        for (item in items) {
-            val numMatch = Regex(""""number"\s*:\s*(\d+)""").find(item)
-            val titleMatch = Regex(""""title"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"""").find(item)
-            val stateMatch = Regex(""""state"\s*:\s*"([^"]+)"""").find(item)
-            val bodyMatch = Regex(""""body"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"""").find(item)
-            val authorMatch = Regex(""""login"\s*:\s*"([^"]+)"""").find(item)
-            val createdMatch = Regex(""""created_at"\s*:\s*"([^"]+)"""").find(item)
-
-            if (numMatch != null && titleMatch != null) {
-                val num = numMatch.groupValues[1].toIntOrNull() ?: 0
-                val title = unescapeJson(titleMatch.groupValues[1])
-                val state = stateMatch?.groupValues?.get(1) ?: "open"
-                val body = if (bodyMatch != null) unescapeJson(bodyMatch.groupValues[1]) else ""
-                val author = authorMatch?.groupValues?.get(1) ?: "github"
-                val rawCreated = createdMatch?.groupValues?.get(1) ?: ""
-                val formattedDate = if (rawCreated.length >= 10) rawCreated.substring(0, 10) else rawCreated
-
-                val labelMatches = Regex(""""name"\s*:\s*"([^"]+)"""").findAll(item)
-                val labels = labelMatches.map { it.groupValues[1] }.toList()
-
-                list.add(
-                    GitHubIssue(
-                        number = num,
-                        title = title,
-                        state = state,
-                        body = body,
-                        author = author,
-                        labels = labels,
-                        createdAt = formattedDate
-                    )
-                )
+        val items = JSONArray(jsonText)
+        return (0 until items.length()).mapNotNull { index ->
+            val item = items.optJSONObject(index) ?: return@mapNotNull null
+            if (item.has("pull_request")) return@mapNotNull null
+            val number = item.optInt("number", 0)
+            val title = item.optString("title")
+            if (number <= 0 || title.isBlank()) return@mapNotNull null
+            val labelsJson = item.optJSONArray("labels") ?: JSONArray()
+            val labels = (0 until labelsJson.length()).mapNotNull { labelIndex ->
+                labelsJson.optJSONObject(labelIndex)?.optString("name")?.takeIf { it.isNotBlank() }
             }
+            GitHubIssue(
+                number = number,
+                title = title,
+                state = item.optString("state", "open"),
+                body = item.optString("body"),
+                author = item.optJSONObject("user")?.optString("login") ?: "github",
+                labels = labels,
+                createdAt = item.optString("created_at").take(10)
+            )
         }
     } catch (e: Exception) {
-        e.printStackTrace()
+        android.util.Log.e("DevNotesScreen", "Unable to parse GitHub issue response", e)
+        return emptyList()
     }
-    return list
-}
-
-private fun unescapeJson(str: String): String {
-    return str.replace("\\\"", "\"")
-        .replace("\\n", "\n")
-        .replace("\\r", "\r")
-        .replace("\\t", "\t")
-        .replace("\\\\", "\\")
 }
 
 private suspend fun testGitHubConnection(
