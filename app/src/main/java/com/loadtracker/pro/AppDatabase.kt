@@ -7,7 +7,7 @@ import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
-@Database(entities = [CurrentLoad::class, TripBreadcrumb::class], version = 12, exportSchema = true)
+@Database(entities = [CurrentLoad::class, TripBreadcrumb::class], version = 13, exportSchema = true)
 abstract class AppDatabase : RoomDatabase() {
 
     abstract fun loadDao(): LoadDao
@@ -27,7 +27,8 @@ abstract class AppDatabase : RoomDatabase() {
                 MIGRATION_8_9,
                 MIGRATION_9_10,
                 MIGRATION_10_11,
-                MIGRATION_11_12
+                MIGRATION_11_12,
+                MIGRATION_12_13
             )
 
         private fun hasTable(db: SupportSQLiteDatabase, tableName: String): Boolean {
@@ -160,6 +161,11 @@ abstract class AppDatabase : RoomDatabase() {
                 addColumnIfMissing(db, "trucking_loads", "currentStopIndex INTEGER NOT NULL DEFAULT 0")
                 addColumnIfMissing(db, "trucking_loads", "lastStopLoadedMiles REAL NOT NULL DEFAULT 0.0")
             }
+        }
+
+        private val MIGRATION_12_13 = object : Migration(12, 13) {
+            // Version 12's columns already exist; version 13 revalidates them against the corrected Room defaults.
+            override fun migrate(db: SupportSQLiteDatabase) {}
         }
 
         // Safe singleton factory constructor to control access to your data file

@@ -30,8 +30,11 @@ data class CurrentLoad(
     val consigneeLat: Double? = null,
     val consigneeLong: Double? = null,
     // 📍 New field added in Version 7
+    // Keep entity defaults aligned with migration SQL or Room throws "Migration didn't properly handle: trucking_loads" at launch.
+    @ColumnInfo(defaultValue = "0")
     val isTrainingWeek: Boolean = false,
     // 📍 New field added in Version 8
+    @ColumnInfo(defaultValue = "0.0")
     val trainerPayRate: Double = 0.0,
     // 📍 New fields added in Version 10 for Appointment & Detention Clock
     val pickupApptText: String? = null,
@@ -41,7 +44,9 @@ data class CurrentLoad(
     val consigneeApptTimestamp: Long? = null,
     val consigneeApptType: String? = null,
     val dockArrivalTime: Long? = null,
+    @ColumnInfo(defaultValue = "0.0")
     val detentionHoursLogged: Double = 0.0,
+    @ColumnInfo(defaultValue = "0.0")
     val detentionFlatPay: Double = 0.0,
     @ColumnInfo(defaultValue = "0")
     val extraStopCount: Int = 0,
@@ -49,7 +54,7 @@ data class CurrentLoad(
     val stopOffsData: String = "",
     @ColumnInfo(defaultValue = "0")
     val currentStopIndex: Int = 0,
-    @ColumnInfo(defaultValue = "0")
+    @ColumnInfo(defaultValue = "0.0")
     val lastStopLoadedMiles: Double = 0.0
 )
 
