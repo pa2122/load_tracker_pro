@@ -1,3 +1,9 @@
 <resources>
     <string name="app_name">Load Tracker Pro</string>
+    <string name="splash_reading_settings">Reading settings...</string>
+    <string name="splash_opening_database">Opening database...</string>
+    <string name="splash_restoring_active_load">Restoring active load...</string>
+    <string name="splash_recovered_after_shutdown">Recovered after unexpected shutdown</string>
+    <string name="splash_timeout_error">Startup is taking longer than expected. The database may be unavailable.</string>
+    <string name="splash_continue_anyway">Continue anyway</string>
 </resources>

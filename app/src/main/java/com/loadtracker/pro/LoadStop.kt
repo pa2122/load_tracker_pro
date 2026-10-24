@@ -1,5 +1,9 @@
 package com.loadtracker.pro
 
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.listSaver
+import androidx.compose.runtime.snapshots.SnapshotStateList
 import java.net.URLDecoder
 import java.net.URLEncoder
 
@@ -60,6 +64,34 @@ internal data class LoadStopDraft(
         return LoadStop(name.trim(), address.trim(), lat, long, miles, actualLegMiles)
     }
 }
+
+internal val stopDraftsSaver: Saver<SnapshotStateList<LoadStopDraft>, Any> = listSaver(
+    save = { drafts ->
+        drafts.map { d ->
+            listOf(
+                d.name, d.address, d.latitude, d.longitude,
+                d.dispatchedLegMiles, d.actualLegMiles, d.lookupError
+            )
+        }
+    },
+    restore = { saved ->
+        mutableStateListOf<LoadStopDraft>().apply {
+            saved.forEach { f ->
+                add(
+                    LoadStopDraft(
+                        name = f[0] as String,
+                        address = f[1] as String,
+                        latitude = f[2] as Double?,
+                        longitude = f[3] as Double?,
+                        dispatchedLegMiles = f[4] as String,
+                        actualLegMiles = f[5] as Double?,
+                        lookupError = f[6] as String?
+                    )
+                )
+            }
+        }
+    }
+)
 
 internal fun CurrentLoad.recordLoadedArrival(
     cumulativeLoadedMiles: Double,

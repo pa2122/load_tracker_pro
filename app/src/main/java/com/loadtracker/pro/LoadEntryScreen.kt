@@ -52,6 +52,7 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -90,17 +91,17 @@ fun LoadEntryScreen(
     val scroll = rememberScrollState()
     val scope = rememberCoroutineScope()
 
-    var proNum by remember { mutableStateOf(value = editingLoad?.proNumber ?: "") }
+    var proNum by rememberSaveable { mutableStateOf(value = editingLoad?.proNumber ?: "") }
     var showDuplicateWarningDialog by remember { mutableStateOf(false) }
     var pendingDuplicateLoad by remember { mutableStateOf<CurrentLoad?>(null) }
-    var dBounce by remember { mutableStateOf(value = editingLoad?.dispatchedBounceMiles?.toString() ?: "") }
-    var dLoaded by remember { mutableStateOf(value = editingLoad?.dispatchedLoadedMiles?.toString() ?: "") }
-    var ratePct by remember { mutableStateOf(value = editingLoad?.percentageRate?.toString() ?: initialPercentage) }
-    var loadPay by remember { mutableStateOf(value = editingLoad?.loadPay?.toString() ?: "") }
-    var extraStopCount by remember {
+    var dBounce by rememberSaveable { mutableStateOf(value = editingLoad?.dispatchedBounceMiles?.toString() ?: "") }
+    var dLoaded by rememberSaveable { mutableStateOf(value = editingLoad?.dispatchedLoadedMiles?.toString() ?: "") }
+    var ratePct by rememberSaveable { mutableStateOf(value = editingLoad?.percentageRate?.toString() ?: initialPercentage) }
+    var loadPay by rememberSaveable { mutableStateOf(value = editingLoad?.loadPay?.toString() ?: "") }
+    var extraStopCount by rememberSaveable {
         mutableStateOf(value = editingLoad?.extraStopCount?.toString() ?: "0")
     }
-    val stopDrafts = remember(editingLoad) {
+    val stopDrafts = rememberSaveable(editingLoad, saver = stopDraftsSaver) {
         mutableStateListOf<LoadStopDraft>().apply {
             addAll(
                 LoadStopCodec.decode(editingLoad?.stopOffsData.orEmpty()).map { stop ->
@@ -119,7 +120,7 @@ fun LoadEntryScreen(
 
     var expanded by remember { mutableStateOf(value = false) }
     val tarpOpts = listOf("None", "4' Drop", "8' Drop")
-    var selectedTarp by remember {
+    var selectedTarp by rememberSaveable {
         val type = editingLoad?.tarpType ?: "N"
         mutableStateOf(
             value = when (type) {
@@ -130,31 +131,31 @@ fun LoadEntryScreen(
         )
     }
 
-    var isPreTarped by remember { mutableStateOf(value = editingLoad?.isPreTarped ?: false) }
-    var isGoingHome by remember { mutableStateOf(value = editingLoad?.isGoingHome ?: false) }
-    var isTrainingWeek by remember { mutableStateOf(value = editingLoad?.isTrainingWeek ?: initialIsTraining) }
-    var tripNotes by remember { mutableStateOf(value = editingLoad?.tripNotes ?: "") }
-    var isManualEntry by remember(isHistorical) { mutableStateOf(value = isHistorical) }
+    var isPreTarped by rememberSaveable { mutableStateOf(value = editingLoad?.isPreTarped ?: false) }
+    var isGoingHome by rememberSaveable { mutableStateOf(value = editingLoad?.isGoingHome ?: false) }
+    var isTrainingWeek by rememberSaveable { mutableStateOf(value = editingLoad?.isTrainingWeek ?: initialIsTraining) }
+    var tripNotes by rememberSaveable { mutableStateOf(value = editingLoad?.tripNotes ?: "") }
+    var isManualEntry by rememberSaveable(isHistorical) { mutableStateOf(value = isHistorical) }
 
-    var manualActBounce by remember {
+    var manualActBounce by rememberSaveable {
         mutableStateOf(
             value = if (editingLoad != null && editingLoad.bounceMilesEnd > 0.0) String.format(Locale.US, "%.1f", editingLoad.bounceMilesEnd) else ""
         )
     }
-    var manualActLoaded by remember {
+    var manualActLoaded by rememberSaveable {
         mutableStateOf(
             value = if (editingLoad != null && editingLoad.loadedMilesEnd > 0.0) String.format(Locale.US, "%.1f", editingLoad.loadedMilesEnd) else ""
         )
     }
-    var matchDispatched by remember { mutableStateOf(value = editingLoad == null) }
+    var matchDispatched by rememberSaveable { mutableStateOf(value = editingLoad == null) }
 
     var showDatePicker by remember { mutableStateOf(value = false) }
     var showDeliveryDatePicker by remember { mutableStateOf(value = false) }
     var showProPaywallDialog by remember { mutableStateOf(value = false) }
-    var selectedDateMillis by remember(editingLoad) {
+    var selectedDateMillis by rememberSaveable(editingLoad) {
         mutableLongStateOf(value = editingLoad?.pickupTimestamp ?: System.currentTimeMillis())
     }
-    var selectedDeliveryDateMillis by remember(editingLoad) {
+    var selectedDeliveryDateMillis by rememberSaveable(editingLoad) {
         mutableLongStateOf(
             value = editingLoad?.deliveryTimestamp
                 ?: editingLoad?.pickupTimestamp
@@ -176,25 +177,25 @@ fun LoadEntryScreen(
             .format(formatter)
     }
 
-    var sRawPaste by remember { mutableStateOf(value = editingLoad?.shipperName ?: "") }
-    var sName by remember { mutableStateOf(value = editingLoad?.shipperName?.lines()?.firstOrNull()?.trim() ?: "") }
-    var sLat by remember { mutableStateOf(value = editingLoad?.shipperLat) }
-    var sLong by remember { mutableStateOf(value = editingLoad?.shipperLong) }
-    var isShipperVerified by remember { mutableStateOf(value = editingLoad?.shipperLat != null) }
+    var sRawPaste by rememberSaveable { mutableStateOf(value = editingLoad?.shipperName ?: "") }
+    var sName by rememberSaveable { mutableStateOf(value = editingLoad?.shipperName?.lines()?.firstOrNull()?.trim() ?: "") }
+    var sLat by rememberSaveable { mutableStateOf(value = editingLoad?.shipperLat) }
+    var sLong by rememberSaveable { mutableStateOf(value = editingLoad?.shipperLong) }
+    var isShipperVerified by rememberSaveable { mutableStateOf(value = editingLoad?.shipperLat != null) }
 
-    var cRawPaste by remember { mutableStateOf(value = editingLoad?.consigneeName ?: "") }
-    var cName by remember { mutableStateOf(value = editingLoad?.consigneeName?.lines()?.firstOrNull()?.trim() ?: "") }
-    var cLat by remember { mutableStateOf(value = editingLoad?.consigneeLat) }
-    var cLong by remember { mutableStateOf(value = editingLoad?.consigneeLong) }
-    var isConsigneeVerified by remember { mutableStateOf(value = editingLoad?.consigneeLat != null) }
+    var cRawPaste by rememberSaveable { mutableStateOf(value = editingLoad?.consigneeName ?: "") }
+    var cName by rememberSaveable { mutableStateOf(value = editingLoad?.consigneeName?.lines()?.firstOrNull()?.trim() ?: "") }
+    var cLat by rememberSaveable { mutableStateOf(value = editingLoad?.consigneeLat) }
+    var cLong by rememberSaveable { mutableStateOf(value = editingLoad?.consigneeLong) }
+    var isConsigneeVerified by rememberSaveable { mutableStateOf(value = editingLoad?.consigneeLat != null) }
 
-    var sApptText by remember { mutableStateOf(value = editingLoad?.pickupApptText) }
-    var sApptTimestamp by remember { mutableStateOf(value = editingLoad?.pickupApptTimestamp) }
-    var sApptType by remember { mutableStateOf(value = editingLoad?.pickupApptType) }
+    var sApptText by rememberSaveable { mutableStateOf(value = editingLoad?.pickupApptText) }
+    var sApptTimestamp by rememberSaveable { mutableStateOf(value = editingLoad?.pickupApptTimestamp) }
+    var sApptType by rememberSaveable { mutableStateOf(value = editingLoad?.pickupApptType) }
 
-    var cApptText by remember { mutableStateOf(value = editingLoad?.consigneeApptText) }
-    var cApptTimestamp by remember { mutableStateOf(value = editingLoad?.consigneeApptTimestamp) }
-    var cApptType by remember { mutableStateOf(value = editingLoad?.consigneeApptType) }
+    var cApptText by rememberSaveable { mutableStateOf(value = editingLoad?.consigneeApptText) }
+    var cApptTimestamp by rememberSaveable { mutableStateOf(value = editingLoad?.consigneeApptTimestamp) }
+    var cApptType by rememberSaveable { mutableStateOf(value = editingLoad?.consigneeApptType) }
 
     fun resolveAddress(input: String, isShipper: Boolean) {
         val lines = input.lines().filter { it.isNotBlank() }
