@@ -375,7 +375,7 @@ fun DashboardScreen(
                                                     TrackingService.targetLong = activeTrip.shipperLong
                                                     TrackingService.targetName = activeTrip.shipperName ?: "Shipper"
                                                     TrackingService.isGeofenceActive = false
-                                                    onUpdateTripClick(activeTrip.copy(tripState = "ACTIVE_SHIPPER"))
+                                                    onUpdateTripClick(activeTrip.copy(tripState = "ACTIVE_SHIPPER", dockArrivalTime = null))
                                                     showUndoPromptDialog = true
                                                 }
                                                 "ACTIVE_SHIPPER" -> {
