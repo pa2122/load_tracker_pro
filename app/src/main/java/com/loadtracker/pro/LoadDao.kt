@@ -18,6 +18,28 @@ interface LoadDao {
     @Query("SELECT * FROM trucking_loads ORDER BY pickupTimestamp DESC")
     fun getAllLoads(): Flow<List<CurrentLoad>>
 
+    @Query("SELECT * FROM trucking_loads WHERE proNumber = :pro")
+    suspend fun getLoadByProNumber(pro: String): CurrentLoad?
+
+    @Query(
+        """
+        UPDATE trucking_loads
+        SET tripState = :newState,
+            bounceMilesEnd = CASE WHEN :newState = 'ACTIVE_SHIPPER' THEN :bounceMilesEnd ELSE bounceMilesEnd END,
+            loadedMilesEnd = CASE WHEN :newState = 'ACTIVE_CONSIGNEE' THEN :loadedMilesEnd ELSE loadedMilesEnd END,
+            dockArrivalTime = :dockArrivalTime
+        WHERE proNumber = :pro AND tripState = :expectedState
+        """
+    )
+    suspend fun updateTripFromNotification(
+        pro: String,
+        expectedState: String,
+        newState: String,
+        bounceMilesEnd: Double,
+        loadedMilesEnd: Double,
+        dockArrivalTime: Long?
+    ): Int
+
     // Deletes an entry permanently from your phone's local storage file.
     @Delete
     suspend fun deleteLoad(load: CurrentLoad)

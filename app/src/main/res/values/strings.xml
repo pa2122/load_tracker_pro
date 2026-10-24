@@ -6,4 +6,8 @@
     <string name="splash_recovered_after_shutdown">Recovered after unexpected shutdown</string>
     <string name="splash_timeout_error">Startup is taking longer than expected. The database may be unavailable.</string>
     <string name="splash_continue_anyway">Continue anyway</string>
+    <string name="notification_arrive_shipper">Arrive at Shipper</string>
+    <string name="notification_depart_shipper">Depart Shipper</string>
+    <string name="notification_arrive_consignee">Arrive at Consignee</string>
+    <string name="notification_open_to_complete">Open to Complete</string>
 </resources>
