@@ -31,6 +31,12 @@ This file provides guidance for GitHub Copilot when working on the load_tracker_
 - Run the focused unit test or build before any push. State plainly if validation failed or could not run.
 - Be honest about status: say clearly if something is unpushed, unverified, or partly done.
 
+### Device Testing
+- Any testing that interacts with the app or its data (tapping, entering loads, running flows, clearing data) must be done on an **emulator only**, never on the user's physical phone. This protects real load history and avoids test records.
+- If no emulator is running, tell the user so they can start one. Do not fall back to the phone.
+- Before using `adb`, confirm the target serial starts with `emulator-` and pin it with `-s`.
+- Read-only inspection on the phone (e.g., `dumpsys`) is fine. Install to the phone only when the user asks, and never uninstall (always update in place).
+
 ### Scope & Behavior
 - Fix only what the issue covers. Raise unrelated problems as a question or a new issue; do not change them.
 - One-time instructions (e.g., "no commit message needed") apply to that action only, unless the user makes them permanent.
