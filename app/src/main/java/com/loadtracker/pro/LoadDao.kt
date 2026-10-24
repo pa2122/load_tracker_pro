@@ -6,6 +6,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Transaction
+import androidx.room.Update
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -44,6 +45,19 @@ interface LoadDao {
 
     @Query("SELECT * FROM trucking_loads WHERE proNumber = :pro LIMIT 1")
     suspend fun getLoadByProNumber(pro: String): CurrentLoad?
+
+    @Update
+    suspend fun updateLoadIfPresent(load: CurrentLoad): Int
+
+    @Transaction
+    suspend fun updateTripFromNotification(
+        expectedState: String,
+        updatedLoad: CurrentLoad
+    ): Int {
+        val currentLoad = getLoadByProNumber(updatedLoad.proNumber) ?: return 0
+        if (currentLoad.tripState != expectedState) return 0
+        return updateLoadIfPresent(updatedLoad)
+    }
 
     // Deletes an entry permanently from your phone's local storage file.
     @Delete

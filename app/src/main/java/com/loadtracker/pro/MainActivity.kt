@@ -420,6 +420,7 @@ class MainActivity : ComponentActivity() {
                             (it.tripState != "PAUSED_AT_HOME") 
                         }
                         if (active != null) {
+                            TrackingService.activeTripState = active.tripState
                             val fineLocation = ContextCompat.checkSelfPermission(
                                 this@MainActivity, Manifest.permission.ACCESS_FINE_LOCATION,
                             ) == PackageManager.PERMISSION_GRANTED

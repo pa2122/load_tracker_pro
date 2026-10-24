@@ -8,6 +8,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.location.Location
+import android.net.Uri
 import android.os.Build
 import android.os.IBinder
 import android.os.Looper
@@ -23,6 +24,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.Locale
 
 class TrackingService : Service() {
@@ -37,10 +39,14 @@ class TrackingService : Service() {
     companion object {
         const val CHANNEL_ID = "tracking_channel"
         const val NOTIFICATION_ID = 101
+        private const val ACTION_NOTIFICATION_TRIP_STEP = "com.loadtracker.pro.NOTIFICATION_TRIP_STEP"
+        private const val EXTRA_NOTIFICATION_PRO = "notification_pro"
+        private const val EXTRA_EXPECTED_TRIP_STATE = "expected_trip_state"
 
         val totalBounceMilesTracked = MutableStateFlow(0.0)
         val totalLoadedMilesTracked = MutableStateFlow(0.0)
         var activeSegment = "Bounce" // "Bounce", "Loaded", "Paused"
+        var activeTripState: String? = null
         
         var activeProNumber: String? = null
 
@@ -111,6 +117,7 @@ class TrackingService : Service() {
             prefs.edit().apply {
                 putString("activeProNumber", activeProNumber)
                 putString("activeSegment", activeSegment)
+                putString("activeTripState", activeTripState)
                 putFloat("homeLat", homeLat?.toFloat() ?: -999f)
                 putFloat("homeLong", homeLong?.toFloat() ?: -999f)
                 putFloat("targetLat", targetLat?.toFloat() ?: -999f)
@@ -131,6 +138,9 @@ class TrackingService : Service() {
             }
             val savedSegment = prefs.getString("activeSegment", null)
             if (savedSegment != null) activeSegment = savedSegment
+            if (activeTripState == null) {
+                activeTripState = prefs.getString("activeTripState", null)
+            }
 
             val hLat = prefs.getFloat("homeLat", -999f)
             if (hLat != -999f) homeLat = hLat.toDouble()
@@ -162,6 +172,7 @@ class TrackingService : Service() {
             totalBounceMilesTracked.value = 0.0
             totalLoadedMilesTracked.value = 0.0
             activeSegment = "Bounce"
+            activeTripState = null
             activeProNumber = null
             isGeofenceActive = false
             currentLatitude = null
@@ -288,6 +299,7 @@ class TrackingService : Service() {
             if (shouldPauseHome) {
                 homeCandidateStartMs = null
                 activeSegment = "PAUSED_AT_HOME"
+                activeTripState = "PAUSED_AT_HOME"
                 isGeofenceActive = false
                 updateNotification()
 
@@ -343,6 +355,7 @@ class TrackingService : Service() {
                     if (previousSegment == "Bounce") {
                         DatabaseBackupManager.createDailyBackupBeforeMutation(applicationContext)
                         dao.updateTripState(pro, "ACTIVE_SHIPPER")
+                        activeTripState = "ACTIVE_SHIPPER"
                     } else if (previousSegment == "Loaded") {
                         val load = requireNotNull(dao.getLoadByProNumber(pro)) {
                             "Active load $pro disappeared before destination arrival."
@@ -353,7 +366,10 @@ class TrackingService : Service() {
                         )
                         DatabaseBackupManager.createDailyBackupBeforeMutation(applicationContext)
                         dao.insertLoad(arrivedLoad)
+                        activeTripState = arrivedLoad.tripState
                     }
+                    saveState(applicationContext)
+                    withContext(Dispatchers.Main) { updateNotification() }
                 } catch (e: Exception) {
                     android.util.Log.e("TrackingService", "Unable to save destination arrival", e)
                 }
@@ -362,9 +378,93 @@ class TrackingService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        updateNotification()
-        configureLocationUpdates()
+        if (intent?.action == ACTION_NOTIFICATION_TRIP_STEP) {
+            handleNotificationTripStep(intent)
+        } else {
+            updateNotification()
+            configureLocationUpdates()
+        }
         return START_STICKY
+    }
+
+    private fun handleNotificationTripStep(intent: Intent) {
+        val pro = intent.getStringExtra(EXTRA_NOTIFICATION_PRO) ?: return
+        val expectedState = intent.getStringExtra(EXTRA_EXPECTED_TRIP_STATE) ?: return
+        if (pro != activeProNumber) return
+
+        serviceScope.launch {
+            try {
+                val dao = AppDatabase.getDatabase(applicationContext).loadDao()
+                val load = dao.getLoadByProNumber(pro) ?: return@launch
+                if (load.tripState != expectedState) {
+                    activeTripState = load.tripState
+                    withContext(Dispatchers.Main) { updateNotification() }
+                    return@launch
+                }
+
+                val now = System.currentTimeMillis()
+                val updatedLoad = when (expectedState) {
+                    "ACTIVE_BOUNCE" -> load.copy(
+                        tripState = "ACTIVE_SHIPPER",
+                        bounceMilesEnd = totalBounceMilesTracked.value,
+                        dockArrivalTime = now
+                    )
+                    "ACTIVE_SHIPPER" -> load.copy(
+                        tripState = "ACTIVE_LOADED",
+                        dockArrivalTime = null
+                    )
+                    "ACTIVE_LOADED" -> load.recordLoadedArrival(
+                        cumulativeLoadedMiles = totalLoadedMilesTracked.value,
+                        arrivalTimestamp = now
+                    )
+                    "ACTIVE_STOP" -> load.copy(
+                        tripState = "ACTIVE_LOADED",
+                        dockArrivalTime = null
+                    )
+                    else -> return@launch
+                }
+                DatabaseBackupManager.createDailyBackupBeforeMutation(applicationContext)
+                val changedRows = dao.updateTripFromNotification(
+                    expectedState = expectedState,
+                    updatedLoad = updatedLoad
+                )
+                if (changedRows == 0) {
+                    activeTripState = dao.getLoadByProNumber(pro)?.tripState
+                    withContext(Dispatchers.Main) { updateNotification() }
+                    return@launch
+                }
+
+                when (updatedLoad.tripState) {
+                    "ACTIVE_SHIPPER" -> {
+                        activeSegment = "Paused"
+                        isGeofenceActive = false
+                    }
+                    "ACTIVE_LOADED" -> {
+                        activeSegment = "Loaded"
+                        val destination = updatedLoad.nextLoadedDestination()
+                        targetLat = destination?.latitude ?: updatedLoad.consigneeLat
+                        targetLong = destination?.longitude ?: updatedLoad.consigneeLong
+                        targetName = destination?.name ?: updatedLoad.consigneeName ?: "Consignee"
+                        isGeofenceActive = targetLat != null && targetLong != null
+                        if (expectedState == "ACTIVE_SHIPPER" || expectedState == "ACTIVE_STOP") {
+                            departureGraceTimeMs = now
+                        }
+                    }
+                    "ACTIVE_STOP", "ACTIVE_CONSIGNEE" -> {
+                        activeSegment = "Paused"
+                        isGeofenceActive = false
+                    }
+                }
+                activeTripState = updatedLoad.tripState
+                saveState(applicationContext)
+                withContext(Dispatchers.Main) {
+                    configureLocationUpdates()
+                    updateNotification()
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("TrackingService", "Unable to apply notification trip action", e)
+            }
+        }
     }
 
     private fun updateNotification() {
@@ -396,6 +496,46 @@ class TrackingService : Service() {
             .setContentIntent(pendingIntent)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
+            .apply {
+                val pro = activeProNumber
+                val expectedState = activeTripState
+                val action = expectedState?.let(TrackingNotificationAction::forTripState)
+                if (pro != null && expectedState != null && action != null) {
+                    val destinationName = targetName ?: "Consignee"
+                    val actionIntent = if (action == TrackingNotificationAction.OPEN_TO_COMPLETE) {
+                        PendingIntent.getActivity(
+                            this@TrackingService,
+                            pro.hashCode(),
+                            Intent(this@TrackingService, MainActivity::class.java),
+                            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+                        )
+                    } else {
+                        val serviceIntent = Intent(this@TrackingService, TrackingService::class.java).apply {
+                            this.action = ACTION_NOTIFICATION_TRIP_STEP
+                            data = Uri.parse("loadtracker://notification/${Uri.encode(pro)}/$expectedState")
+                            putExtra(EXTRA_NOTIFICATION_PRO, pro)
+                            putExtra(EXTRA_EXPECTED_TRIP_STATE, expectedState)
+                        }
+                        PendingIntent.getService(
+                            this@TrackingService,
+                            pro.hashCode() xor expectedState.hashCode(),
+                            serviceIntent,
+                            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+                        )
+                    }
+                    addAction(
+                        NotificationCompat.Action.Builder(
+                            R.mipmap.ic_launcher,
+                            if (action == TrackingNotificationAction.ARRIVE_DESTINATION) {
+                                getString(action.titleResource, destinationName)
+                            } else {
+                                getString(action.titleResource)
+                            },
+                            actionIntent
+                        ).build()
+                    )
+                }
+            }
             .build()
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -410,7 +550,7 @@ class TrackingService : Service() {
             val stateText = when (activeSegment) {
                 "Bounce" -> "ACTIVE_BOUNCE"
                 "Loaded" -> "ACTIVE_LOADED"
-                "Paused" -> "ACTIVE_SHIPPER"
+                "Paused" -> activeTripState ?: "ACTIVE_SHIPPER"
                 else -> "ACTIVE_BOUNCE"
             }
             val payload = WearableDataSyncManager.WearTripStatePayload(

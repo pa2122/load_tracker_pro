@@ -1211,6 +1211,7 @@ fun LoadEntryScreen(
                     if (editingLoad == null) {
                         TrackingService.resetTrackingState()
                         TrackingService.activeProNumber = proNum.trim()
+                        TrackingService.activeTripState = "ACTIVE_BOUNCE"
                         TrackingService.targetLat = sLat
                         TrackingService.targetLong = sLong
                         TrackingService.targetName = sName

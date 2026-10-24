@@ -63,4 +63,9 @@
     <string name="dock_detention_accruing">Detention %1$dh %2$dm</string>
     <string name="dock_call_dispatch">1.5 hrs: call detention dispatch</string>
     <string name="detention_copied">Copied detention statement to clipboard</string>
+    <string name="notification_arrive_shipper">Arrive at Shipper</string>
+    <string name="notification_depart_shipper">Depart Shipper</string>
+    <string name="notification_arrive_destination">Arrive at %1$s</string>
+    <string name="notification_depart_stop">Depart Stop</string>
+    <string name="notification_open_to_complete">Open to Complete</string>
 </resources>

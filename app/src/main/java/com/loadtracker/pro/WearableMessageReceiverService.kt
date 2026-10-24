@@ -24,21 +24,25 @@ class WearableMessageReceiverService : WearableListenerService() {
                         DatabaseBackupManager.createDailyBackupBeforeMutation(applicationContext)
                         dao.updateTripState(activePro, "ACTIVE_SHIPPER")
                         TrackingService.activeSegment = "Paused"
+                        TrackingService.activeTripState = "ACTIVE_SHIPPER"
                     }
                     WearableDataSyncManager.ACTION_DEPART_SHIPPER -> {
                         DatabaseBackupManager.createDailyBackupBeforeMutation(applicationContext)
                         dao.updateTripState(activePro, "ACTIVE_LOADED")
                         TrackingService.activeSegment = "Loaded"
+                        TrackingService.activeTripState = "ACTIVE_LOADED"
                     }
                     WearableDataSyncManager.ACTION_ARRIVE_CONSIGNEE -> {
                         DatabaseBackupManager.createDailyBackupBeforeMutation(applicationContext)
                         dao.updateTripState(activePro, "ACTIVE_CONSIGNEE")
                         TrackingService.activeSegment = "Paused"
+                        TrackingService.activeTripState = "ACTIVE_CONSIGNEE"
                     }
                     WearableDataSyncManager.ACTION_COMPLETE_LOAD -> {
                         DatabaseBackupManager.createDailyBackupBeforeMutation(applicationContext)
                         dao.updateTripState(activePro, "COMPLETED")
                         TrackingService.activeSegment = "Paused"
+                        TrackingService.activeTripState = "COMPLETED"
                         TrackingService.activeProNumber = null
                     }
                 }

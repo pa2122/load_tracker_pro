@@ -22,7 +22,7 @@ This file provides guidance for GitHub Copilot when working on the load_tracker_
 
 ### Branches & Versions
 - State the current branch before starting work and after any branch switch.
-- **Bug fixes go to both `v1.x` and `v2` by default; new features go to `v2` only.** If unclear, ask.
+- **Bug fixes and new features go to both `v1.x` and `v2` by default**, unless the user explicitly names a different version scope. If the target version is unclear or the change may not fit one version, ask which version(s).
 - Apply to the second branch via cherry-pick, resolve conflicts, rebuild, and test before pushing.
 - `v2` has code `v1.x` lacks (e.g., load model, backup manager). On conflicts, never copy v1.x-only calls; adapt to what the target branch actually has.
 - After branch-hopping, switch back to the branch the user named.
