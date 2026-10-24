@@ -77,4 +77,24 @@ class ScreenshotBatchParserTest {
         assertEquals("12 Main St, Dallas, TX", stop.address)
         assertEquals("42", stop.dispatchedLegMiles)
     }
+
+    @Test
+    fun importReadinessSkipsDuplicateRowsButAllowsValidRows() {
+        val readyLoad = ScreenshotBatchParser.parse(
+            fileName = "dispatch.png",
+            rawText = """
+                PRO Number: 12345678
+                Pickup Date: 10/05/2026
+                Gross Pay: $2,750.00
+                Bounce Miles: 150
+                Loaded Miles: 1,025
+            """.trimIndent(),
+            defaultPercentage = "31.0"
+        )
+
+        assertTrue(readyLoad.isReadyToImport(emptySet(), mapOf("12345678" to 1)))
+        assertFalse(readyLoad.isReadyToImport(setOf("12345678"), mapOf("12345678" to 1)))
+        assertFalse(readyLoad.isReadyToImport(emptySet(), mapOf("12345678" to 2)))
+        assertFalse(readyLoad.copy(grossPay = "").isReadyToImport(emptySet(), mapOf("12345678" to 1)))
+    }
 }

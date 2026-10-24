@@ -23,12 +23,18 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -38,6 +44,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -48,7 +55,9 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import dev.jeziellago.compose.markdowntext.MarkdownText
@@ -57,6 +66,7 @@ import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -80,6 +90,15 @@ fun DashboardScreen(
 ) {
     val activeTrip = pastLoads.find { it.tripState != "COMPLETED" }
     val ctx = LocalContext.current
+    var nowMs by remember { mutableStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(activeTrip?.tripState, activeTrip?.dockArrivalTime) {
+        if (activeTrip?.tripState == "ACTIVE_SHIPPER" || activeTrip?.tripState == "ACTIVE_CONSIGNEE") {
+            while (true) {
+                nowMs = System.currentTimeMillis()
+                delay(60_000L)
+            }
+        }
+    }
     val currentPayrollWeekStart = getPayrollWeekStartDate(System.currentTimeMillis())
     val completedLoads = pastLoads.asSequence()
         .filter { it.payrollWeekStartDate() == currentPayrollWeekStart }
@@ -99,6 +118,7 @@ fun DashboardScreen(
     var showUndoPromptDialog by remember { mutableStateOf(false) }
     var showMileageEditDialog by remember { mutableStateOf(false) }
     var mileageEditInput by remember { mutableStateOf("") }
+    var mileageEditError by remember { mutableStateOf<Int?>(null) }
 
     Scaffold { innerPadding ->
         Box(
@@ -236,34 +256,186 @@ fun DashboardScreen(
                                     .graphicsLayer(alpha = if (isAtHome) 0.6f else 1.0f),
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
-                                Text(
-                                    "⚠️ ACTIVE TRIP: PRO #${activeTrip.proNumber}",
-                                    style = MaterialTheme.typography.titleSmall,
-                                    color = MaterialTheme.colorScheme.onTertiaryContainer
-                                )
-                                Spacer(modifier = Modifier.height(4.dp))
-                                
-                                Text(label, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onTertiaryContainer)
-                                Spacer(modifier = Modifier.height(12.dp))
+                                var showCardMenu by remember { mutableStateOf(value = false) }
+                                val dock = remember(activeTrip.tripState, activeTrip.dockArrivalTime, activeTrip.pickupApptTimestamp, activeTrip.consigneeApptTimestamp, nowMs) {
+                                    when (activeTrip.tripState) {
+                                        "ACTIVE_SHIPPER" -> DockTimeCalculator.calculate(
+                                            arrivalTs = activeTrip.dockArrivalTime ?: nowMs,
+                                            apptTs = activeTrip.pickupApptTimestamp,
+                                            apptType = activeTrip.pickupApptType,
+                                            apptText = activeTrip.pickupApptText,
+                                            nowMs = nowMs
+                                        )
+                                        "ACTIVE_CONSIGNEE" -> DockTimeCalculator.calculate(
+                                            arrivalTs = activeTrip.dockArrivalTime ?: nowMs,
+                                            apptTs = activeTrip.consigneeApptTimestamp,
+                                            apptType = activeTrip.consigneeApptType,
+                                            apptText = activeTrip.consigneeApptText,
+                                            nowMs = nowMs
+                                        )
+                                        else -> null
+                                    }
+                                }
+                                val canUndo = activeTrip.tripState in setOf("ACTIVE_LOADED", "ACTIVE_SHIPPER", "ACTIVE_CONSIGNEE")
+                                val canAdjustMiles = activeTrip.tripState == "ACTIVE_SHIPPER" || activeTrip.tripState == "ACTIVE_CONSIGNEE"
+                                val hasCardMenu = canUndo || dock != null
+                                val clipboardManager = LocalClipboardManager.current
+
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceAround
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                        Text("Tracked Bounce", color = MaterialTheme.colorScheme.onTertiaryContainer)
-                                        Text(
-                                            "${String.format(Locale.US, "%.1f", displayBounceMiles)} mi (${String.format(Locale.US, "%.1f", bounceOorPct)}%)",
-                                            style = MaterialTheme.typography.titleMedium,
-                                            color = if (bounceOorPct > 0.0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
-                                        )
+                                    Text(
+                                        stringResource(
+                                            R.string.card_trip_header,
+                                            activeTrip.proNumber,
+                                            label.lines().first()
+                                        ),
+                                        modifier = Modifier.weight(1f),
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        style = MaterialTheme.typography.titleSmall,
+                                        color = MaterialTheme.colorScheme.onTertiaryContainer
+                                    )
+                                    if (hasCardMenu) {
+                                        Box {
+                                            IconButton(onClick = { showCardMenu = true }) {
+                                                Icon(
+                                                    Icons.Default.MoreVert,
+                                                    contentDescription = stringResource(R.string.card_more_actions),
+                                                    tint = MaterialTheme.colorScheme.onTertiaryContainer
+                                                )
+                                            }
+                                            DropdownMenu(
+                                                expanded = showCardMenu,
+                                                onDismissRequest = { showCardMenu = false }
+                                            ) {
+                                                if (dock != null) {
+                                                    DropdownMenuItem(
+                                                        text = { Text(stringResource(R.string.card_copy_detention)) },
+                                                        onClick = {
+                                                            showCardMenu = false
+                                                            val facility = if (activeTrip.tripState == "ACTIVE_SHIPPER") {
+                                                                activeTrip.shipperName ?: "Shipper Facility"
+                                                            } else {
+                                                                activeTrip.consigneeName ?: "Consignee Facility"
+                                                            }
+                                                            clipboardManager.setText(
+                                                                AnnotatedString(
+                                                                    DockTimeCalculator.detentionStatement(activeTrip.proNumber, facility, dock)
+                                                                )
+                                                            )
+                                                            Toast.makeText(ctx, ctx.getString(R.string.detention_copied), Toast.LENGTH_SHORT).show()
+                                                        }
+                                                    )
+                                                }
+                                                if (canUndo) {
+                                                    DropdownMenuItem(
+                                                        text = { Text(stringResource(R.string.card_undo_step)) },
+                                                        onClick = {
+                                                            showCardMenu = false
+                                                            when (activeTrip.tripState) {
+                                                                "ACTIVE_LOADED", "ACTIVE_CONSIGNEE" -> {
+                                                                    TrackingService.activeSegment = "Paused"
+                                                                    TrackingService.targetLat = activeTrip.shipperLat
+                                                                    TrackingService.targetLong = activeTrip.shipperLong
+                                                                    TrackingService.targetName = activeTrip.shipperName ?: "Shipper"
+                                                                    TrackingService.isGeofenceActive = false
+                                                                    onUpdateTripClick(activeTrip.copy(tripState = "ACTIVE_SHIPPER", dockArrivalTime = null))
+                                                                    showUndoPromptDialog = true
+                                                                }
+                                                                "ACTIVE_SHIPPER" -> {
+                                                                    TrackingService.activeSegment = "Bounce"
+                                                                    TrackingService.targetLat = activeTrip.shipperLat
+                                                                    TrackingService.targetLong = activeTrip.shipperLong
+                                                                    TrackingService.targetName = activeTrip.shipperName ?: "Shipper"
+                                                                    TrackingService.isGeofenceActive = true
+                                                                    onUpdateTripClick(activeTrip.copy(tripState = "ACTIVE_BOUNCE", dockArrivalTime = null))
+                                                                    showUndoPromptDialog = true
+                                                                }
+                                                            }
+                                                        }
+                                                    )
+                                                }
+                                            }
+                                        }
                                     }
-                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                        Text("Tracked Loaded", color = MaterialTheme.colorScheme.onTertiaryContainer)
-                                        Text(
-                                            "${String.format(Locale.US, "%.1f", displayLoadedMiles)} mi (${String.format(Locale.US, "%.1f", loadedOorPct)}%)",
-                                            style = MaterialTheme.typography.titleMedium,
-                                            color = if (loadedOorPct > 0.0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
-                                        )
+                                }
+                                if (dock != null) {
+                                    DockTimeSummary(dock)
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                }
+                                if (activeTrip.tripState == "ACTIVE_SHIPPER") {
+                                    Button(
+                                        onClick = {
+                                            TrackingService.activeSegment = "Loaded"
+                                            val destination = activeTrip.nextLoadedDestination()
+                                            TrackingService.targetLat = destination?.latitude ?: activeTrip.consigneeLat
+                                            TrackingService.targetLong = destination?.longitude ?: activeTrip.consigneeLong
+                                            TrackingService.targetName =
+                                                destination?.name ?: activeTrip.consigneeName ?: "Consignee"
+                                            TrackingService.isGeofenceActive = TrackingService.targetLat != null
+                                            TrackingService.departureGraceTimeMs = System.currentTimeMillis()
+                                            onUpdateTripClick(activeTrip.copy(tripState = "ACTIVE_LOADED", dockArrivalTime = null))
+                                        },
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text(stringResource(R.string.card_depart_shipper_loaded))
+                                    }
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                }
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        stringResource(
+                                            R.string.card_miles_summary,
+                                            if (displayBounceMiles > 0.0 && bounceOorPct > 0.0) {
+                                                stringResource(
+                                                    R.string.card_miles_value_oor,
+                                                    String.format(Locale.US, "%.1f", displayBounceMiles),
+                                                    String.format(Locale.US, "%.1f", bounceOorPct)
+                                                )
+                                            } else {
+                                                stringResource(
+                                                    R.string.card_miles_value,
+                                                    String.format(Locale.US, "%.1f", displayBounceMiles)
+                                                )
+                                            },
+                                            if (displayLoadedMiles > 0.0 && loadedOorPct > 0.0) {
+                                                stringResource(
+                                                    R.string.card_miles_value_oor,
+                                                    String.format(Locale.US, "%.1f", displayLoadedMiles),
+                                                    String.format(Locale.US, "%.1f", loadedOorPct)
+                                                )
+                                            } else {
+                                                stringResource(
+                                                    R.string.card_miles_value,
+                                                    String.format(Locale.US, "%.1f", displayLoadedMiles)
+                                                )
+                                            }
+                                        ),
+                                        modifier = Modifier.weight(1f),
+                                        style = MaterialTheme.typography.titleSmall,
+                                        color = if ((displayBounceMiles > 0.0 && bounceOorPct > 0.0) ||
+                                            (displayLoadedMiles > 0.0 && loadedOorPct > 0.0)
+                                        ) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onTertiaryContainer
+                                    )
+                                    if (canAdjustMiles) {
+                                        TextButton(
+                                            onClick = {
+                                                val isBounce = activeTrip.tripState == "ACTIVE_SHIPPER"
+                                                val live = if (isBounce) liveBounceMiles else liveLoadedMiles
+                                                val saved = if (isBounce) activeTrip.bounceMilesEnd else activeTrip.loadedMilesEnd
+                                                mileageEditInput = String.format(Locale.US, "%.1f", if (live > 0) live else saved)
+                                                mileageEditError = null
+                                                showMileageEditDialog = true
+                                            }
+                                        ) {
+                                            Text(stringResource(R.string.card_edit_miles))
+                                        }
                                     }
                                 }
                                 if (activeTrip.tripState.startsWith("ACTIVE_LOADED") ||
@@ -309,8 +481,9 @@ fun DashboardScreen(
                                         )
                                     }
                                 }
-                                Spacer(modifier = Modifier.height(16.dp))
-                                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.2f))
+                                Spacer(modifier = Modifier.height(8.dp))
+                                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp), color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.2f))
+                                Spacer(modifier = Modifier.height(4.dp))
 
                                 val (targetLat, targetLong, targetName) = when (activeTrip.tripState) {
                                     "ACTIVE_BOUNCE", "ACTIVE_SHIPPER" ->
@@ -324,7 +497,8 @@ fun DashboardScreen(
                                     )
                                 }
 
-                                if (targetLat != null && targetLong != null) {
+                                val hasArrived = activeTrip.tripState in setOf("ACTIVE_SHIPPER", "ACTIVE_STOP", "ACTIVE_CONSIGNEE")
+                                if (targetLat != null && targetLong != null && !hasArrived) {
                                     val context = LocalContext.current
                                     Button(
                                         onClick = { launchNavigationIntent(context, targetLat, targetLong, targetName) },
@@ -334,14 +508,14 @@ fun DashboardScreen(
                                         ),
                                         modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
                                     ) {
-                                        Text("🧭 Launch Navigation ($targetName)")
+                                        Text(stringResource(R.string.card_navigate_to, targetName.lines().first()))
                                     }
                                 }
 
                                 val phoneMatchResult = extractPhoneNumber(activeTrip.tripNotes ?: "")
                                 if (phoneMatchResult != null) {
                                     val (dialableNumber, displayString) = phoneMatchResult
-                                    Button(
+                                    OutlinedButton(
                                         onClick = {
                                             val dialIntent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:$dialableNumber"))
                                             try {
@@ -350,48 +524,9 @@ fun DashboardScreen(
                                                 Toast.makeText(ctx, "No dialer app found.", Toast.LENGTH_SHORT).show()
                                             }
                                         },
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = MaterialTheme.colorScheme.primary,
-                                            contentColor = MaterialTheme.colorScheme.onPrimary
-                                        ),
                                         modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
                                     ) {
-                                        Text("📞 Call Shipping Office: $displayString")
-                                    }
-                                }
-
-                                if (activeTrip.tripState in setOf(
-                                        "ACTIVE_LOADED",
-                                        "ACTIVE_SHIPPER",
-                                        "ACTIVE_CONSIGNEE"
-                                    )
-                                ) {
-                                    OutlinedButton(
-                                        onClick = {
-                                            when (activeTrip.tripState) {
-                                                "ACTIVE_LOADED", "ACTIVE_CONSIGNEE" -> {
-                                                    TrackingService.activeSegment = "Paused"
-                                                    TrackingService.targetLat = activeTrip.shipperLat
-                                                    TrackingService.targetLong = activeTrip.shipperLong
-                                                    TrackingService.targetName = activeTrip.shipperName ?: "Shipper"
-                                                    TrackingService.isGeofenceActive = false
-                                                    onUpdateTripClick(activeTrip.copy(tripState = "ACTIVE_SHIPPER", dockArrivalTime = null))
-                                                    showUndoPromptDialog = true
-                                                }
-                                                "ACTIVE_SHIPPER" -> {
-                                                    TrackingService.activeSegment = "Bounce"
-                                                    TrackingService.targetLat = activeTrip.shipperLat
-                                                    TrackingService.targetLong = activeTrip.shipperLong
-                                                    TrackingService.targetName = activeTrip.shipperName ?: "Shipper"
-                                                    TrackingService.isGeofenceActive = true
-                                                    onUpdateTripClick(activeTrip.copy(tripState = "ACTIVE_BOUNCE", dockArrivalTime = null))
-                                                    showUndoPromptDialog = true
-                                                }
-                                            }
-                                        },
-                                        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
-                                    ) {
-                                        Text("↩️ Undo Step (Go Back)")
+                                        Text(stringResource(R.string.card_call_shipping_office, displayString))
                                     }
                                 }
 
@@ -428,131 +563,6 @@ fun DashboardScreen(
                                             },
                                             modifier = Modifier.fillMaxWidth()
                                         ) { Text("Arrive at Shipper") }
-                                    }
-
-                                    "ACTIVE_SHIPPER" -> {
-                                        val arrivalTs = activeTrip.dockArrivalTime ?: System.currentTimeMillis()
-                                        val apptTs = activeTrip.pickupApptTimestamp
-                                        val apptType = activeTrip.pickupApptType
-                                        val apptText = activeTrip.pickupApptText
-
-                                        val isBeforeWindow = apptType?.contains("before", ignoreCase = true) == true || apptType?.contains("fcfs", ignoreCase = true) == true || apptType?.equals("B", ignoreCase = true) == true
-                                        val clockStartTs = if (isBeforeWindow || apptTs == null) {
-                                            arrivalTs
-                                        } else {
-                                            if (arrivalTs < apptTs) apptTs else arrivalTs
-                                        }
-
-                                        val now = System.currentTimeMillis()
-                                        val totalDockMins = maxOf(0L, (now - arrivalTs) / 60000L)
-                                        val clockMins = maxOf(0L, (now - clockStartTs) / 60000L)
-
-                                        val totalDockStr = "${totalDockMins / 60}h ${totalDockMins % 60}m"
-                                        val is1Point5HrAlert = clockMins >= 90L
-                                        val billableMins = maxOf(0L, clockMins - 120L)
-                                        val timeFormatter = DateTimeFormatter.ofPattern("h:mm a", Locale.US)
-                                        val arrivalTimeStr = Instant.ofEpochMilli(arrivalTs).atZone(ZoneId.systemDefault()).format(timeFormatter)
-
-                                        Surface(
-                                            color = MaterialTheme.colorScheme.surfaceVariant,
-                                            shape = RoundedCornerShape(8.dp),
-                                            modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
-                                        ) {
-                                            Column(
-                                                modifier = Modifier.padding(12.dp),
-                                                verticalArrangement = Arrangement.spacedBy(4.dp)
-                                            ) {
-                                                Row(
-                                                    modifier = Modifier.fillMaxWidth(),
-                                                    horizontalArrangement = Arrangement.SpaceBetween
-                                                ) {
-                                                    Text("⏱️ Facility Dock Time:", style = MaterialTheme.typography.titleSmall)
-                                                    Text(totalDockStr, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                                                }
-
-                                                Text(
-                                                    "Dock Check-In: $arrivalTimeStr${if (isBeforeWindow) " (BEFORE / FCFS Window)" else ""}",
-                                                    style = MaterialTheme.typography.bodySmall,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                                )
-
-                                                if (!apptText.isNullOrBlank()) {
-                                                    Text("Appt Schedule: $apptText", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
-                                                }
-
-                                                if (is1Point5HrAlert && billableMins == 0L) {
-                                                    Text(
-                                                        "⚠️ 1.5 Hours Elapsed: Contact Detention Dispatch!",
-                                                        style = MaterialTheme.typography.labelMedium,
-                                                        color = MaterialTheme.colorScheme.error,
-                                                        fontWeight = FontWeight.Bold
-                                                    )
-                                                } else if (billableMins > 0L) {
-                                                    val detHrs = billableMins / 60
-                                                    val detMins = billableMins % 60
-                                                    Text(
-                                                        "🚨 Detention Accruing: ${detHrs}h ${detMins}m",
-                                                        style = MaterialTheme.typography.labelMedium,
-                                                        color = MaterialTheme.colorScheme.error,
-                                                        fontWeight = FontWeight.Bold
-                                                    )
-                                                } else {
-                                                    val remainingFree = 120L - clockMins
-                                                    Text(
-                                                        "Free Time: ${remainingFree}m remaining",
-                                                        style = MaterialTheme.typography.bodySmall,
-                                                        color = MaterialTheme.colorScheme.primary
-                                                    )
-                                                }
-
-                                                val clipboardManager = LocalClipboardManager.current
-                                                OutlinedButton(
-                                                    onClick = {
-                                                        val facility = activeTrip.shipperName ?: "Shipper Facility"
-                                                        val detHrs = billableMins / 60
-                                                        val detMins = billableMins % 60
-                                                        val statement = """
-                                                            🚨 DETENTION NOTICE - PRO #${activeTrip.proNumber}
-                                                            Facility: $facility
-                                                            Arrival Time: $arrivalTimeStr
-                                                            Appt Schedule: ${apptText ?: if (isBeforeWindow) "BEFORE / FCFS Window" else "Not Specified"}
-                                                            Total Dock Time: $totalDockStr
-                                                            Billable Detention Accrued: ${detHrs}h ${detMins}m
-                                                        """.trimIndent()
-                                                        clipboardManager.setText(AnnotatedString(statement))
-                                                        Toast.makeText(ctx, "Copied Detention Statement to Clipboard!", Toast.LENGTH_SHORT).show()
-                                                    },
-                                                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
-                                                ) {
-                                                    Text("📋 Copy Detention Statement for Dispatch")
-                                                }
-                                            }
-                                        }
-
-                                        OutlinedButton(
-                                            onClick = {
-                                                mileageEditInput = String.format(Locale.US, "%.1f", if (liveBounceMiles > 0) liveBounceMiles else activeTrip.bounceMilesEnd)
-                                                showMileageEditDialog = true
-                                            },
-                                            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
-                                        ) {
-                                            Text("✏️ Adjust Bounce Miles")
-                                        }
-
-                                        Button(
-                                            onClick = {
-                                                TrackingService.activeSegment = "Loaded"
-                                                val destination = activeTrip.nextLoadedDestination()
-                                                TrackingService.targetLat = destination?.latitude ?: activeTrip.consigneeLat
-                                                TrackingService.targetLong = destination?.longitude ?: activeTrip.consigneeLong
-                                                TrackingService.targetName =
-                                                    destination?.name ?: activeTrip.consigneeName ?: "Consignee"
-                                                TrackingService.isGeofenceActive = TrackingService.targetLat != null
-                                                TrackingService.departureGraceTimeMs = System.currentTimeMillis()
-                                                onUpdateTripClick(activeTrip.copy(tripState = "ACTIVE_LOADED", dockArrivalTime = null))
-                                            },
-                                            modifier = Modifier.fillMaxWidth()
-                                        ) { Text("Depart Shipper (Loaded)") }
                                     }
 
                                     "ACTIVE_STOP" -> {
@@ -593,118 +603,6 @@ fun DashboardScreen(
                                     }
 
                                     "ACTIVE_LOADED", "ACTIVE_CONSIGNEE" -> {
-                                        if (activeTrip.tripState == "ACTIVE_CONSIGNEE") {
-                                            val arrivalTs = activeTrip.dockArrivalTime ?: System.currentTimeMillis()
-                                            val apptTs = activeTrip.consigneeApptTimestamp
-                                            val apptType = activeTrip.consigneeApptType
-                                            val apptText = activeTrip.consigneeApptText
-
-                                            val isBeforeWindow = apptType?.contains("before", ignoreCase = true) == true || apptType?.contains("fcfs", ignoreCase = true) == true || apptType?.equals("B", ignoreCase = true) == true
-                                            val clockStartTs = if (isBeforeWindow || apptTs == null) {
-                                                arrivalTs
-                                            } else {
-                                                if (arrivalTs < apptTs) apptTs else arrivalTs
-                                            }
-
-                                            val now = System.currentTimeMillis()
-                                            val totalDockMins = maxOf(0L, (now - arrivalTs) / 60000L)
-                                            val clockMins = maxOf(0L, (now - clockStartTs) / 60000L)
-
-                                            val totalDockStr = "${totalDockMins / 60}h ${totalDockMins % 60}m"
-                                            val is1Point5HrAlert = clockMins >= 90L
-                                            val billableMins = maxOf(0L, clockMins - 120L)
-                                            val timeFormatter = DateTimeFormatter.ofPattern("h:mm a", Locale.US)
-                                            val arrivalTimeStr = Instant.ofEpochMilli(arrivalTs).atZone(ZoneId.systemDefault()).format(timeFormatter)
-
-                                            Surface(
-                                                color = MaterialTheme.colorScheme.surfaceVariant,
-                                                shape = RoundedCornerShape(8.dp),
-                                                modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
-                                            ) {
-                                                Column(
-                                                    modifier = Modifier.padding(12.dp),
-                                                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                                                ) {
-                                                    Row(
-                                                        modifier = Modifier.fillMaxWidth(),
-                                                        horizontalArrangement = Arrangement.SpaceBetween
-                                                    ) {
-                                                        Text("⏱️ Facility Dock Time:", style = MaterialTheme.typography.titleSmall)
-                                                        Text(totalDockStr, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                                                    }
-
-                                                    Text(
-                                                        "Dock Check-In: $arrivalTimeStr${if (isBeforeWindow) " (BEFORE / FCFS Window)" else ""}",
-                                                        style = MaterialTheme.typography.bodySmall,
-                                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                                    )
-
-                                                    if (!apptText.isNullOrBlank()) {
-                                                        Text("Appt Schedule: $apptText", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
-                                                    }
-
-                                                    if (is1Point5HrAlert && billableMins == 0L) {
-                                                        Text(
-                                                            "⚠️ 1.5 Hours Elapsed: Contact Detention Dispatch!",
-                                                            style = MaterialTheme.typography.labelMedium,
-                                                            color = MaterialTheme.colorScheme.error,
-                                                            fontWeight = FontWeight.Bold
-                                                        )
-                                                    } else if (billableMins > 0L) {
-                                                        val detHrs = billableMins / 60
-                                                        val detMins = billableMins % 60
-                                                        Text(
-                                                            "🚨 Detention Accruing: ${detHrs}h ${detMins}m",
-                                                            style = MaterialTheme.typography.labelMedium,
-                                                            color = MaterialTheme.colorScheme.error,
-                                                            fontWeight = FontWeight.Bold
-                                                        )
-                                                    } else {
-                                                        val remainingFree = 120L - clockMins
-                                                        Text(
-                                                            "Free Time: ${remainingFree}m remaining",
-                                                            style = MaterialTheme.typography.bodySmall,
-                                                            color = MaterialTheme.colorScheme.primary
-                                                        )
-                                                    }
-
-                                                    val clipboardManager = LocalClipboardManager.current
-                                                    OutlinedButton(
-                                                        onClick = {
-                                                            val facility = activeTrip.consigneeName ?: "Consignee Facility"
-                                                            val detHrs = billableMins / 60
-                                                            val detMins = billableMins % 60
-                                                            val statement = """
-                                                                🚨 DETENTION NOTICE - PRO #${activeTrip.proNumber}
-                                                                Facility: $facility
-                                                                Arrival Time: $arrivalTimeStr
-                                                                Appt Schedule: ${apptText ?: if (isBeforeWindow) "BEFORE / FCFS Window" else "Not Specified"}
-                                                                Total Dock Time: $totalDockStr
-                                                                Billable Detention Accrued: ${detHrs}h ${detMins}m
-                                                            """.trimIndent()
-                                                            clipboardManager.setText(AnnotatedString(statement))
-                                                            Toast.makeText(ctx, "Copied Detention Statement to Clipboard!", Toast.LENGTH_SHORT).show()
-                                                        },
-                                                        modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
-                                                    ) {
-                                                        Text("📋 Copy Detention Statement for Dispatch")
-                                                    }
-                                                }
-                                            }
-                                        }
-
-                                        if (activeTrip.tripState == "ACTIVE_CONSIGNEE") {
-                                            OutlinedButton(
-                                                onClick = {
-                                                    mileageEditInput = String.format(Locale.US, "%.1f", if (liveLoadedMiles > 0) liveLoadedMiles else activeTrip.loadedMilesEnd)
-                                                    showMileageEditDialog = true
-                                                },
-                                                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
-                                            ) {
-                                                Text("✏️ Adjust Loaded Miles")
-                                            }
-                                        }
-
                                         Button(
                                             onClick = {
                                                 if (activeTrip.tripState == "ACTIVE_LOADED") {
@@ -1743,6 +1641,7 @@ fun DashboardScreen(
                 Button(onClick = {
                     showUndoPromptDialog = false
                     mileageEditInput = ""
+                    mileageEditError = null
                     showMileageEditDialog = true
                 }) { Text("Yes, Adjust Miles") }
             },
@@ -1753,40 +1652,74 @@ fun DashboardScreen(
     }
 
     if (showMileageEditDialog) {
+        val isBounceMileage = activeTrip?.tripState == "ACTIVE_SHIPPER" ||
+                activeTrip?.tripState == "ACTIVE_BOUNCE"
         var correctedMilesStr by remember { mutableStateOf(mileageEditInput) }
         AlertDialog(
-            onDismissRequest = { showMileageEditDialog = false },
-            title = { Text("✏️ Correct Leg Mileage") },
+            onDismissRequest = {
+                showMileageEditDialog = false
+                mileageEditError = null
+            },
+            title = {
+                Text(
+                    stringResource(
+                        if (isBounceMileage) R.string.mileage_edit_bounce_title
+                        else R.string.mileage_edit_loaded_title
+                    )
+                )
+            },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Enter the correct total miles for this leg:")
+                    Text(
+                        stringResource(
+                            if (isBounceMileage) R.string.mileage_edit_bounce_description
+                            else R.string.mileage_edit_loaded_description
+                        )
+                    )
                     OutlinedTextField(
                         value = correctedMilesStr,
-                        onValueChange = { correctedMilesStr = it },
-                        label = { Text("Corrected Miles") },
+                        onValueChange = {
+                            correctedMilesStr = it
+                            mileageEditError = null
+                        },
+                        label = { Text(stringResource(R.string.mileage_edit_field_label)) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        isError = mileageEditError != null,
+                        supportingText = mileageEditError?.let { error ->
+                            { Text(stringResource(error)) }
+                        }
                     )
                 }
             },
             confirmButton = {
                 Button(onClick = {
-                    val newMiles = correctedMilesStr.toDoubleOrNull()
-                    if (newMiles != null && activeTrip != null) {
-                        if (activeTrip.tripState == "ACTIVE_SHIPPER" || activeTrip.tripState == "ACTIVE_BOUNCE") {
+                    val newMiles = correctedMilesStr.trim().toDoubleOrNull()
+                    if (newMiles == null || !newMiles.isFinite() || newMiles < 0.0) {
+                        mileageEditError = R.string.mileage_edit_invalid_error
+                    } else if (activeTrip == null) {
+                        mileageEditError = R.string.mileage_edit_no_active_load_error
+                    } else {
+                        if (isBounceMileage) {
                             TrackingService.totalBounceMilesTracked.value = newMiles
                             onUpdateTripClick(activeTrip.copy(bounceMilesEnd = newMiles))
                         } else {
                             TrackingService.totalLoadedMilesTracked.value = newMiles
                             onUpdateTripClick(activeTrip.copy(loadedMilesEnd = newMiles))
                         }
+                        mileageEditError = null
+                        showMileageEditDialog = false
                     }
-                    showMileageEditDialog = false
-                }) { Text("Save Corrected Miles") }
+                }) { Text(stringResource(R.string.mileage_edit_save)) }
             },
             dismissButton = {
-                TextButton(onClick = { showMileageEditDialog = false }) { Text("Cancel") }
+                TextButton(onClick = {
+                    showMileageEditDialog = false
+                    mileageEditError = null
+                }) {
+                    Text(stringResource(R.string.mileage_edit_cancel))
+                }
             }
         )
     }

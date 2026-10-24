@@ -668,7 +668,7 @@ class MainActivity : ComponentActivity() {
 
                                     if (isDeveloperAuthorized) {
                                         NavigationDrawerItem(
-                                            label = { Text("📥 One-time Screenshot Load Import") },
+                                            label = { Text("📥 Screenshot Load Import") },
                                             selected = currentScreen == "batch_import",
                                             onClick = {
                                                 scope.launch { drawerState.close() }

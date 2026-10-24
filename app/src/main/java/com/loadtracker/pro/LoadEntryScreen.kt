@@ -57,6 +57,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -1225,7 +1226,15 @@ fun LoadEntryScreen(
             enabled = isFormValid,
             modifier = Modifier.fillMaxWidth().height(height = 50.dp)
         ) {
-            Text(if (isManualEntry) "Save Record" else "Start Journey")
+            Text(
+                stringResource(
+                    when {
+                        editingLoad != null -> R.string.load_entry_save_changes
+                        isManualEntry -> R.string.load_entry_save_record
+                        else -> R.string.load_entry_start_journey
+                    }
+                )
+            )
         }
 
         TextButton(
@@ -1235,7 +1244,12 @@ fun LoadEntryScreen(
                 contentColor = MaterialTheme.colorScheme.primary
             )
         ) {
-            Text("Cancel Load Entry")
+            Text(
+                stringResource(
+                    if (editingLoad != null) R.string.load_entry_back_without_saving
+                    else R.string.load_entry_cancel
+                )
+            )
         }
 
         Spacer(modifier = Modifier.height(32.dp))

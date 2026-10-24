@@ -6,6 +6,7 @@ import android.provider.DocumentsContract
 import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -34,6 +35,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
@@ -50,8 +52,7 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-private const val BATCH_IMPORT_PREFS = "dev_prefs"
-private const val BATCH_IMPORT_COMPLETED_KEY = "historical_batch_import_completed"
+private const val EXTERNAL_STORAGE_DOCUMENTS_AUTHORITY = "com.android.externalstorage.documents"
 
 internal data class BatchScreenshot(
     val fileName: String,
@@ -72,6 +73,34 @@ internal data class BatchScreenshot(
     val extraStopCount: String = "0"
 )
 
+internal fun BatchScreenshot.hasDuplicateProNumber(
+    existingProNumbers: Set<String>,
+    batchProNumberCounts: Map<String, Int>
+): Boolean {
+    val normalizedProNumber = proNumber.trim()
+    return normalizedProNumber.isNotBlank() &&
+            (normalizedProNumber in existingProNumbers || batchProNumberCounts[normalizedProNumber] != 1)
+}
+
+internal fun BatchScreenshot.isReadyToImport(
+    existingProNumbers: Set<String>,
+    batchProNumberCounts: Map<String, Int>
+): Boolean {
+    fun String.isNonNegativeFiniteNumber() =
+        toDoubleOrNull()?.let { it.isFinite() && it >= 0.0 } == true
+
+    return proNumber.isNotBlank() &&
+            pickupDate.toLocalDateOrNull() != null &&
+            (deliveryDate.isBlank() || deliveryDate.toLocalDateOrNull() != null) &&
+            grossPay.isNonNegativeFiniteNumber() &&
+            bounceMiles.isNonNegativeFiniteNumber() &&
+            loadedMiles.isNonNegativeFiniteNumber() &&
+            percentageRate.isNonNegativeFiniteNumber() &&
+            (extraStopCount.isBlank() || extraStopCount.toIntOrNull()?.let { it >= 0 } == true) &&
+            (!isPreTarped || tarpType != "None") &&
+            !hasDuplicateProNumber(existingProNumbers, batchProNumberCounts)
+}
+
 private data class ImageDocument(val uri: Uri, val name: String, val mimeType: String)
 
 @Composable
@@ -88,11 +117,12 @@ fun ScreenshotBatchImportScreen(
     var errorText by remember { mutableStateOf("") }
     var showImportConfirmation by remember { mutableStateOf(false) }
     var isImporting by remember { mutableStateOf(false) }
-    var expandedOcrFiles by remember { mutableStateOf(emptySet<String>()) }
-    var importFinished by remember {
-        mutableStateOf(
-            context.getSharedPreferences(BATCH_IMPORT_PREFS, Context.MODE_PRIVATE)
-                .getBoolean(BATCH_IMPORT_COMPLETED_KEY, false)
+    var expandedDrafts by remember { mutableStateOf(emptySet<Int>()) }
+    var expandedOcrDrafts by remember { mutableStateOf(emptySet<Int>()) }
+    val initialFolderUri = remember {
+        DocumentsContract.buildTreeDocumentUri(
+            EXTERNAL_STORAGE_DOCUMENTS_AUTHORITY,
+            "primary:Documents/LTP_Batch_Upload"
         )
     }
 
@@ -103,6 +133,8 @@ fun ScreenshotBatchImportScreen(
             isScanning = true
             errorText = ""
             drafts.clear()
+            expandedDrafts = emptySet()
+            expandedOcrDrafts = emptySet()
             scope.launch {
                 try {
                     val results = withContext(Dispatchers.IO) {
@@ -112,8 +144,14 @@ fun ScreenshotBatchImportScreen(
                     if (results.isEmpty()) {
                         errorText = "No image files were found in the selected folder."
                     } else {
-                        val problemCount = results.count { it.error != null }
-                        scanStatus = "Scanned ${results.size} image(s). $problemCount need attention."
+                        val counts = results.groupingBy { it.proNumber.trim() }.eachCount()
+                        val existing = existingProNumbers.mapTo(mutableSetOf()) { it.trim() }
+                        val problemCount = results.count { !it.isReadyToImport(existing, counts) }
+                        scanStatus = context.getString(
+                            R.string.batch_import_scan_status,
+                            results.size,
+                            problemCount
+                        )
                     }
                 } catch (e: Exception) {
                     errorText = "Could not read the selected folder: ${e.localizedMessage ?: e.javaClass.simpleName}"
@@ -124,21 +162,15 @@ fun ScreenshotBatchImportScreen(
         }
     }
 
-    val proNumberCounts = drafts.groupingBy { it.proNumber.trim() }.eachCount()
-    val importable = drafts.filter { draft ->
-        draft.proNumber.isNotBlank() &&
-                draft.pickupDate.toLocalDateOrNull() != null &&
-                (draft.deliveryDate.isBlank() || draft.deliveryDate.toLocalDateOrNull() != null) &&
-                draft.grossPay.toDoubleOrNull() != null &&
-                draft.bounceMiles.toDoubleOrNull() != null &&
-                draft.loadedMiles.toDoubleOrNull() != null &&
-                draft.percentageRate.toDoubleOrNull() != null &&
-                (draft.extraStopCount.isBlank() ||
-                        draft.extraStopCount.toIntOrNull()?.let { it >= 0 } == true) &&
-                (!draft.isPreTarped || draft.tarpType != "None") &&
-                draft.proNumber !in existingProNumbers &&
-                proNumberCounts[draft.proNumber.trim()] == 1
+    val existingProNumbersTrimmed = remember(existingProNumbers) {
+        existingProNumbers.mapTo(mutableSetOf()) { it.trim() }
     }
+    val proNumberCounts = drafts.groupingBy { it.proNumber.trim() }.eachCount()
+    val importable = drafts.filter {
+        it.isReadyToImport(existingProNumbersTrimmed, proNumberCounts)
+    }
+    val duplicateCount = drafts.count { it.hasDuplicateProNumber(existingProNumbersTrimmed, proNumberCounts) }
+    val needsReviewCount = drafts.size - importable.size - duplicateCount
 
     Column(
         modifier = Modifier
@@ -147,31 +179,28 @@ fun ScreenshotBatchImportScreen(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Text("One-time Screenshot Load Import", style = MaterialTheme.typography.headlineSmall)
+        Text(stringResource(R.string.batch_import_title), style = MaterialTheme.typography.headlineSmall)
         Text(
-            "Choose the LTP_Batch_Upload folder. OCR results are staged for review; nothing is saved until you confirm. Imported loads are marked completed. Screenshots are not changed or deleted.",
+            stringResource(R.string.batch_import_description),
             style = MaterialTheme.typography.bodyMedium
         )
         Text(
-            "For historical mileage, the imported actual miles initially match the dispatched miles. Correct the records afterward if your odometer totals differ.",
+            stringResource(R.string.batch_import_actual_mileage_note),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.secondary
+        )
+        Text(
+            stringResource(R.string.batch_import_stopoff_note),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.secondary
         )
 
-        if (importFinished) {
-            Text(
-                "This one-time batch import has already completed on this installation.",
-                color = MaterialTheme.colorScheme.primary,
-                fontWeight = FontWeight.Bold
-            )
-        } else {
-            Button(
-                onClick = { folderPicker.launch(null) },
-                enabled = !isScanning && !isImporting,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text("Select LTP_Batch_Upload Folder")
-            }
+        Button(
+            onClick = { folderPicker.launch(initialFolderUri) },
+            enabled = !isScanning && !isImporting,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(stringResource(R.string.batch_import_folder_link))
         }
 
         if (isScanning || isImporting) {
@@ -185,30 +214,167 @@ fun ScreenshotBatchImportScreen(
         if (errorText.isNotBlank()) Text(errorText, color = MaterialTheme.colorScheme.error)
 
         drafts.forEachIndexed { index, draft ->
-            val duplicate = draft.proNumber.trim().let { pro ->
-                pro.isNotBlank() && (pro in existingProNumbers || proNumberCounts[pro] != 1)
+            val duplicate = draft.hasDuplicateProNumber(existingProNumbersTrimmed, proNumberCounts)
+            val ready = draft.isReadyToImport(existingProNumbersTrimmed, proNumberCounts)
+            val expanded = index in expandedDrafts
+            val facilitySummary = listOf(draft.shipperName, draft.consigneeName)
+                .map { it.trim() }
+                .filter { it.isNotBlank() }
+                .joinToString(" → ")
+                .ifBlank { stringResource(R.string.batch_import_facilities_missing) }
+            val pickupDate = draft.pickupDate.ifBlank {
+                stringResource(R.string.batch_import_pickup_missing)
             }
+            val payAmount = draft.grossPay.toDoubleOrNull()?.let {
+                String.format(Locale.US, "%.2f", it)
+            } ?: stringResource(R.string.batch_import_pay_missing)
             Surface(
                 color = MaterialTheme.colorScheme.surfaceVariant,
                 shape = MaterialTheme.shapes.medium
             ) {
                 Column(
-                    modifier = Modifier.padding(12.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            expandedDrafts = if (expanded) expandedDrafts - index else expandedDrafts + index
+                        }
+                        .padding(12.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Text(draft.fileName, fontWeight = FontWeight.Bold)
-                    TextButton(
-                        onClick = {
-                            expandedOcrFiles = if (draft.fileName in expandedOcrFiles) {
-                                expandedOcrFiles - draft.fileName
-                            } else {
-                                expandedOcrFiles + draft.fileName
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            draft.proNumber.trim().takeIf { it.isNotBlank() }?.let {
+                                stringResource(R.string.batch_import_pro_number, it)
+                            }
+                                ?: draft.fileName,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Text(
+                            stringResource(
+                                when {
+                                    duplicate -> R.string.batch_import_status_duplicate
+                                    ready -> R.string.batch_import_status_ready
+                                    else -> R.string.batch_import_status_needs_review
+                                }
+                            ),
+                            color = when {
+                                duplicate || !ready -> MaterialTheme.colorScheme.error
+                                else -> MaterialTheme.colorScheme.primary
+                            },
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Text(
+                            stringResource(
+                                if (expanded) R.string.batch_import_hide_details
+                                else R.string.batch_import_review_details
+                            ),
+                            modifier = Modifier.padding(start = 8.dp),
+                            color = MaterialTheme.colorScheme.primary,
+                            style = MaterialTheme.typography.labelSmall
+                        )
+                    }
+                    Text("$pickupDate · $facilitySummary", style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        stringResource(
+                            R.string.batch_import_miles_summary,
+                            payAmount,
+                            draft.bounceMiles.ifBlank { "—" },
+                            draft.loadedMiles.ifBlank { "—" }
+                        ),
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    if (expanded) {
+                        Text(draft.fileName, style = MaterialTheme.typography.bodySmall)
+                        draft.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                        if (duplicate) {
+                            Text(
+                                stringResource(R.string.batch_import_duplicate_notice),
+                                color = MaterialTheme.colorScheme.error
+                            )
+                        } else if (!ready) {
+                            Text(
+                                stringResource(R.string.batch_import_review_notice),
+                                color = MaterialTheme.colorScheme.error
+                            )
+                        }
+                        BatchField("PRO number", draft.proNumber) {
+                            drafts[index] = draft.copy(proNumber = it)
+                        }
+                        BatchField("Pickup date (MM/dd/yyyy)", draft.pickupDate) {
+                            drafts[index] = draft.copy(pickupDate = it)
+                        }
+                        BatchField("Delivery date (optional)", draft.deliveryDate) {
+                            drafts[index] = draft.copy(deliveryDate = it)
+                        }
+                        BatchField("Shipper / pickup", draft.shipperName) {
+                            drafts[index] = draft.copy(shipperName = it)
+                        }
+                        BatchField("Consignee / delivery", draft.consigneeName) {
+                            drafts[index] = draft.copy(consigneeName = it)
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            BatchField("Gross pay", draft.grossPay, Modifier.weight(1f)) {
+                                drafts[index] = draft.copy(grossPay = it)
+                            }
+                            BatchField("Pay split %", draft.percentageRate, Modifier.weight(1f)) {
+                                drafts[index] = draft.copy(percentageRate = it)
                             }
                         }
-                    ) {
-                        Text(if (draft.fileName in expandedOcrFiles) "Hide OCR text" else "Show OCR text")
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            BatchField("Bounce miles", draft.bounceMiles, Modifier.weight(1f)) {
+                                drafts[index] = draft.copy(bounceMiles = it)
+                            }
+                            BatchField("Loaded miles", draft.loadedMiles, Modifier.weight(1f)) {
+                                drafts[index] = draft.copy(loadedMiles = it)
+                            }
+                        }
+                        BatchField(
+                            "Stop Offs (payable extra stops)",
+                            draft.extraStopCount,
+                            keyboardType = KeyboardType.Number
+                        ) {
+                            drafts[index] = draft.copy(extraStopCount = it)
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            listOf("None", "4' Drop", "8' Drop").forEach { option ->
+                                TextButton(onClick = { drafts[index] = draft.copy(tarpType = option) }) {
+                                    Text(if (draft.tarpType == option) "✓ $option" else option)
+                                }
+                            }
+                        }
+                        Row {
+                            Checkbox(
+                                checked = draft.isPreTarped,
+                                onCheckedChange = { drafts[index] = draft.copy(isPreTarped = it) }
+                            )
+                            Text("Pre-tarped")
+                        }
+                        Row {
+                            Checkbox(
+                                checked = draft.isGoingHome,
+                                onCheckedChange = { drafts[index] = draft.copy(isGoingHome = it) }
+                            )
+                            Text("Going home")
+                        }
+                        if (draft.rawText.isNotBlank()) {
+                            TextButton(
+                                onClick = {
+                                    expandedOcrDrafts = if (index in expandedOcrDrafts) {
+                                        expandedOcrDrafts - index
+                                    } else {
+                                        expandedOcrDrafts + index
+                                    }
+                                }
+                            ) {
+                                Text(if (index in expandedOcrDrafts) "Hide OCR text" else "Show OCR text")
+                            }
+                        }
                     }
-                    if (draft.fileName in expandedOcrFiles && draft.rawText.isNotBlank()) {
+                    if (expanded && index in expandedOcrDrafts && draft.rawText.isNotBlank()) {
                         Text(
                             draft.rawText,
                             style = MaterialTheme.typography.bodySmall,
@@ -216,96 +382,26 @@ fun ScreenshotBatchImportScreen(
                             overflow = TextOverflow.Ellipsis
                         )
                     }
-                    draft.error?.let {
-                        Text(it, color = MaterialTheme.colorScheme.error)
-                    }
-                    if (duplicate) {
-                        Text(
-                            "Duplicate PRO number: this image cannot be imported until corrected.",
-                            color = MaterialTheme.colorScheme.error
-                        )
-                    }
-                    BatchField("PRO number", draft.proNumber) {
-                        drafts[index] = draft.copy(proNumber = it)
-                    }
-                    BatchField("Pickup date (MM/dd/yyyy)", draft.pickupDate) {
-                        drafts[index] = draft.copy(pickupDate = it)
-                    }
-                    BatchField("Delivery date (optional)", draft.deliveryDate) {
-                        drafts[index] = draft.copy(deliveryDate = it)
-                    }
-                    BatchField("Shipper / pickup", draft.shipperName) {
-                        drafts[index] = draft.copy(shipperName = it)
-                    }
-                    BatchField("Consignee / delivery", draft.consigneeName) {
-                        drafts[index] = draft.copy(consigneeName = it)
-                    }
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        BatchField("Gross pay", draft.grossPay, Modifier.weight(1f)) {
-                            drafts[index] = draft.copy(grossPay = it)
-                        }
-                        BatchField("Pay split %", draft.percentageRate, Modifier.weight(1f)) {
-                            drafts[index] = draft.copy(percentageRate = it)
-                        }
-                    }
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        BatchField("Bounce miles", draft.bounceMiles, Modifier.weight(1f)) {
-                            drafts[index] = draft.copy(bounceMiles = it)
-                        }
-                        BatchField("Loaded miles", draft.loadedMiles, Modifier.weight(1f)) {
-                            drafts[index] = draft.copy(loadedMiles = it)
-                        }
-                    }
-                    BatchField(
-                        "Stop Offs (payable extra stops)",
-                        draft.extraStopCount,
-                        keyboardType = KeyboardType.Number
-                    ) {
-                        drafts[index] = draft.copy(extraStopCount = it)
-                    }
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        listOf("None", "4' Drop", "8' Drop").forEach { option ->
-                            TextButton(onClick = { drafts[index] = draft.copy(tarpType = option) }) {
-                                Text(if (draft.tarpType == option) "✓ $option" else option)
-                            }
-                        }
-                    }
-                    Row {
-                        Checkbox(
-                            checked = draft.isPreTarped,
-                            onCheckedChange = { drafts[index] = draft.copy(isPreTarped = it) }
-                        )
-                        Text("Pre-tarped")
-                    }
-                    Row {
-                        Checkbox(
-                            checked = draft.isGoingHome,
-                            onCheckedChange = { drafts[index] = draft.copy(isGoingHome = it) }
-                        )
-                        Text("Going home")
-                    }
                 }
             }
         }
 
         if (drafts.isNotEmpty()) {
             Text(
-                "${importable.size} of ${drafts.size} image(s) ready to import.",
+                stringResource(
+                    R.string.batch_import_review_counts,
+                    importable.size,
+                    duplicateCount,
+                    needsReviewCount
+                ),
                 fontWeight = FontWeight.Bold
             )
             Button(
                 onClick = { showImportConfirmation = true },
-                enabled = !importFinished && !isImporting &&
-                        importable.isNotEmpty() && importable.size == drafts.size,
+                enabled = !isImporting && importable.isNotEmpty(),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text(
-                    if (importable.size == drafts.size) {
-                        "Import ${importable.size} Historical Load(s)"
-                    } else {
-                        "Complete all rows to enable import"
-                    }
-                )
+                Text(stringResource(R.string.batch_import_import_ready, importable.size))
             }
         }
 
@@ -316,10 +412,15 @@ fun ScreenshotBatchImportScreen(
     if (showImportConfirmation) {
         AlertDialog(
             onDismissRequest = { showImportConfirmation = false },
-            title = { Text("Import historical loads?") },
+            title = { Text(stringResource(R.string.batch_import_confirm_title)) },
             text = {
                 Text(
-                    "Add ${importable.size} completed load(s) to this device. Existing PRO numbers are never overwritten. After a successful import, this one-time tool is disabled."
+                    stringResource(
+                        R.string.batch_import_confirm_message,
+                        importable.size,
+                        duplicateCount,
+                        needsReviewCount
+                    )
                 )
             },
             confirmButton = {
@@ -336,18 +437,22 @@ fun ScreenshotBatchImportScreen(
                                         DatabaseBackupManager.createDailyBackupBeforeMutation(context)
                                     AppDatabase.getDatabase(context).loadDao()
                                         .insertHistoricalBatchIfNoConflicts(loads)
-                                    val stored = context.getSharedPreferences(
-                                        BATCH_IMPORT_PREFS,
-                                        Context.MODE_PRIVATE
-                                    ).edit().putBoolean(BATCH_IMPORT_COMPLETED_KEY, true).commit()
-                                    check(stored) { "The one-time import completion flag could not be saved." }
                                     snapshotSaved
                                 }
-                                importFinished = true
                                 scanStatus = if (backupSaved) {
-                                    "Imported ${loads.size} historical load(s) successfully."
+                                    context.getString(
+                                        R.string.batch_import_success,
+                                        loads.size,
+                                        duplicateCount,
+                                        needsReviewCount
+                                    )
                                 } else {
-                                    "Imported ${loads.size} load(s), but the pre-import automatic snapshot failed. Check Export Data for details."
+                                    context.getString(
+                                        R.string.batch_import_snapshot_warning,
+                                        loads.size,
+                                        duplicateCount,
+                                        needsReviewCount
+                                    )
                                 }
                             } catch (e: Exception) {
                                 errorText = "Import failed: ${e.localizedMessage ?: e.javaClass.simpleName}"
