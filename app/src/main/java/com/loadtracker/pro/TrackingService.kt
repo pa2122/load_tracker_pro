@@ -57,6 +57,55 @@ class TrackingService : Service() {
         var currentLatitude: Double? = null
         var currentLongitude: Double? = null
         var detectedTruckStop: String? = null
+        var departureGraceTimeMs: Long = 0L
+
+        const val ARRIVAL_RADIUS_METERS = 305.0
+        const val ARRIVAL_MAX_SPEED_MPS = 2.24
+        const val ARRIVAL_DWELL_MS = 30_000L
+
+        @JvmStatic
+        fun shouldTriggerArrival(
+            currentLocation: Location,
+            targetLocation: Location,
+            previousLocation: Location? = null,
+            candidateStartMs: Long? = null,
+            nowMs: Long = System.currentTimeMillis()
+        ): Pair<Boolean, Long?> {
+            val distanceMeters = currentLocation.distanceTo(targetLocation).toDouble()
+            val speedMps = when {
+                currentLocation.hasSpeed() -> currentLocation.speed.toDouble()
+                previousLocation != null && previousLocation.time > 0L && currentLocation.time > previousLocation.time -> {
+                    currentLocation.distanceTo(previousLocation).toDouble() / ((currentLocation.time - previousLocation.time) / 1000.0)
+                }
+                else -> Double.POSITIVE_INFINITY
+            }
+            return shouldTriggerArrival(
+                distanceMeters = distanceMeters,
+                speedMps = speedMps,
+                candidateStartMs = candidateStartMs,
+                nowMs = nowMs,
+            )
+        }
+
+        @JvmStatic
+        fun shouldTriggerArrival(
+            distanceMeters: Double,
+            speedMps: Double,
+            candidateStartMs: Long? = null,
+            nowMs: Long = System.currentTimeMillis()
+        ): Pair<Boolean, Long?> {
+            if (distanceMeters >= ARRIVAL_RADIUS_METERS) {
+                return false to null
+            }
+
+            if (speedMps > ARRIVAL_MAX_SPEED_MPS) {
+                return false to null
+            }
+
+            val startMs = candidateStartMs ?: nowMs
+            val triggered = (nowMs - startMs) >= ARRIVAL_DWELL_MS
+            return triggered to if (triggered) null else startMs
+        }
 
         fun saveState(context: Context) {
             val prefs = context.getSharedPreferences("tracking_service_prefs", MODE_PRIVATE)
@@ -109,6 +158,8 @@ class TrackingService : Service() {
     }
 
     private var isLowPowerMode = false
+    private var geofenceCandidateStartMs: Long? = null
+    private var homeCandidateStartMs: Long? = null
 
     fun configureLocationUpdates(force: Boolean = false) {
         val shouldBeLowPower = (activeSegment == "Paused" || activeSegment == "PAUSED_AT_HOME")
@@ -198,64 +249,86 @@ class TrackingService : Service() {
     }
 
     private fun checkGeofence(currentLocation: Location) {
+        val nowMs = System.currentTimeMillis()
+
         // 1. Check for Home Arrival if on a "Going Home" load
         if (homeLat != null && homeLong != null) {
             val homeLoc = Location("").apply {
                 latitude = homeLat!!
                 longitude = homeLong!!
             }
-            if (currentLocation.distanceTo(homeLoc) < 305.0) { // 1,000 feet
-                // 📍 AUTO-PAUSE LOGIC
+            val (shouldPauseHome, nextHomeCandidateStart) = shouldTriggerArrival(
+                currentLocation = currentLocation,
+                targetLocation = homeLoc,
+                previousLocation = lastLocation,
+                candidateStartMs = homeCandidateStartMs,
+                nowMs = nowMs,
+            )
+            homeCandidateStartMs = nextHomeCandidateStart
+            if (shouldPauseHome) {
+                homeCandidateStartMs = null
                 activeSegment = "PAUSED_AT_HOME"
                 isGeofenceActive = false
                 updateNotification()
 
-                // Update Database so Dashboard reflects the "At Home" state
                 val pro = activeProNumber
                 if (pro != null) {
                     serviceScope.launch {
                         try {
                             val dao = AppDatabase.getDatabase(applicationContext).loadDao()
                             dao.updateTripState(pro, "PAUSED_AT_HOME")
-                            // 📍 STOP SERVICE TO SAVE BATTERY & PRIVACY
                             stopSelf()
                         } catch (e: Exception) { e.printStackTrace() }
                     }
                 }
-                return 
+                return
             }
         }
 
         // 2. Standard Facility Geofencing (Pro Feature)
         if (!isProUser || !isGeofenceActive || targetLat == null || targetLong == null) return
 
+        if (departureGraceTimeMs > 0L && nowMs - departureGraceTimeMs < 300000L) {
+            return
+        }
+
         val targetLoc = Location("").apply {
             latitude = targetLat!!
             longitude = targetLong!!
         }
 
-        val distanceToTarget = currentLocation.distanceTo(targetLoc)
-        
-        if (distanceToTarget < 305.0) { // 1,000 feet
-            val previousSegment = activeSegment
-            activeSegment = "Paused"
-            isGeofenceActive = false 
-            updateNotification()
-            configureLocationUpdates()
+        val (shouldTriggerArrival, nextCandidateStart) = shouldTriggerArrival(
+            currentLocation = currentLocation,
+            targetLocation = targetLoc,
+            previousLocation = lastLocation,
+            candidateStartMs = geofenceCandidateStartMs,
+            nowMs = nowMs,
+        )
+        geofenceCandidateStartMs = nextCandidateStart
+        if (!shouldTriggerArrival) return
+        geofenceCandidateStartMs = null
 
-            val pro = activeProNumber
-            if (pro != null) {
-                serviceScope.launch {
-                    try {
-                        val dao = AppDatabase.getDatabase(applicationContext).loadDao()
-                        if (previousSegment == "Bounce") {
-                            dao.updateTripState(pro, "ACTIVE_SHIPPER")
-                        } else if (previousSegment == "Loaded") {
-                            dao.updateTripState(pro, "ACTIVE_CONSIGNEE")
-                        }
-                    } catch (e: Exception) {
-                        e.printStackTrace()
+        val previousSegment = activeSegment
+        activeSegment = "Paused"
+        isGeofenceActive = false
+        updateNotification()
+        configureLocationUpdates()
+
+        val pro = activeProNumber
+        if (pro != null) {
+            serviceScope.launch {
+                try {
+                    val dao = AppDatabase.getDatabase(applicationContext).loadDao()
+                    val nextState = when (previousSegment) {
+                        "Bounce" -> "ACTIVE_SHIPPER"
+                        "Loaded" -> "ACTIVE_CONSIGNEE"
+                        else -> null
                     }
+                    if (nextState != null) {
+                        dao.updateTripState(pro, nextState)
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.e("TrackingService", "Unable to save destination arrival", e)
                 }
             }
         }
