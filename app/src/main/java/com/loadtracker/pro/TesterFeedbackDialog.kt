@@ -206,7 +206,7 @@ fun TesterFeedbackDialog(
                                 token = token,
                                 title = "[$appVer] [$categoryName] ${summaryText.trim()}",
                                 body = formattedBody,
-                                labels = listOf(selectedCategory, appVer)
+                                labels = listOf(selectedCategory, IssueLabels.TESTER_REPORT, IssueLabels.versionLabel())
                             )
                             isSubmitting = false
                             if (success) {
