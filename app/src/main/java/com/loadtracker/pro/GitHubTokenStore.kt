@@ -22,6 +22,15 @@ object GitHubTokenStore {
     private const val IV_SIZE_BYTES = 12
 
     fun load(context: Context): GitHubTokenResult {
+        val saved = loadSaved(context)
+        return if (saved.token.isBlank() && saved.error == null) {
+            GitHubTokenResult(BuildConfig.DEFAULT_GITHUB_TOKEN)
+        } else {
+            saved
+        }
+    }
+
+    private fun loadSaved(context: Context): GitHubTokenResult {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         return try {
             val encrypted = prefs.getString(ENCRYPTED_TOKEN_KEY, null)

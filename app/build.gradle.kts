@@ -25,6 +25,7 @@ android {
     if (localPropsFile.exists()) {
         localProps.load(localPropsFile.inputStream())
     }
+    val defaultGithubToken = localProps.getProperty("GITHUB_TOKEN", "")
     val defaultGithubRepo = localProps.getProperty("GITHUB_REPO", "pa2122/load_tracker_pro")
     val mapsApiKey = localProps.getProperty("MAPS_API_KEY", "")
 
@@ -50,6 +51,7 @@ android {
         versionName = vName
 
         manifestPlaceholders["MAPS_API_KEY"] = mapsApiKey
+        buildConfigField("String", "DEFAULT_GITHUB_TOKEN", "\"$defaultGithubToken\"")
         buildConfigField("String", "DEFAULT_GITHUB_REPO", "\"$defaultGithubRepo\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

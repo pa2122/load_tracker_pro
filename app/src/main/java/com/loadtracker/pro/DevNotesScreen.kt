@@ -1091,7 +1091,7 @@ fun DevNotesScreen(
                                 token = githubToken,
                                 title = issueTitle,
                                 body = issueBody,
-                                labels = listOf(selectedLabel)
+                                labels = listOf(selectedLabel, IssueLabels.versionLabel())
                             )
                             isPostingToGithub = false
                             Toast.makeText(ctx, message, Toast.LENGTH_LONG).show()
