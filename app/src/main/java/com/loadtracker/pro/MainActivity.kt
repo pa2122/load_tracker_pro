@@ -44,6 +44,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.rememberScrollState
@@ -101,6 +102,8 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.LaunchedEffect
 import kotlinx.coroutines.flow.firstOrNull
@@ -178,8 +181,10 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background,
                 ) {
-                    var isAppStartingUp by remember { mutableStateOf(value = true) }
-                    var loadingStatusText by remember { mutableStateOf(value = "Initializing Engines...") }
+                    var splashDismissed by rememberSaveable { mutableStateOf(value = false) }
+                    var settingsRead by remember { mutableStateOf(value = false) }
+                    var activeLoadRestored by remember { mutableStateOf(value = false) }
+                    var splashTimedOut by remember { mutableStateOf(value = false) }
 
                     val appVersionName = remember {
                         try {
@@ -190,15 +195,17 @@ class MainActivity : ComponentActivity() {
                         }
                     }
 
-                    LaunchedEffect(key1 = Unit) {
-                        delay(1200.milliseconds) 
-                        loadingStatusText = "Loading Databases..."
-                        delay(1000.milliseconds) 
-                        isAppStartingUp = false 
+                    var currentScreen by rememberSaveable { mutableStateOf(value = "dashboard") }
+                    val loadByProSaver = Saver<CurrentLoad?, String>(
+                        save = { it?.proNumber.orEmpty() },
+                        restore = { pro -> viewModel.allLoads.value.find { it.proNumber == pro } }
+                    )
+                    var tripToEdit by rememberSaveable(stateSaver = loadByProSaver) {
+                        mutableStateOf<CurrentLoad?>(value = null)
                     }
-                    var currentScreen by remember { mutableStateOf(value = "dashboard") }
-                    var tripToEdit by remember { mutableStateOf<CurrentLoad?>(value = null) }
-                    var tripForMap by remember { mutableStateOf<CurrentLoad?>(value = null) }
+                    var tripForMap by rememberSaveable(stateSaver = loadByProSaver) {
+                        mutableStateOf<CurrentLoad?>(value = null)
+                    }
 
                     val backupRestoreLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
                         if (uri != null) {
@@ -248,7 +255,7 @@ class MainActivity : ComponentActivity() {
                     var showTrainerSettingsDialog by remember { mutableStateOf(value = false) }
                     var showProUpgradeDialog by remember { mutableStateOf(value = false) }
                     var showReadmeDialog by remember { mutableStateOf(value = false) }
-                    var isHistoricalEntry by remember { mutableStateOf(value = false) }
+                    var isHistoricalEntry by rememberSaveable { mutableStateOf(value = false) }
 
                     var initialRxBytes by remember { mutableLongStateOf(value = TrafficStats.getUidRxBytes(Process.myUid())) }
                     var initialTxBytes by remember { mutableLongStateOf(value = TrafficStats.getUidTxBytes(Process.myUid())) }
@@ -346,6 +353,39 @@ class MainActivity : ComponentActivity() {
                     val scope = rememberCoroutineScope()
 
                     val savedLoads by viewModel.allLoads.collectAsState(initial = emptyList())
+                    val loadsLoaded by viewModel.loadsLoaded.collectAsState()
+                    val hasUnfinishedLoad = loadsLoaded &&
+                        viewModel.allLoads.value.any { StartupSplashLogic.isUnfinished(it.tripState) }
+                    val isAppStartingUp = StartupSplashLogic.shouldShowSplash(
+                        settingsRead = settingsRead,
+                        loadsLoaded = loadsLoaded,
+                        hasUnfinishedLoad = hasUnfinishedLoad,
+                        activeLoadRestored = activeLoadRestored,
+                        alreadyDismissed = splashDismissed
+                    )
+                    val splashStep = StartupSplashLogic.currentStep(
+                        settingsRead = settingsRead,
+                        loadsLoaded = loadsLoaded,
+                        hasUnfinishedLoad = hasUnfinishedLoad,
+                        activeLoadRestored = activeLoadRestored,
+                        recoveredAfterShutdown = recoveryState.wasRecovered
+                    )
+
+                    LaunchedEffect(Unit) {
+                        withContext(Dispatchers.IO) {
+                            getSharedPreferences("dev_prefs", MODE_PRIVATE).all
+                        }
+                        settingsRead = true
+                    }
+
+                    LaunchedEffect(isAppStartingUp) {
+                        if (!isAppStartingUp) {
+                            splashDismissed = true
+                        } else {
+                            delay(StartupSplashLogic.TIMEOUT_MS.milliseconds)
+                            splashTimedOut = true
+                        }
+                    }
 
                     val currentTargetFriday = remember {
                         getPayPeriodDate(System.currentTimeMillis())
@@ -364,7 +404,7 @@ class MainActivity : ComponentActivity() {
                         }
                     }
 
-                    LaunchedEffect(key1 = savedLoads) {
+                    LaunchedEffect(key1 = savedLoads, key2 = loadsLoaded) {
                         val active = savedLoads.find { 
                             (it.tripState != "COMPLETED") && 
                             (it.tripState != "NOT_STARTED") && 
@@ -400,6 +440,9 @@ class MainActivity : ComponentActivity() {
                                     Intent(this@MainActivity, TrackingService::class.java)
                                 )
                             }
+                        }
+                        if (loadsLoaded && (active != null || !hasUnfinishedLoad)) {
+                            activeLoadRestored = true
                         }
                     }
 
@@ -868,10 +911,27 @@ class MainActivity : ComponentActivity() {
                                             )
 
                                             Text(
-                                                text = loadingStatusText,
+                                                text = if (splashTimedOut) {
+                                                    stringResource(R.string.splash_timeout_error)
+                                                } else {
+                                                    stringResource(
+                                                        when (splashStep) {
+                                                            StartupStep.READING_SETTINGS -> R.string.splash_reading_settings
+                                                            StartupStep.OPENING_DATABASE -> R.string.splash_opening_database
+                                                            StartupStep.RESTORING_ACTIVE_LOAD -> R.string.splash_restoring_active_load
+                                                            StartupStep.RECOVERED_AFTER_SHUTDOWN -> R.string.splash_recovered_after_shutdown
+                                                        }
+                                                    )
+                                                },
                                                 style = MaterialTheme.typography.bodyMedium,
-                                                color = MaterialTheme.colorScheme.secondary
+                                                color = if (splashTimedOut) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.secondary
                                             )
+
+                                            if (splashTimedOut) {
+                                                Button(onClick = { splashDismissed = true }) {
+                                                    Text(stringResource(R.string.splash_continue_anyway))
+                                                }
+                                            }
                                         }
                                     }
 

@@ -31,6 +31,9 @@ class LoadViewModel(application: Application) :
     val allLoads: StateFlow<List<CurrentLoad>> =
         _allLoads.asStateFlow()
 
+    private val _loadsLoaded = MutableStateFlow(false)
+    val loadsLoaded: StateFlow<Boolean> = _loadsLoaded.asStateFlow()
+
     val allFacilities: Flow<List<String>> = loadDao.getAllFacilityNames()
     
     private val _selectedFacility = MutableStateFlow("")
@@ -56,6 +59,7 @@ class LoadViewModel(application: Application) :
         viewModelScope.launch {
             loadDao.getAllLoads().collect { list ->
                 _allLoads.value = list
+                _loadsLoaded.value = true
             }
         }
     }
