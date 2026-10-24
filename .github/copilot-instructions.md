@@ -4,6 +4,41 @@ This file provides guidance for GitHub Copilot when working on the load_tracker_
 
 ---
 
+## 🚦 Mandatory Operating Rules
+
+### Communication & Execution
+- **Answer first, act later:** Address the user's question or idea directly first, with analysis or a proposed design.
+- **Wait for confirmation:** Do NOT modify code, commit, push, or make GitHub changes (issues, labels, comments, milestones) until the user explicitly says "go ahead" / "do it" / "make the changes".
+- **Allowed without permission:** Reading files, searching, and compiling/running tests.
+- If the user says "stop", stop immediately and revert any unapproved changes.
+
+### Tooling
+- Edit and read files with the IDE/built-in file tools, not shell commands (`sed`, `echo >`, `cat`, etc.). Re-read a file before editing it.
+
+### GitHub Issue Workflow
+- After a fix or feature is implemented, pushed, and verified by tests/build, comment on the issue with the changes.
+- Leave the issue **OPEN** and apply the **`needs-verification`** label.
+- Never close an issue unless the user explicitly says "close it" or "verified".
+
+### Branches & Versions
+- State the current branch before starting work and after any branch switch.
+- **Bug fixes go to both `v1.x` and `v2` by default; new features go to `v2` only.** If unclear, ask.
+- Apply to the second branch via cherry-pick, resolve conflicts, rebuild, and test before pushing.
+- `v2` has code `v1.x` lacks (e.g., load model, backup manager). On conflicts, never copy v1.x-only calls; adapt to what the target branch actually has.
+- After branch-hopping, switch back to the branch the user named.
+
+### Verification & Reporting
+- Run the focused unit test or build before any push. State plainly if validation failed or could not run.
+- Be honest about status: say clearly if something is unpushed, unverified, or partly done.
+
+### Scope & Behavior
+- Fix only what the issue covers. Raise unrelated problems as a question or a new issue; do not change them.
+- One-time instructions (e.g., "no commit message needed") apply to that action only, unless the user makes them permanent.
+- If a request could mean two things, ask one short question instead of guessing.
+- Keep reports short unless the user asks for detail.
+
+---
+
 ## 📋 Project Overview
 
 **load_tracker_pro** is a Kotlin-based Android application for dispatch, payroll, and auditing workflows for flatbed trucking operations. The app processes dispatch screenshots via OCR, tracks loads, calculates payroll, and maintains detailed audit logs.
