@@ -1209,7 +1209,7 @@ fun LoadEntryScreen(
                         consigneeApptType = cApptType
                     )
                     if (editingLoad == null) {
-                        TrackingService.resetTrackingState()
+                        TrackingService.resetTrackingState(ctx)
                         TrackingService.activeProNumber = proNum.trim()
                         TrackingService.activeTripState = "ACTIVE_BOUNCE"
                         TrackingService.targetLat = sLat
@@ -1296,7 +1296,7 @@ fun LoadEntryScreen(
                 Button(onClick = {
                     val data = pendingDuplicateLoad!!
                     if (!data.tripState.startsWith("COMPLETED")) {
-                        TrackingService.resetTrackingState()
+                        TrackingService.resetTrackingState(ctx)
                         TrackingService.activeProNumber = data.proNumber
                         TrackingService.targetLat = data.shipperLat
                         TrackingService.targetLong = data.shipperLong

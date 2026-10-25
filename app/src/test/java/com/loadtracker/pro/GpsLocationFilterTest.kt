@@ -15,7 +15,8 @@ class GpsLocationFilterTest {
             currentTimeMs = 1005000L,
             lastLat = 32.7767,
             lastLong = -96.7970,
-            lastTimeMs = 1000000L
+            lastTimeMs = 1000000L,
+            nowTimeMs = 1005000L
         )
         assertTrue("Normal GPS update should be valid", isValid)
     }
@@ -69,5 +70,60 @@ class GpsLocationFilterTest {
         assertFalse("NaN latitude should be rejected", invalidLat)
         assertFalse("Infinite longitude should be rejected", invalidLong)
         assertFalse("Out-of-range latitude should be rejected", invalidRange)
+    }
+
+    @Test
+    fun testStaleFix_ReturnsFalse() {
+        val isValid = GpsLocationFilter.isValidFix(
+            accuracy = 10f,
+            locationTimeMs = 1000000L,
+            nowTimeMs = 1060001L,
+            distanceMeters = null,
+            timeDeltaSeconds = null
+        )
+
+        assertFalse("Fix older than 60 seconds should be rejected", isValid)
+    }
+
+    @Test
+    fun testFutureFixBeyondClockSkew_ReturnsFalse() {
+        val isValid = GpsLocationFilter.isValidFix(
+            accuracy = 10f,
+            locationTimeMs = 1110001L,
+            nowTimeMs = 1000000L,
+            distanceMeters = null,
+            timeDeltaSeconds = null
+        )
+
+        assertFalse("Fix far in the future should be rejected", isValid)
+    }
+
+    @Test
+    fun testUnrealisticSpeedJump_ReturnsFalse() {
+        val isValid = GpsLocationFilter.isValidFix(
+            accuracy = 10f,
+            locationTimeMs = 1005000L,
+            nowTimeMs = 1005000L,
+            distanceMeters = 1000.0,
+            timeDeltaSeconds = 2.0
+        )
+
+        assertFalse("Implausible GPS speed should be rejected", isValid)
+    }
+
+    @Test
+    fun testNonIncreasingTimestamp_ReturnsFalse() {
+        val isValid = GpsLocationFilter.isValidLocation(
+            currentLat = 32.7767,
+            currentLong = -96.7970,
+            currentAccuracy = 10f,
+            currentTimeMs = 1000000L,
+            lastLat = 32.7767,
+            lastLong = -96.7970,
+            lastTimeMs = 1000000L,
+            nowTimeMs = 1000000L
+        )
+
+        assertFalse("Non-increasing timestamp should be rejected", isValid)
     }
 }

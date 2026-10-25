@@ -928,7 +928,7 @@ class MainActivity : ComponentActivity() {
                                                 onDeleteTripClick = { load ->
                                                     if (load.tripState != "COMPLETED") {
                                                         stopService(Intent(this@MainActivity, TrackingService::class.java))
-                                                        TrackingService.resetTrackingState()
+                                                        TrackingService.resetTrackingState(this@MainActivity)
                                                     }
                                                     viewModel.deleteLoad(load)
                                                 },
@@ -953,7 +953,7 @@ class MainActivity : ComponentActivity() {
                                                                 TrackingService::class.java
                                                             )
                                                         )
-                                                        TrackingService.resetTrackingState()
+                                                        TrackingService.resetTrackingState(this@MainActivity)
                                                     }
                                                     viewModel.saveLoad(
                                                         proNumber = updatedTripEntity.proNumber,

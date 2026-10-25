@@ -1,8 +1,48 @@
 package com.loadtracker.pro
 
 import android.location.Location
+import android.util.Log
 
 object GpsLocationFilter {
+    private const val MAX_ACCURACY_METERS = 50f
+    private const val MAX_STALE_TIME_MS = 60_000L
+    private const val MAX_FUTURE_SKEW_MS = 10_000L
+    private const val MAX_REALISTIC_SPEED_MPS = 45.0
+
+    fun isValidFix(
+        accuracy: Float,
+        locationTimeMs: Long,
+        nowTimeMs: Long,
+        distanceMeters: Double?,
+        timeDeltaSeconds: Double?
+    ): Boolean {
+        if (!accuracy.isFinite() || accuracy < 0f || accuracy > MAX_ACCURACY_METERS) {
+            return false
+        }
+        if (locationTimeMs <= 0L || nowTimeMs <= 0L) {
+            return false
+        }
+        if (locationTimeMs < nowTimeMs - MAX_STALE_TIME_MS) {
+            return false
+        }
+        if (locationTimeMs > nowTimeMs && locationTimeMs - nowTimeMs > MAX_FUTURE_SKEW_MS) {
+            return false
+        }
+        if ((distanceMeters == null) != (timeDeltaSeconds == null)) {
+            return false
+        }
+        if (distanceMeters != null && timeDeltaSeconds != null) {
+            if (!distanceMeters.isFinite() || distanceMeters < 0.0 ||
+                !timeDeltaSeconds.isFinite() || timeDeltaSeconds <= 0.0
+            ) {
+                return false
+            }
+            if (distanceMeters / timeDeltaSeconds > MAX_REALISTIC_SPEED_MPS) {
+                return false
+            }
+        }
+        return true
+    }
 
     fun isValidLocation(
         currentLat: Double,
@@ -11,64 +51,68 @@ object GpsLocationFilter {
         currentTimeMs: Long,
         lastLat: Double?,
         lastLong: Double?,
-        lastTimeMs: Long?
+        lastTimeMs: Long?,
+        nowTimeMs: Long = System.currentTimeMillis()
     ): Boolean {
-        if (!currentLat.isFinite() || !currentLong.isFinite() || currentAccuracy.isNaN() || currentAccuracy.isInfinite()) {
+        if (!currentLat.isFinite() || !currentLong.isFinite() ||
+            currentLat !in -90.0..90.0 || currentLong !in -180.0..180.0
+        ) {
             return false
         }
 
-        if (currentLat < -90.0 || currentLat > 90.0 || currentLong < -180.0 || currentLong > 180.0) {
+        val hasPreviousCoordinates = lastLat != null || lastLong != null || lastTimeMs != null
+        if (!hasPreviousCoordinates) {
+            return isValidFix(currentAccuracy, currentTimeMs, nowTimeMs, null, null)
+        }
+
+        val previousLat = lastLat ?: return false
+        val previousLong = lastLong ?: return false
+        val previousTimeMs = lastTimeMs ?: return false
+        if (!previousLat.isFinite() || !previousLong.isFinite() ||
+            previousLat !in -90.0..90.0 || previousLong !in -180.0..180.0 ||
+            previousTimeMs <= 0L || currentTimeMs <= previousTimeMs
+        ) {
             return false
         }
 
-        if (currentAccuracy < 0f || currentAccuracy > 50f) {
-            return false
-        }
-
-        if (lastLat == null || lastLong == null || lastTimeMs == null) {
-            return true
-        }
-
-        if (!lastLat.isFinite() || !lastLong.isFinite() || lastTimeMs < 0L) {
-            return false
-        }
-
-        if (currentTimeMs <= lastTimeMs) {
-            return false
-        }
-
-        val timeDeltaMs = currentTimeMs - lastTimeMs
-        val distanceMeters = calculateApproxDistance(lastLat, lastLong, currentLat, currentLong)
-        val speedMps = distanceMeters / (timeDeltaMs / 1000.0)
-
-        if (speedMps > 53.64) {
-            return false
-        }
-
-        return true
-    }
-
-    private fun calculateApproxDistance(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
-        val r = 6371000.0 // Earth radius in meters
-        val dLat = Math.toRadians(lat2 - lat1)
-        val dLon = Math.toRadians(lon2 - lon1)
-        val a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-                Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2)) *
-                Math.sin(dLon / 2) * Math.sin(dLon / 2)
-        val c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
-        return r * c
+        val timeDeltaSeconds = (currentTimeMs - previousTimeMs) / 1000.0
+        val distanceMeters = calculateApproxDistance(previousLat, previousLong, currentLat, currentLong)
+        return isValidFix(
+            accuracy = currentAccuracy,
+            locationTimeMs = currentTimeMs,
+            nowTimeMs = nowTimeMs,
+            distanceMeters = distanceMeters,
+            timeDeltaSeconds = timeDeltaSeconds
+        )
     }
 
     fun isValidLocation(current: Location, last: Location?): Boolean {
-        val currentAcc = if (current.hasAccuracy()) current.accuracy else 0f
-        return isValidLocation(
-            currentLat = current.latitude,
-            currentLong = current.longitude,
-            currentAccuracy = currentAcc,
-            currentTimeMs = current.time,
-            lastLat = last?.latitude,
-            lastLong = last?.longitude,
-            lastTimeMs = last?.time
-        )
+        return try {
+            if (!current.hasAccuracy()) return false
+            isValidLocation(
+                currentLat = current.latitude,
+                currentLong = current.longitude,
+                currentAccuracy = current.accuracy,
+                currentTimeMs = current.time,
+                lastLat = last?.latitude,
+                lastLong = last?.longitude,
+                lastTimeMs = last?.time
+            )
+        } catch (e: RuntimeException) {
+            Log.w("GpsLocationFilter", "Rejecting location because validation failed", e)
+            false
+        }
+    }
+
+    private fun calculateApproxDistance(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
+        val earthRadiusMeters = 6_371_000.0
+        val dLat = Math.toRadians(lat2 - lat1)
+        val dLon = Math.toRadians(lon2 - lon1)
+        val a = (
+            Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2)) *
+                Math.sin(dLon / 2) * Math.sin(dLon / 2)
+            ).coerceIn(0.0, 1.0)
+        return earthRadiusMeters * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
     }
 }
