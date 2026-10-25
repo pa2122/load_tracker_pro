@@ -57,4 +57,42 @@ class GpsLocationFilterTest {
         )
         assertFalse(isValid)
     }
+
+    @Test
+    fun testFixOlderThanSixtySecondsIsRejected() {
+        val now = 1_000_000L
+        val isValid = GpsLocationFilter.isValidFix(
+            accuracy = 10f,
+            locationTime = now - 60_001L,
+            currentTime = now,
+            distanceMeters = null,
+            timeDeltaSeconds = null
+        )
+        assertFalse(isValid)
+    }
+
+    @Test
+    fun testFutureFixBeyondClockSkewIsRejected() {
+        val now = 1_000_000L
+        val isValid = GpsLocationFilter.isValidFix(
+            accuracy = 10f,
+            locationTime = now + 10_001L,
+            currentTime = now,
+            distanceMeters = null,
+            timeDeltaSeconds = null
+        )
+        assertFalse(isValid)
+    }
+
+    @Test
+    fun testNonIncreasingTimestampIsRejected() {
+        val isValid = GpsLocationFilter.isValidFix(
+            accuracy = 10f,
+            locationTime = 1_000_000L,
+            currentTime = 1_000_000L,
+            distanceMeters = 10f,
+            timeDeltaSeconds = 0.0
+        )
+        assertFalse(isValid)
+    }
 }

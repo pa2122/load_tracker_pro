@@ -125,6 +125,8 @@ class TrackingService : Service() {
                 putFloat("targetLong", targetLong?.toFloat() ?: -999f)
                 putString("targetName", targetName)
                 putBoolean("isGeofenceActive", isGeofenceActive)
+                putFloat("totalBounceMilesTracked", totalBounceMilesTracked.value.toFloat())
+                putFloat("totalLoadedMilesTracked", totalLoadedMilesTracked.value.toFloat())
                 apply()
             }
         }
@@ -154,9 +156,18 @@ class TrackingService : Service() {
             if (tName != null) targetName = tName
 
             isGeofenceActive = prefs.getBoolean("isGeofenceActive", isGeofenceActive)
+
+            val savedBounce = prefs.getFloat("totalBounceMilesTracked", 0f)
+            if (totalBounceMilesTracked.value == 0.0 && savedBounce > 0f) {
+                totalBounceMilesTracked.value = savedBounce.toDouble()
+            }
+            val savedLoaded = prefs.getFloat("totalLoadedMilesTracked", 0f)
+            if (totalLoadedMilesTracked.value == 0.0 && savedLoaded > 0f) {
+                totalLoadedMilesTracked.value = savedLoaded.toDouble()
+            }
         }
 
-        fun resetTrackingState() {
+        fun resetTrackingState(context: Context? = null) {
             totalBounceMilesTracked.value = 0.0
             totalLoadedMilesTracked.value = 0.0
             activeSegment = "Bounce"
@@ -165,6 +176,7 @@ class TrackingService : Service() {
             isGeofenceActive = false
             currentLatitude = null
             currentLongitude = null
+            context?.getSharedPreferences("tracking_service_prefs", MODE_PRIVATE)?.edit()?.clear()?.apply()
         }
     }
 
@@ -524,9 +536,9 @@ class TrackingService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
+        saveState(this)
         fusedLocationClient.removeLocationUpdates(locationCallback)
         lastLocation = null
-        resetTrackingState()
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
