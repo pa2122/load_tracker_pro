@@ -223,15 +223,9 @@ fun LoadEntryScreen(
         }
 
         // 2. Extract Load Pay
-        val payRegex = Regex(
-            """(?:Pay|Gross|Rate|Linehaul|Total|Amount)\D*?\$?\s*(\d{1,3}(?:,\d{3})+|\d+)(?:\.(\d{1,2}))?""",
-            RegexOption.IGNORE_CASE
-        )
-        val payMatch = payRegex.find(rawText)
-        if (payMatch != null && payMatch.groupValues.size > 1) {
-            val intPart = payMatch.groupValues[1].replace(",", "")
-            val decPart = if (payMatch.groupValues.size > 2 && payMatch.groupValues[2].isNotBlank()) "." + payMatch.groupValues[2] else ""
-            loadPay = intPart + decPart
+        val parsedPay = OcrPayParser.parse(rawText)
+        if (parsedPay != null) {
+            loadPay = parsedPay
         } else {
             val dollarMatch = Regex("""\$?\s*([1-9][0-9]{2,4}(?:\.[0-9]{2})?)""").find(rawText)
             if (dollarMatch != null && dollarMatch.groupValues.size > 1) {

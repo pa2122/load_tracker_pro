@@ -18,15 +18,21 @@ object CrashRecoveryHandler {
         val timestamp: Long
     )
 
+    private var handlerInstalled = false
+
     /**
      * Registers global uncaught exception handler to save active trip state to disk before process death.
      */
+    @Synchronized
     fun setupGlobalExceptionHandler(context: Context) {
+        if (handlerInstalled) return
+        handlerInstalled = true
+        val appContext = context.applicationContext
         val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
             try {
                 Log.e("CRASH_RECOVERY", "Intercepted uncaught crash in thread ${thread.name}", throwable)
-                val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                val prefs = appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
                 val activePro = TrackingService.activeProNumber
                 val activeSegment = TrackingService.activeSegment
