@@ -85,6 +85,8 @@ class ScreenshotBatchParserTest {
             rawText = """
                 PRO Number: 12345678
                 Pickup Date: 10/05/2026
+                Shipper: North Yard
+                Consignee: South Yard
                 Gross Pay: $2,750.00
                 Bounce Miles: 150
                 Loaded Miles: 1,025

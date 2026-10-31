@@ -82,6 +82,16 @@ internal fun BatchScreenshot.hasDuplicateProNumber(
             (normalizedProNumber in existingProNumbers || batchProNumberCounts[normalizedProNumber] != 1)
 }
 
+internal fun BatchScreenshot.missingFields(): List<DispatchField> = listOfNotNull(
+    DispatchField.PRO_NUMBER.takeIf { proNumber.isBlank() },
+    DispatchField.PICKUP_FACILITY.takeIf { shipperName.isBlank() },
+    DispatchField.DELIVERY_FACILITY.takeIf { consigneeName.isBlank() },
+    DispatchField.PICKUP_DATE.takeIf { pickupDate.toLocalDateOrNull() == null },
+    DispatchField.PAY.takeIf { grossPay.toDoubleOrNull() == null },
+    DispatchField.LOADED_MILES.takeIf { loadedMiles.toDoubleOrNull() == null },
+    DispatchField.BOUNCE_MILES.takeIf { bounceMiles.toDoubleOrNull() == null }
+)
+
 internal fun BatchScreenshot.isReadyToImport(
     existingProNumbers: Set<String>,
     batchProNumberCounts: Map<String, Int>
@@ -89,7 +99,8 @@ internal fun BatchScreenshot.isReadyToImport(
     fun String.isNonNegativeFiniteNumber() =
         toDoubleOrNull()?.let { it.isFinite() && it >= 0.0 } == true
 
-    return proNumber.isNotBlank() &&
+    return missingFields().isEmpty() &&
+            proNumber.isNotBlank() &&
             pickupDate.toLocalDateOrNull() != null &&
             (deliveryDate.isBlank() || deliveryDate.toLocalDateOrNull() != null) &&
             grossPay.isNonNegativeFiniteNumber() &&
@@ -287,6 +298,19 @@ fun ScreenshotBatchImportScreen(
                         ),
                         style = MaterialTheme.typography.bodySmall
                     )
+                    if (!duplicate) {
+                        val missing = draft.missingFields()
+                        if (missing.isNotEmpty()) {
+                            Text(
+                                stringResource(
+                                    R.string.batch_import_incomplete_notice,
+                                    missing.map { stringResource(it.labelRes) }.joinToString(", ")
+                                ),
+                                color = MaterialTheme.colorScheme.error,
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                    }
                     if (expanded) {
                         Text(draft.fileName, style = MaterialTheme.typography.bodySmall)
                         draft.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
@@ -498,7 +522,7 @@ private suspend fun scanScreenshotFolder(
 
     val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
     try {
-        return files.map { file ->
+        return ScreenshotBatchParser.mergeSplitScreenshots(files.map { file ->
             try {
                 val image = InputImage.fromFilePath(context, file.uri)
                 val text = OcrHelper.reconstructSpatialText(recognizer.process(image).await())
@@ -515,7 +539,7 @@ private suspend fun scanScreenshotFolder(
                     "Could not scan this image: ${e.localizedMessage ?: e.javaClass.simpleName}"
                 )
             }
-        }
+        })
     } finally {
         recognizer.close()
     }
@@ -569,94 +593,49 @@ private fun listImageDocuments(context: Context, treeUri: Uri): List<ImageDocume
 }
 
 internal object ScreenshotBatchParser {
-    fun parse(fileName: String, rawText: String, defaultPercentage: String): BatchScreenshot {
-        val pro = Regex(
-            """\b(?:PRO|Order|Load|Trip)\s*(?:Number|No|Num)?\s*#?\s*:?\s*(\d{4,12})""",
-            RegexOption.IGNORE_CASE
-        ).find(rawText)?.groupValues?.get(1)
-            ?: Regex("""\b\d{6,10}\b""").find(rawText)?.value.orEmpty()
-
-        val pay = OcrPayParser.parse(rawText).orEmpty()
-
-        fun extractMiles(pattern: Regex): String = pattern.find(rawText)
-            ?.groupValues?.get(1)?.replace(",", "").orEmpty()
-
-        val bounce = extractMiles(
-            Regex(
-                """(?:bounce\s*miles|bounce\s*mi|deadhead\s*miles|deadhead\s*mi|dh\s*miles)\s*[:=\-\s]*(\d{1,4}(?:,\d{3})*(?:\.\d+)?)""",
-                RegexOption.IGNORE_CASE
-            )
-        )
-        val loaded = extractMiles(
-            Regex(
-                """(?:loaded\s*miles|loaded\s*mi|load\s*miles|trip\s*miles|distance)\s*[:=\-\s]*(\d{1,4}(?:,\d{3})*(?:\.\d+)?)""",
-                RegexOption.IGNORE_CASE
-            )
-        )
-        val pickupDate = rawText.lines().firstNotNullOfOrNull { line ->
-            if (Regex("""\b(pick[\s-]?up|origin|shipper)\b""", RegexOption.IGNORE_CASE)
-                    .containsMatchIn(line)
-            ) {
-                BATCH_DATE.find(line)?.value
-            } else null
-        }.orEmpty()
-        val deliveryDate = OcrDateParser.extractDeliveryDateMillis(rawText)?.let { timestamp ->
-            java.time.Instant.ofEpochMilli(timestamp)
-                .atZone(ZoneId.systemDefault())
-                .toLocalDate()
-                .format(DateTimeFormatter.ofPattern("MM/dd/yyyy", Locale.US))
-        }.orEmpty()
-        var currentFacility: String? = null
-        val shipperName = StringBuilder()
-        val consigneeName = StringBuilder()
-        rawText.lines().forEach { line ->
-            val trimmed = line.trim()
-            val lower = trimmed.lowercase(Locale.US)
-            val shipperHeader = Regex(
-                """^(shipper|pickup|origin)(?:\s+(?:name|location|address))?\s*:?\s*(.*)$""",
-                RegexOption.IGNORE_CASE
-            ).find(trimmed)
-            val consigneeHeader = Regex(
-                """^(consignee|delivery|destination|dropoff)(?:\s+(?:name|location|address))?\s*:?\s*(.*)$""",
-                RegexOption.IGNORE_CASE
-            ).find(trimmed)
-            when {
-                lower.startsWith("pickup date") || lower.startsWith("pickup appt") ||
-                        lower.startsWith("pickup appointment") || lower.startsWith("delivery date") ||
-                        lower.startsWith("delivery appt") || lower.startsWith("delivery appointment") ||
-                        lower.startsWith("going home") || lower.startsWith("home run") ||
-                        StopOffParser.isLabelLine(trimmed) ||
-                        lower.startsWith("tarp") ->
-                    currentFacility = null
-                shipperHeader != null -> {
-                    currentFacility = "shipper"
-                    shipperHeader.groupValues[2].takeIf { it.isNotBlank() }?.let {
-                        shipperName.append(it.trim()).append('\n')
-                    }
-                }
-                consigneeHeader != null -> {
-                    currentFacility = "consignee"
-                    consigneeHeader.groupValues[2].takeIf { it.isNotBlank() }?.let {
-                        consigneeName.append(it.trim()).append('\n')
-                    }
-                }
-                lower.startsWith("pro ") || lower.startsWith("gross ") ||
-                        lower.startsWith("bounce ") || lower.startsWith("loaded ") ||
-                        lower.startsWith("stop type") -> currentFacility = null
-                currentFacility == "shipper" && shipperName.lines().size < 4 ->
-                    shipperName.append(trimmed).append('\n')
-                currentFacility == "consignee" && consigneeName.lines().size < 4 ->
-                    consigneeName.append(trimmed).append('\n')
+    // A long dispatch message is often captured as several overlapping screenshots; combine
+    // the drafts that share a PRO number so each load is filled in from every part.
+    fun mergeSplitScreenshots(drafts: List<BatchScreenshot>): List<BatchScreenshot> {
+        val merged = LinkedHashMap<String, BatchScreenshot>()
+        val unmatched = mutableListOf<BatchScreenshot>()
+        for (draft in drafts) {
+            val pro = draft.proNumber.trim()
+            if (pro.isBlank()) {
+                unmatched += draft
+                continue
             }
+            merged[pro] = merged[pro]?.let { first ->
+                first.copy(
+                    fileName = "${first.fileName}, ${draft.fileName}",
+                    rawText = first.rawText + "\n" + draft.rawText,
+                    pickupDate = first.pickupDate.ifBlank { draft.pickupDate },
+                    deliveryDate = first.deliveryDate.ifBlank { draft.deliveryDate },
+                    grossPay = first.grossPay.ifBlank { draft.grossPay },
+                    bounceMiles = first.bounceMiles.ifBlank { draft.bounceMiles },
+                    loadedMiles = first.loadedMiles.ifBlank { draft.loadedMiles },
+                    tarpType = if (first.tarpType != "None") first.tarpType else draft.tarpType,
+                    isPreTarped = first.isPreTarped || draft.isPreTarped,
+                    isGoingHome = first.isGoingHome || draft.isGoingHome,
+                    shipperName = first.shipperName.ifBlank { draft.shipperName },
+                    consigneeName = first.consigneeName.ifBlank { draft.consigneeName },
+                    error = first.error ?: draft.error,
+                    extraStopCount = maxOf(
+                        first.extraStopCount.toIntOrNull() ?: 0,
+                        draft.extraStopCount.toIntOrNull() ?: 0
+                    ).toString()
+                )
+            } ?: draft
         }
-        val goingHome = Regex(
-            """(?:Going\s*Home|Home\s*Run|Home)\s*[:=\-\s]*([YN])""",
-            RegexOption.IGNORE_CASE
-        ).find(rawText)?.groupValues?.get(1)?.equals("Y", ignoreCase = true) == true
+        return merged.values.toList() + unmatched
+    }
 
-        val tarp = OcrTarpParser.parse(rawText)
-        val extraStopCount = StopOffParser.parseCount(rawText) ?: 0
-        val tarpType = when (tarp?.tarpType) {
+    fun parse(fileName: String, rawText: String, defaultPercentage: String):     BatchScreenshot {
+            val parsed = DispatchMessageParser.parse(rawText)
+        val dateFormat = DateTimeFormatter.ofPattern("MM/dd/yyyy", Locale.US)
+        fun Long?.asDate(): String = this?.let {
+            java.time.Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).toLocalDate().format(dateFormat)
+        }.orEmpty()
+        val tarpType = when (parsed.tarp?.tarpType) {
             "4' Drop" -> "4' Drop"
             "8' Drop" -> "8' Drop"
             else -> "None"
@@ -665,19 +644,19 @@ internal object ScreenshotBatchParser {
         return BatchScreenshot(
             fileName = fileName,
             rawText = rawText,
-            proNumber = pro,
-            pickupDate = pickupDate,
-            deliveryDate = deliveryDate,
-            grossPay = pay,
-            bounceMiles = bounce,
-            loadedMiles = loaded,
+            proNumber = parsed.proNumber.orEmpty(),
+            pickupDate = parsed.pickupDateMillis.asDate(),
+            deliveryDate = parsed.deliveryDateMillis.asDate(),
+            grossPay = parsed.loadPay.orEmpty(),
+            bounceMiles = parsed.dispatchedBounceMiles.orEmpty(),
+            loadedMiles = parsed.dispatchedLoadedMiles.orEmpty(),
             percentageRate = defaultPercentage,
             tarpType = tarpType,
-            isPreTarped = tarp?.isPreTarped == true,
-            isGoingHome = goingHome,
-            shipperName = shipperName.toString().trim(),
-            consigneeName = consigneeName.toString().trim(),
-            extraStopCount = extraStopCount.toString()
+            isPreTarped = parsed.tarp?.isPreTarped == true,
+            isGoingHome = parsed.isGoingHome == true,
+            shipperName = parsed.shipperText,
+            consigneeName = parsed.consigneeText,
+            extraStopCount = (parsed.extraStopCount ?: 0).toString()
         )
     }
 }

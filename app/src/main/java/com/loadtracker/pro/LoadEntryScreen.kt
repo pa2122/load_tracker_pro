@@ -159,6 +159,9 @@ fun LoadEntryScreen(
     var showDatePicker by remember { mutableStateOf(value = false) }
     var showDeliveryDatePicker by remember { mutableStateOf(value = false) }
     var showProPaywallDialog by remember { mutableStateOf(value = false) }
+    var hasScanned by rememberSaveable { mutableStateOf(value = false) }
+    var pickupDateConfirmed by rememberSaveable(editingLoad) { mutableStateOf(value = true) }
+    var incompleteScanFields by remember { mutableStateOf(value = emptyList<DispatchField>()) }
     var selectedDateMillis by rememberSaveable(editingLoad) {
         mutableLongStateOf(value = editingLoad?.pickupTimestamp ?: System.currentTimeMillis())
     }
@@ -361,259 +364,91 @@ fun LoadEntryScreen(
     }
 
     fun processOcrText(rawText: String) {
-        val lines = rawText.lines().map { it.trim() }.filter { it.isNotBlank() }
-        StopOffParser.parseCount(rawText)?.let { extraStopCount = it.toString() }
+        val parsed = DispatchMessageParser.parse(rawText)
+        parsed.extraStopCount?.let { extraStopCount = it.toString() }
         if (stopDrafts.isEmpty()) {
-            stopDrafts.addAll(StopOffParser.parseRouteStops(rawText))
+            stopDrafts.addAll(parsed.routeStops)
         }
-        OcrDateParser.extractDeliveryDateMillis(rawText)?.let {
-            selectedDeliveryDateMillis = it
-        }
+        parsed.deliveryDateMillis?.let { selectedDeliveryDateMillis = it }
+        parsed.proNumber?.let { proNum = it }
 
-        // 1. Extract PRO #
-        val proRegex = Regex("""\b(?:PRO|Order|Load|Trip)\s*(?:Number|No|Num)?\s*#?\s*:?\s*(\d{4,12})""", RegexOption.IGNORE_CASE)
-        val proMatch = proRegex.find(rawText)
-        if (proMatch != null && proMatch.groupValues.size > 1) {
-            proNum = proMatch.groupValues[1]
-        } else {
-            val fallbackPro = Regex("""\b\d{6,10}\b""").find(rawText)
-            if (fallbackPro != null) proNum = fallbackPro.value
-        }
-
-        // 2. Extract Load Pay
-        val parsedPay = OcrPayParser.parse(rawText)
+        val parsedPay = parsed.loadPay
         if (parsedPay != null) {
             loadPay = parsedPay
-        } else {
-            val dollarMatch = Regex("""\$?\s*([1-9][0-9]{2,4}(?:\.[0-9]{2})?)""").find(rawText)
-            if (dollarMatch != null && dollarMatch.groupValues.size > 1) {
-                loadPay = dollarMatch.groupValues[1].replace(",", "")
-            }
         }
 
-        // 3. Extract Dispatched Miles (Loaded Miles & Bounce/Deadhead Miles)
-        val numRegex = Regex("""\b\d{1,4}(?:,\d{3})*(?:\.\d+)?\b""")
-        var extractedLoaded: String? = null
-        var extractedBounce: String? = null
+        parsed.dispatchedLoadedMiles?.let { dLoaded = it }
+        parsed.dispatchedBounceMiles?.let { dBounce = it }
 
-        // Direct regex check for Loaded Miles & Bounce Miles
-        val loadedRegex = Regex("""(?:loaded\s*miles|loaded\s*mi|load\s*miles|trip\s*miles|distance)\s*[:=\-\s]*(\d{1,4}(?:,\d{3})*(?:\.\d+)?)""", RegexOption.IGNORE_CASE)
-        val loadedMatch = loadedRegex.find(rawText)
-        if (loadedMatch != null && loadedMatch.groupValues.size > 1) {
-            extractedLoaded = loadedMatch.groupValues[1].replace(",", "")
-        }
-
-        val bounceRegex = Regex("""(?:bounce\s*miles|bounce\s*mi|deadhead\s*miles|deadhead\s*mi|dh\s*miles)\s*[:=\-\s]*(\d{1,4}(?:,\d{3})*(?:\.\d+)?)""", RegexOption.IGNORE_CASE)
-        val bounceMatch = bounceRegex.find(rawText)
-        if (bounceMatch != null && bounceMatch.groupValues.size > 1) {
-            extractedBounce = bounceMatch.groupValues[1].replace(",", "")
-        }
-
-        // Line-by-line inspection fallback (safely ignoring headers and order numbers)
-        if (extractedLoaded == null || extractedBounce == null) {
-            for (line in lines) {
-                val lower = line.lowercase(Locale.US)
-                if (lower.contains("out of route") || lower.contains("po number") || lower.contains("order") || lower.contains("status")) {
-                    continue
-                }
-
-                if (extractedLoaded == null && (lower.contains("loaded miles") || lower.contains("loaded mi"))) {
-                    val match = numRegex.find(line)
-                    if (match != null) extractedLoaded = match.value.replace(",", "")
-                }
-
-                if (extractedBounce == null && (lower.contains("bounce miles") || lower.contains("bounce mi") || lower.contains("deadhead miles") || lower.contains("dh miles"))) {
-                    val match = numRegex.find(line)
-                    if (match != null) extractedBounce = match.value.replace(",", "")
-                }
-            }
-        }
-
-        if (extractedLoaded != null) dLoaded = extractedLoaded
-        if (extractedBounce != null) dBounce = extractedBounce
-
-        // 4. Extract Shipper & Consignee
-        var foundShipper = false
-        var foundConsignee = false
-        val shipperSb = StringBuilder()
-        val consigneeSb = StringBuilder()
-
-        for (i in lines.indices) {
-            val line = lines[i]
-            val lower = line.lowercase(Locale.US)
-            if (lower.contains("shipper") || lower.contains("pickup") || lower.contains("origin")) {
-                foundShipper = true
-                foundConsignee = false
-                val name = line.substringAfter(":").trim()
-                if (name.isNotBlank() && !name.equals("origin", ignoreCase = true) && !name.equals("pickup", ignoreCase = true) && !name.equals("shipper", ignoreCase = true)) {
-                    shipperSb.append(name).append("\n")
-                }
-                continue
-            }
-            if (lower.contains("consignee") || lower.contains("delivery") || lower.contains("destination") || lower.contains("drop")) {
-                foundConsignee = true
-                foundShipper = false
-                val name = line.substringAfter(":").trim()
-                if (name.isNotBlank() && !name.equals("final dropoff", ignoreCase = true) && !name.equals("dropoff", ignoreCase = true) && !name.equals("drop", ignoreCase = true) && !name.equals("consignee", ignoreCase = true) && !name.equals("delivery", ignoreCase = true)) {
-                    consigneeSb.append(name).append("\n")
-                }
-                continue
-            }
-            if (foundShipper && shipperSb.lines().size < 4) {
-                shipperSb.append(line).append("\n")
-            }
-            if (foundConsignee && consigneeSb.lines().size < 4) {
-                consigneeSb.append(line).append("\n")
-            }
-        }
-
-        if (shipperSb.isNotBlank()) {
-            sRawPaste = shipperSb.toString().trim()
+        if (parsed.shipperText.isNotBlank()) {
+            sRawPaste = parsed.shipperText
             resolveAddress(sRawPaste, isShipper = true)
         }
-        if (consigneeSb.isNotBlank()) {
-            cRawPaste = consigneeSb.toString().trim()
+        if (parsed.consigneeText.isNotBlank()) {
+            cRawPaste = parsed.consigneeText
             resolveAddress(cRawPaste, isShipper = false)
         }
 
-        // 5. Extract Going Home status
-        val homeMatch = Regex("""(?:Going\s*Home|Home\s*Run|Home)\s*[:=\-\s]*([YN])""", RegexOption.IGNORE_CASE).find(rawText)
-        if (homeMatch != null && homeMatch.groupValues.size > 1) {
-            isGoingHome = homeMatch.groupValues[1].equals("Y", ignoreCase = true)
-        }
+        parsed.isGoingHome?.let { isGoingHome = it }
 
         // P indicates pre-tarped but doesn't identify the drop size.
-        OcrTarpParser.parse(rawText)?.let { tarpInfo ->
+        parsed.tarp?.let { tarpInfo ->
             tarpInfo.tarpType?.let { selectedTarp = it }
             tarpInfo.isPreTarped?.let { isPreTarped = it }
         }
 
-        // 7. Extract Optional Facility Instructions, Directions & Parking Info
-        var currentFacility = ""
-        val shipperInst = StringBuilder()
-        val shipperDir = StringBuilder()
-        var shipperPark = ""
-
-        val consigneeInst = StringBuilder()
-        val consigneeDir = StringBuilder()
-        var consigneePark = ""
-
-        var currentField = ""
-
-        for (i in lines.indices) {
-            val line = lines[i]
-            val lower = line.lowercase(Locale.US)
-
-            if (lower.contains("shipper") || lower.contains("pickup") || lower.contains("origin")) {
-                currentFacility = "shipper"
-                currentField = ""
-            } else if (lower.contains("consignee") || lower.contains("delivery") || lower.contains("destination") || lower.contains("drop")) {
-                currentFacility = "consignee"
-                currentField = ""
-            } else if (StopOffParser.isLabelLine(line)) {
-                currentFacility = ""
-                currentField = ""
-            } else if (lower.contains("pro number") || lower.contains("load number") || lower.contains("gross:") || lower.contains("additional load notes")) {
-                currentFacility = ""
-                currentField = ""
-            }
-
-            if (lower.startsWith("instructions:") || lower.startsWith("instruction:")) {
-                currentField = "instructions"
-                val content = line.substringAfter(":").trim()
-                if (content.isNotBlank()) {
-                    if (currentFacility == "shipper") shipperInst.append(content).append(" ")
-                    else if (currentFacility == "consignee") consigneeInst.append(content).append(" ")
-                }
-                continue
-            }
-
-            if (lower.startsWith("directions:") || lower.startsWith("direction:")) {
-                currentField = "directions"
-                val content = line.substringAfter(":").trim()
-                if (content.isNotBlank()) {
-                    if (currentFacility == "shipper") shipperDir.append(content).append(" ")
-                    else if (currentFacility == "consignee") consigneeDir.append(content).append(" ")
-                }
-                continue
-            }
-
-            if (lower.startsWith("parking:")) {
-                currentField = "parking"
-                val content = line.substringAfter(":").trim()
-                if (currentFacility == "shipper") shipperPark = content
-                else if (currentFacility == "consignee") consigneePark = content
-                continue
-            }
-
-            if (currentField == "instructions" && !line.contains(":")) {
-                if (currentFacility == "shipper") shipperInst.append(line).append(" ")
-                else if (currentFacility == "consignee") consigneeInst.append(line).append(" ")
-            } else if (currentField == "directions" && !line.contains(":")) {
-                if (currentFacility == "shipper") shipperDir.append(line).append(" ")
-                else if (currentFacility == "consignee") consigneeDir.append(line).append(" ")
-            }
-        }
-
         val notesSb = StringBuilder()
-        if (shipperInst.isNotBlank() || shipperDir.isNotBlank() || shipperPark.isNotBlank()) {
-            notesSb.append("--- SHIPPER FACILITY NOTES ---\n")
-            if (shipperInst.isNotBlank()) notesSb.append("⚠️ Instructions: ").append(shipperInst.toString().trim()).append("\n")
-            if (shipperDir.isNotBlank()) notesSb.append("🗺️ Directions: ").append(shipperDir.toString().trim()).append("\n")
-            if (shipperPark.isNotBlank()) notesSb.append("🅿️ Parking: ").append(shipperPark).append("\n")
-            notesSb.append("\n")
+        fun appendNotes(title: String, notes: FacilityNoteFields) {
+            if (notes.instructions.isBlank() && notes.directions.isBlank() && notes.parking.isBlank()) return
+            if (notesSb.isNotEmpty()) notesSb.append("\n\n")
+            notesSb.append("--- $title FACILITY NOTES ---\n")
+            if (notes.instructions.isNotBlank()) notesSb.append("⚠️ Instructions: ").append(notes.instructions).append("\n")
+            if (notes.directions.isNotBlank()) notesSb.append("🗺️ Directions: ").append(notes.directions).append("\n")
+            if (notes.parking.isNotBlank()) notesSb.append("🅿️ Parking: ").append(notes.parking).append("\n")
         }
-
-        if (consigneeInst.isNotBlank() || consigneeDir.isNotBlank() || consigneePark.isNotBlank()) {
-            notesSb.append("--- CONSIGNEE FACILITY NOTES ---\n")
-            if (consigneeInst.isNotBlank()) notesSb.append("⚠️ Instructions: ").append(consigneeInst.toString().trim()).append("\n")
-            if (consigneeDir.isNotBlank()) notesSb.append("🗺️ Directions: ").append(consigneeDir.toString().trim()).append("\n")
-            if (consigneePark.isNotBlank()) notesSb.append("🅿️ Parking: ").append(consigneePark).append("\n")
-        }
-
+        appendNotes("SHIPPER", parsed.shipperNotes)
+        appendNotes("CONSIGNEE", parsed.consigneeNotes)
         if (notesSb.isNotBlank()) {
             tripNotes = notesSb.toString().trim()
         }
 
         scannedShipperNotes = if (sRawPaste.isNotBlank()) {
-            ScannedFacilityNotes(
-                FacilityNotes.key(sRawPaste),
-                FacilityNoteFields(shipperInst.toString().trim(), shipperDir.toString().trim(), shipperPark.trim())
-            ).encode()
+            ScannedFacilityNotes(FacilityNotes.key(sRawPaste), parsed.shipperNotes).encode()
         } else ""
         scannedConsigneeNotes = if (cRawPaste.isNotBlank()) {
-            ScannedFacilityNotes(
-                FacilityNotes.key(cRawPaste),
-                FacilityNoteFields(consigneeInst.toString().trim(), consigneeDir.toString().trim(), consigneePark.trim())
-            ).encode()
+            ScannedFacilityNotes(FacilityNotes.key(cRawPaste), parsed.consigneeNotes).encode()
         } else ""
 
-        // 8. Extract Appointment Date/Time Lines (@ or B)
-        val apptRegex = Regex("""(?:[@B]\s*)?(\d{1,2}/\d{1,2}/\d{2,4}\s+\d{1,2}:\d{2}(?::\d{2})?\s*(?:AM|PM)?)""", RegexOption.IGNORE_CASE)
-        for (i in lines.indices) {
-            val line = lines[i]
-            val match = apptRegex.find(line)
-            if (match != null) {
-                val apptText = line.trim()
-                val isBeforeType = apptText.startsWith("B", ignoreCase = true)
-                val type = if (isBeforeType) "BEFORE" else "EXACT"
-                val rawDateStr = match.groupValues[1].trim()
-                val parsedTs = parseApptDateToMillis(rawDateStr)
-
-                if (i < lines.size / 2 && sApptTimestamp == null) {
-                    sApptText = apptText
-                    sApptTimestamp = parsedTs
-                    sApptType = type
-                    if (parsedTs != null) {
-                        selectedDateMillis = parsedTs
-                    }
-                } else if (cApptTimestamp == null) {
-                    cApptText = apptText
-                    cApptTimestamp = parsedTs
-                    cApptType = type
-                }
+        if (sApptTimestamp == null) {
+            parsed.pickupAppointment?.let { appt ->
+                sApptText = appt.text
+                sApptTimestamp = appt.timestamp
+                sApptType = appt.type
             }
         }
+        parsed.pickupDateMillis?.let { selectedDateMillis = it }
+        if (parsed.pickupDateMillis != null) {
+            pickupDateConfirmed = true
+        } else if (!hasScanned && sApptTimestamp == null) {
+            pickupDateConfirmed = false
+        }
+        hasScanned = true
+        if (cApptTimestamp == null) {
+            parsed.deliveryAppointment?.let { appt ->
+                cApptText = appt.text
+                cApptTimestamp = appt.timestamp
+                cApptType = appt.type
+            }
+        }
+        incompleteScanFields = listOfNotNull(
+            DispatchField.PRO_NUMBER.takeIf { proNum.isBlank() },
+            DispatchField.PICKUP_FACILITY.takeIf { sRawPaste.isBlank() },
+            DispatchField.DELIVERY_FACILITY.takeIf { cRawPaste.isBlank() },
+            DispatchField.PICKUP_DATE.takeIf { !pickupDateConfirmed },
+            DispatchField.PAY.takeIf { loadPay.toDoubleOrNull() == null },
+            DispatchField.LOADED_MILES.takeIf { dLoaded.toDoubleOrNull() == null },
+            DispatchField.BOUNCE_MILES.takeIf { dBounce.toDoubleOrNull() == null }
+        )
     }
 
     var isScanningOcr by remember { mutableStateOf(false) }
@@ -932,6 +767,7 @@ fun LoadEntryScreen(
                                 picked,
                                 ZoneId.systemDefault()
                             )
+                            pickupDateConfirmed = true
                         }
                         showDatePicker = false
                     }) { Text("OK") }
@@ -1186,7 +1022,27 @@ fun LoadEntryScreen(
                         editingLoad.currentStopIndex <= stopDrafts.size) &&
                 sLat != null &&
                 (cLat != null || isConsigneeAddressTbd) &&
-                (!isPreTarped || selectedTarp != "None")
+                (!isPreTarped || selectedTarp != "None") &&
+                pickupDateConfirmed
+
+        val blockingFields = if (!hasScanned) emptyList() else listOfNotNull(
+            DispatchField.PRO_NUMBER.takeIf { proNum.isBlank() },
+            DispatchField.PICKUP_FACILITY.takeIf { sLat == null },
+            DispatchField.DELIVERY_FACILITY.takeIf { cLat == null && !isConsigneeAddressTbd },
+            DispatchField.PICKUP_DATE.takeIf { !pickupDateConfirmed },
+            DispatchField.PAY.takeIf { loadPay.toDoubleOrNull() == null },
+            DispatchField.LOADED_MILES.takeIf { dLoaded.toDoubleOrNull() == null },
+            DispatchField.BOUNCE_MILES.takeIf { dBounce.toDoubleOrNull() == null }
+        )
+        if (blockingFields.isNotEmpty()) {
+            Text(
+                stringResource(
+                    R.string.incomplete_scan_blocking,
+                    blockingFields.map { stringResource(it.labelRes) }.joinToString(", ")
+                ),
+                color = MaterialTheme.colorScheme.error
+            )
+        }
 
         val consigneeNameToSave = when {
             cRawPaste.isNotBlank() -> cRawPaste.trim()
@@ -1364,6 +1220,25 @@ fun LoadEntryScreen(
     }
 
     val pending = pendingLoadSave
+    if (incompleteScanFields.isNotEmpty()) {
+        AlertDialog(
+            onDismissRequest = { incompleteScanFields = emptyList() },
+            title = { Text(stringResource(R.string.incomplete_scan_title)) },
+            text = {
+                Text(
+                    stringResource(
+                        R.string.incomplete_scan_message,
+                        incompleteScanFields.map { stringResource(it.labelRes) }.joinToString(", ")
+                    )
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { incompleteScanFields = emptyList() }) {
+                    Text(stringResource(R.string.incomplete_scan_ok))
+                }
+            }
+        )
+    }
     if (showFridayReminder && pending != null) {
         AlertDialog(
             onDismissRequest = { showFridayReminder = false },
