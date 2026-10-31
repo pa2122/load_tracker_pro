@@ -189,20 +189,95 @@ abstract class AppDatabase : RoomDatabase() {
 
         private val MIGRATION_12_13 = object : Migration(12, 13) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("ALTER TABLE fuel_entries ADD COLUMN defGallons REAL NOT NULL DEFAULT 0.0")
-                db.execSQL("ALTER TABLE fuel_entries ADD COLUMN defCost REAL NOT NULL DEFAULT 0.0")
+                // Databases that came from v1.x (same version numbers, no fuel table) get it in 14->15.
+                if (hasTable(db, "fuel_entries")) {
+                    addColumnIfMissing(db, "fuel_entries", "defGallons REAL NOT NULL DEFAULT 0.0")
+                    addColumnIfMissing(db, "fuel_entries", "defCost REAL NOT NULL DEFAULT 0.0")
+                }
             }
         }
 
         private val MIGRATION_13_14 = object : Migration(13, 14) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("ALTER TABLE fuel_entries ADD COLUMN receiptPhotoUri TEXT")
+                if (hasTable(db, "fuel_entries")) {
+                    addColumnIfMissing(db, "fuel_entries", "receiptPhotoUri TEXT")
+                }
             }
+        }
+
+        private fun ensureFuelAndDvirTables(db: SupportSQLiteDatabase) {
+            db.execSQL("""
+                CREATE TABLE IF NOT EXISTS fuel_entries (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    timestamp INTEGER NOT NULL,
+                    gallons REAL NOT NULL,
+                    totalCost REAL NOT NULL,
+                    pricePerGallon REAL NOT NULL,
+                    state TEXT NOT NULL,
+                    stationName TEXT NOT NULL,
+                    odometer REAL NOT NULL,
+                    defGallons REAL NOT NULL DEFAULT 0.0,
+                    defCost REAL NOT NULL DEFAULT 0.0,
+                    receiptPhotoUri TEXT
+                )
+            """.trimIndent())
+            db.execSQL("""
+                CREATE TABLE IF NOT EXISTS dvir_entries (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    timestamp INTEGER NOT NULL,
+                    truckNumber TEXT NOT NULL,
+                    trailerNumber TEXT NOT NULL,
+                    odometer REAL NOT NULL,
+                    passedTractorCheck INTEGER NOT NULL,
+                    passedCouplingCheck INTEGER NOT NULL,
+                    passedBrakesTiresCheck INTEGER NOT NULL,
+                    passedFlatbedGearCheck INTEGER NOT NULL,
+                    strapsCount INTEGER NOT NULL,
+                    chainsBindersCount INTEGER NOT NULL,
+                    tarpsCondition TEXT NOT NULL,
+                    coilRacksCount INTEGER NOT NULL,
+                    defectsFound TEXT,
+                    isSafeToOperate INTEGER NOT NULL,
+                    driverSignature TEXT NOT NULL
+                )
+            """.trimIndent())
+        }
+
+        // v1.x databases carry multi-stop columns that v2's loads table does not have; Room rejects extras, so rebuild.
+        private fun dropV1OnlyLoadColumns(db: SupportSQLiteDatabase) {
+            if (!hasTable(db, "trucking_loads")) return
+            val v1Only = listOf("extraStopCount", "stopOffsData", "currentStopIndex", "lastStopLoadedMiles")
+            if (v1Only.none { hasColumn(db, "trucking_loads", it) }) return
+            val columns = "proNumber, dispatchedBounceMiles, dispatchedLoadedMiles, bounceMilesStart, bounceMilesEnd, " +
+                "loadedMilesStart, loadedMilesEnd, percentageRate, loadPay, tarpType, isPreTarped, pickupTimestamp, " +
+                "isGoingHome, tripState, tripNotes, deliveryTimestamp, shipperName, shipperLat, shipperLong, " +
+                "consigneeName, consigneeLat, consigneeLong, isTrainingWeek, trainerPayRate, pickupApptText, " +
+                "pickupApptTimestamp, pickupApptType, consigneeApptText, consigneeApptTimestamp, consigneeApptType, " +
+                "dockArrivalTime, detentionHoursLogged, detentionFlatPay"
+            db.execSQL("DROP TABLE IF EXISTS trucking_loads_v2_rebuild")
+            db.execSQL(
+                "CREATE TABLE trucking_loads_v2_rebuild (`proNumber` TEXT NOT NULL, `dispatchedBounceMiles` REAL NOT NULL, " +
+                    "`dispatchedLoadedMiles` REAL NOT NULL, `bounceMilesStart` REAL NOT NULL, `bounceMilesEnd` REAL NOT NULL, " +
+                    "`loadedMilesStart` REAL NOT NULL, `loadedMilesEnd` REAL NOT NULL, `percentageRate` REAL NOT NULL, " +
+                    "`loadPay` REAL NOT NULL, `tarpType` TEXT NOT NULL, `isPreTarped` INTEGER NOT NULL, " +
+                    "`pickupTimestamp` INTEGER NOT NULL, `isGoingHome` INTEGER NOT NULL, `tripState` TEXT NOT NULL, " +
+                    "`tripNotes` TEXT, `deliveryTimestamp` INTEGER, `shipperName` TEXT, `shipperLat` REAL, `shipperLong` REAL, " +
+                    "`consigneeName` TEXT, `consigneeLat` REAL, `consigneeLong` REAL, `isTrainingWeek` INTEGER NOT NULL, " +
+                    "`trainerPayRate` REAL NOT NULL, `pickupApptText` TEXT, `pickupApptTimestamp` INTEGER, " +
+                    "`pickupApptType` TEXT, `consigneeApptText` TEXT, `consigneeApptTimestamp` INTEGER, " +
+                    "`consigneeApptType` TEXT, `dockArrivalTime` INTEGER, `detentionHoursLogged` REAL NOT NULL, " +
+                    "`detentionFlatPay` REAL NOT NULL, PRIMARY KEY(`proNumber`))"
+            )
+            db.execSQL("INSERT INTO trucking_loads_v2_rebuild ($columns) SELECT $columns FROM trucking_loads")
+            db.execSQL("DROP TABLE trucking_loads")
+            db.execSQL("ALTER TABLE trucking_loads_v2_rebuild RENAME TO trucking_loads")
         }
 
         private val MIGRATION_14_15 = object : Migration(14, 15) {
             // One notes record per facility (name + address); backfilled from the notes blobs saved on past loads.
             override fun migrate(db: SupportSQLiteDatabase) {
+                ensureFuelAndDvirTables(db)
+                dropV1OnlyLoadColumns(db)
                 db.execSQL(
                     """
                     CREATE TABLE IF NOT EXISTS facility_notes (
