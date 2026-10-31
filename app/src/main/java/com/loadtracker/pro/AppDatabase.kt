@@ -9,7 +9,7 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import java.io.File
 
-@Database(entities = [CurrentLoad::class, TripBreadcrumb::class, FuelEntry::class, DvirEntry::class], version = 14, exportSchema = true)
+@Database(entities = [CurrentLoad::class, TripBreadcrumb::class, FuelEntry::class, DvirEntry::class, FacilityNoteEntity::class], version = 15, exportSchema = true)
 abstract class AppDatabase : RoomDatabase() {
 
     abstract fun loadDao(): LoadDao
@@ -17,6 +17,60 @@ abstract class AppDatabase : RoomDatabase() {
     companion object {
         @Volatile
         private var INSTANCE: AppDatabase? = null
+        internal val ALL_MIGRATIONS: Array<Migration>
+            get() = arrayOf(
+                MIGRATION_1_2,
+                MIGRATION_2_3,
+                MIGRATION_3_4,
+                MIGRATION_4_5,
+                MIGRATION_5_6,
+                MIGRATION_6_7,
+                MIGRATION_7_8,
+                MIGRATION_8_9,
+                MIGRATION_9_10,
+                MIGRATION_10_11,
+                MIGRATION_11_12,
+                MIGRATION_12_13,
+                MIGRATION_13_14,
+                MIGRATION_14_15
+            )
+
+        private fun hasTable(db: SupportSQLiteDatabase, tableName: String): Boolean {
+            val cursor = db.query(
+                "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
+                arrayOf(tableName)
+            )
+            return try {
+                cursor.moveToFirst() && cursor.count > 0
+            } finally {
+                cursor.close()
+            }
+        }
+
+        private fun hasColumn(db: SupportSQLiteDatabase, tableName: String, columnName: String): Boolean {
+            val cursor = db.query(
+                "PRAGMA table_info($tableName)",
+                emptyArray()
+            )
+            return try {
+                while (cursor.moveToNext()) {
+                    val nameIndex = cursor.getColumnIndexOrThrow("name")
+                    if (cursor.getString(nameIndex) == columnName) {
+                        return true
+                    }
+                }
+                false
+            } finally {
+                cursor.close()
+            }
+        }
+
+        private fun addColumnIfMissing(db: SupportSQLiteDatabase, tableName: String, columnDefinition: String) {
+            val columnName = columnDefinition.substringBefore(' ').trim()
+            if (!hasColumn(db, tableName, columnName)) {
+                db.execSQL("ALTER TABLE $tableName ADD COLUMN $columnDefinition")
+            }
+        }
 
         private val MIGRATION_1_2 = object : Migration(1, 2) {
             override fun migrate(db: SupportSQLiteDatabase) {}
@@ -146,6 +200,91 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_14_15 = object : Migration(14, 15) {
+            // One notes record per facility (name + address); backfilled from the notes blobs saved on past loads.
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS facility_notes (
+                        facilityKey TEXT NOT NULL,
+                        displayName TEXT NOT NULL,
+                        instructions TEXT NOT NULL,
+                        directions TEXT NOT NULL,
+                        parking TEXT NOT NULL,
+                        updatedAt INTEGER NOT NULL,
+                        PRIMARY KEY(facilityKey)
+                    )
+                    """.trimIndent()
+                )
+                if (hasTable(db, "trucking_loads") &&
+                    hasColumn(db, "trucking_loads", "tripNotes") &&
+                    hasColumn(db, "trucking_loads", "shipperName") &&
+                    hasColumn(db, "trucking_loads", "consigneeName")
+                ) {
+                    try {
+                        backfillFacilityNotes(db)
+                    } catch (e: Exception) {
+                        // Notes are a convenience; never block the upgrade over unparseable history.
+                        e.printStackTrace()
+                    }
+                }
+            }
+        }
+
+        private fun backfillFacilityNotes(db: SupportSQLiteDatabase) {
+            val placeholders = setOf(
+                "origin", "pickup", "shipper", "final dropoff", "dropoff", "drop", "consignee", "delivery"
+            )
+            val merged = linkedMapOf<String, FacilityNoteEntity>()
+
+            fun absorb(name: String?, fields: FacilityNoteFields, timestamp: Long) {
+                val displayName = name?.trim().orEmpty()
+                if (displayName.isEmpty() || displayName.lowercase() in placeholders || fields.isEmpty) return
+                val key = FacilityNotes.key(displayName)
+                if (key.isEmpty()) return
+                val combined = merged[key]?.let { FacilityNotes.merge(it.fields(), fields) } ?: fields
+                merged[key] = FacilityNoteEntity(
+                    facilityKey = key,
+                    displayName = displayName,
+                    instructions = combined.instructions,
+                    directions = combined.directions,
+                    parking = combined.parking,
+                    updatedAt = timestamp
+                )
+            }
+
+            // Oldest first so the newest load's notes win.
+            val cursor = db.query(
+                "SELECT shipperName, consigneeName, tripNotes, pickupTimestamp FROM trucking_loads " +
+                    "WHERE tripNotes IS NOT NULL AND TRIM(tripNotes) != '' ORDER BY pickupTimestamp ASC"
+            )
+            try {
+                while (cursor.moveToNext()) {
+                    val (shipperFields, consigneeFields) = FacilityNotes.parseTripNotes(cursor.getString(2).orEmpty())
+                    val timestamp = cursor.getLong(3)
+                    absorb(cursor.getString(0), shipperFields, timestamp)
+                    absorb(cursor.getString(1), consigneeFields, timestamp)
+                }
+            } finally {
+                cursor.close()
+            }
+
+            merged.values.forEach { note ->
+                db.insert(
+                    "facility_notes",
+                    android.database.sqlite.SQLiteDatabase.CONFLICT_REPLACE,
+                    android.content.ContentValues().apply {
+                        put("facilityKey", note.facilityKey)
+                        put("displayName", note.displayName)
+                        put("instructions", note.instructions)
+                        put("directions", note.directions)
+                        put("parking", note.parking)
+                        put("updatedAt", note.updatedAt)
+                    }
+                )
+            }
+        }
+
         // Safe singleton factory constructor to control access to your data file
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
@@ -154,7 +293,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "load_tracker_local.db"
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15)
                     .build()
                 INSTANCE = instance
                 instance

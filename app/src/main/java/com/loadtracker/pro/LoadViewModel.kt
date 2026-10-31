@@ -3,13 +3,10 @@ package com.loadtracker.pro
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import java.time.DayOfWeek
 import java.time.Instant
@@ -34,19 +31,20 @@ class LoadViewModel(application: Application) :
     private val _loadsLoaded = MutableStateFlow(false)
     val loadsLoaded: StateFlow<Boolean> = _loadsLoaded.asStateFlow()
 
-    val allFacilities: Flow<List<String>> = loadDao.getAllFacilityNames()
-    
+    val facilities: Flow<List<FacilityNoteEntity>> = loadDao.getAllFacilityNotes()
+
     private val _selectedFacility = MutableStateFlow("")
     val selectedFacility = _selectedFacility.asStateFlow()
 
-    @OptIn(ExperimentalCoroutinesApi::class)
-    val facilityNotes: Flow<List<FacilityNote>> = _selectedFacility.flatMapLatest { name ->
-        if (name.isBlank()) flowOf(emptyList())
-        else loadDao.getNotesForFacility(name)
+    fun selectFacility(key: String) {
+        _selectedFacility.value = key
     }
 
-    fun selectFacility(name: String) {
-        _selectedFacility.value = name
+    suspend fun getFacilityNote(name: String): FacilityNoteEntity? =
+        loadDao.getFacilityNote(FacilityNotes.key(name))
+
+    suspend fun saveFacilityNote(note: FacilityNoteEntity) {
+        loadDao.upsertFacilityNote(note)
     }
 
     fun getBreadcrumbs(pro: String): Flow<List<TripBreadcrumb>> {

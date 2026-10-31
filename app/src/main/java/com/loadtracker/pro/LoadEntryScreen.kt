@@ -84,6 +84,8 @@ fun LoadEntryScreen(
     editingLoad: CurrentLoad? = null,
     isHistorical: Boolean = false,
     existingProNumbers: List<String> = emptyList(),
+    lookupFacilityNote: suspend (String) -> FacilityNoteEntity? = { null },
+    saveFacilityNote: suspend (FacilityNoteEntity) -> Unit = {},
     onSaveClick: (CurrentLoad) -> Unit,
     onCancelClick: () -> Unit,
 ) {
@@ -93,6 +95,10 @@ fun LoadEntryScreen(
 
     var proNum by rememberSaveable { mutableStateOf(value = editingLoad?.proNumber ?: "") }
     var showDuplicateWarningDialog by remember { mutableStateOf(false) }
+    var scannedShipperNotes by rememberSaveable { mutableStateOf("") }
+    var scannedConsigneeNotes by rememberSaveable { mutableStateOf("") }
+    var facilityPrompts by remember { mutableStateOf<FacilityPromptState?>(null) }
+    var isResolvingFacilityNotes by remember { mutableStateOf(false) }
     var pendingDuplicateLoad by remember { mutableStateOf<CurrentLoad?>(null) }
     var dBounce by rememberSaveable { mutableStateOf(value = editingLoad?.dispatchedBounceMiles?.toString() ?: "") }
     var dLoaded by rememberSaveable { mutableStateOf(value = editingLoad?.dispatchedLoadedMiles?.toString() ?: "") }
@@ -207,6 +213,46 @@ fun LoadEntryScreen(
             } catch (_: Exception) {}
         }
         return null
+    }
+
+    fun finishSave(load: CurrentLoad) {
+        if (isResolvingFacilityNotes) return
+        isResolvingFacilityNotes = true
+        scope.launch {
+            val prompts = mutableListOf<FacilityPrompt>()
+            val candidates = listOf(
+                ScannedFacilityNotes.decode(scannedShipperNotes) to load.shipperName,
+                ScannedFacilityNotes.decode(scannedConsigneeNotes) to load.consigneeName
+            )
+            for ((scanned, name) in candidates) {
+                if (scanned == null || name.isNullOrBlank()) continue
+                val key = FacilityNotes.key(name)
+                // A scan only applies to the facility it was read for; the user may have changed the address since.
+                if (key != scanned.facilityKey) continue
+                val existing = lookupFacilityNote(name)
+                when (val plan = FacilityNotes.plan(existing?.fields(), scanned.fields)) {
+                    FacilityNotePlan.NoChange -> {}
+                    is FacilityNotePlan.Save -> saveFacilityNote(
+                        FacilityNoteEntity(
+                            facilityKey = key,
+                            displayName = existing?.displayName ?: name.trim(),
+                            instructions = plan.fields.instructions,
+                            directions = plan.fields.directions,
+                            parking = plan.fields.parking,
+                            updatedAt = System.currentTimeMillis()
+                        )
+                    )
+                    is FacilityNotePlan.Ask -> prompts += FacilityPrompt(
+                        key = key,
+                        displayName = existing?.displayName ?: name.trim(),
+                        saved = existing?.fields() ?: FacilityNoteFields(),
+                        plan = plan
+                    )
+                }
+            }
+            isResolvingFacilityNotes = false
+            if (prompts.isEmpty()) onSaveClick(load) else facilityPrompts = FacilityPromptState(load, prompts)
+        }
     }
 
     fun processOcrText(rawText: String) {
@@ -415,6 +461,19 @@ fun LoadEntryScreen(
         if (notesSb.isNotBlank()) {
             tripNotes = notesSb.toString().trim()
         }
+
+        scannedShipperNotes = if (sRawPaste.isNotBlank()) {
+            ScannedFacilityNotes(
+                FacilityNotes.key(sRawPaste),
+                FacilityNoteFields(shipperInst.toString().trim(), shipperDir.toString().trim(), shipperPark.trim())
+            ).encode()
+        } else ""
+        scannedConsigneeNotes = if (cRawPaste.isNotBlank()) {
+            ScannedFacilityNotes(
+                FacilityNotes.key(cRawPaste),
+                FacilityNoteFields(consigneeInst.toString().trim(), consigneeDir.toString().trim(), consigneePark.trim())
+            ).encode()
+        } else ""
 
         // 8. Extract Appointment Date/Time Lines (@ or B)
         val apptRegex = Regex("""(?:[@B]\s*)?(\d{1,2}/\d{1,2}/\d{2,4}\s+\d{1,2}:\d{2}(?::\d{2})?\s*(?:AM|PM)?)""", RegexOption.IGNORE_CASE)
@@ -806,7 +865,7 @@ fun LoadEntryScreen(
                 pendingDuplicateLoad = loadToSave
                 showDuplicateWarningDialog = true
             } else {
-                onSaveClick(loadToSave)
+                finishSave(loadToSave)
             }
         }
 
@@ -934,13 +993,13 @@ fun LoadEntryScreen(
             text = { Text("It's Friday! Is this a 'Going Home' load? Marking it as such will protect your OOR percentage.") },
             confirmButton = {
                 Button(onClick = {
-                    onSaveClick(pending.copy(isGoingHome = true))
+                    finishSave(pending.copy(isGoingHome = true))
                     showFridayReminder = false
                 }) { Text("Yes, Home Run") }
             },
             dismissButton = {
                 TextButton(onClick = {
-                    onSaveClick(pending)
+                    finishSave(pending)
                     showFridayReminder = false
                 }) { Text("No, Work Only") }
             }
@@ -964,12 +1023,65 @@ fun LoadEntryScreen(
             text = { Text("PRO #${pendingDuplicateLoad?.proNumber} already exists in your records. Would you like to update the existing record with these new details?") },
             confirmButton = {
                 Button(onClick = {
-                    onSaveClick(pendingDuplicateLoad!!)
+                    finishSave(pendingDuplicateLoad!!)
                     showDuplicateWarningDialog = false
                 }) { Text("Yes, Update") }
             },
             dismissButton = {
                 TextButton(onClick = { showDuplicateWarningDialog = false }) { Text("Cancel") }
+            }
+        )
+    }
+
+    facilityPrompts?.let { state ->
+        val prompt = state.queue.first()
+        fun answer(fields: FacilityNoteFields) {
+            scope.launch {
+                saveFacilityNote(
+                    FacilityNoteEntity(
+                        facilityKey = prompt.key,
+                        displayName = prompt.displayName,
+                        instructions = fields.instructions,
+                        directions = fields.directions,
+                        parking = fields.parking,
+                        updatedAt = System.currentTimeMillis()
+                    )
+                )
+                val remaining = state.queue.drop(1)
+                if (remaining.isEmpty()) {
+                    facilityPrompts = null
+                    onSaveClick(state.load)
+                } else {
+                    facilityPrompts = state.copy(queue = remaining)
+                }
+            }
+        }
+        AlertDialog(
+            onDismissRequest = {},
+            title = { Text("Facility notes changed") },
+            text = {
+                Column(
+                    modifier = Modifier.verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(formatFacilityTitle(prompt.displayName), style = MaterialTheme.typography.titleSmall)
+                    Text("This dispatch has different notes than the ones you have saved. Update them?")
+                    listOf(
+                        Triple("Instructions", prompt.saved.instructions, prompt.plan.useScanned.instructions),
+                        Triple("Directions", prompt.saved.directions, prompt.plan.useScanned.directions),
+                        Triple("Parking", prompt.saved.parking, prompt.plan.useScanned.parking)
+                    ).filter { (_, saved, dispatch) -> saved != dispatch }.forEach { (label, saved, dispatch) ->
+                        Text(label, style = MaterialTheme.typography.labelLarge)
+                        Text("Saved: ${saved.ifBlank { "(empty)" }}", style = MaterialTheme.typography.bodySmall)
+                        Text("Dispatch: $dispatch", style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            },
+            confirmButton = {
+                Button(onClick = { answer(prompt.plan.useScanned) }) { Text("Update") }
+            },
+            dismissButton = {
+                TextButton(onClick = { answer(prompt.plan.keepSaved) }) { Text("Keep mine") }
             }
         )
     }

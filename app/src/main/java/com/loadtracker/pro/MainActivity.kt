@@ -946,6 +946,8 @@ class MainActivity : ComponentActivity() {
                                                 editingLoad = tripToEdit,
                                                 isHistorical = isHistoricalEntry,
                                                 existingProNumbers = savedLoads.map { it.proNumber },
+                                                lookupFacilityNote = { name -> viewModel.getFacilityNote(name) },
+                                                saveFacilityNote = { note -> viewModel.saveFacilityNote(note) },
                                                 onSaveClick = { finalizedLoadEntity ->
                                                     if (finalizedLoadEntity.tripState.startsWith(prefix = "ACTIVE")) {
                                                         TrackingService.activeProNumber = finalizedLoadEntity.proNumber
