@@ -52,6 +52,7 @@ import androidx.compose.ui.unit.dp
 import dev.jeziellago.compose.markdowntext.MarkdownText
 import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneId
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -74,6 +75,7 @@ fun DashboardScreen(
     flatTrainerPayRate: Double,
     showHelpOnLaunch: Boolean,
     onDismissHelpDialog: () -> Unit,
+    onEditDeliveryDate: (CurrentLoad, Long) -> Unit = { _, _ -> },
 ) {
     val activeTrip = pastLoads.find { it.tripState != "COMPLETED" }
     val currentPayrollWeekStart = getPayrollWeekStartDate(System.currentTimeMillis())
@@ -702,12 +704,49 @@ fun DashboardScreen(
                 val dhBonus =
                     if (trip.dispatchedBounceMiles >= 150.0) trip.dispatchedBounceMiles * 0.20 else 0.0
                 val finalNet = baseCut + tarp + dhBonus
+                val completionZone = ZoneId.systemDefault()
+                var deliveryDate by remember(trip.proNumber) {
+                    mutableStateOf(
+                        Instant.ofEpochMilli(trip.deliveryTimestamp ?: System.currentTimeMillis())
+                            .atZone(completionZone).toLocalDate()
+                    )
+                }
+                var showDeliveryDatePicker by remember { mutableStateOf(false) }
+                if (showDeliveryDatePicker) {
+                    DeliveryDatePickerDialog(
+                        initialDate = deliveryDate,
+                        minDate = Instant.ofEpochMilli(trip.pickupTimestamp).atZone(completionZone).toLocalDate(),
+                        maxDate = LocalDate.now(completionZone),
+                        onConfirm = { deliveryDate = it; showDeliveryDatePicker = false },
+                        onDismiss = { showDeliveryDatePicker = false }
+                    )
+                }
 
                 AlertDialog(
                     onDismissRequest = { },
                     title = { Text("Load Settlement Summary - PRO #${trip.proNumber}") },
                     text = {
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("Delivered on:")
+                                OutlinedButton(onClick = { showDeliveryDatePicker = true }) {
+                                    Text(deliveryDate.format(DateTimeFormatter.ofPattern("EEE MM/dd/yyyy", Locale.US)))
+                                }
+                            }
+                            Text(
+                                "Pay week: " + getPayrollWeekStartDate(
+                                    deliveryTimestampForDate(deliveryDate, trip.pickupTimestamp)
+                                ).let {
+                                    "${it.format(DateTimeFormatter.ofPattern("MM/dd"))} - " +
+                                            it.plusDays(6).format(DateTimeFormatter.ofPattern("MM/dd/yyyy"))
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.secondary
+                            )
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween
@@ -756,7 +795,11 @@ fun DashboardScreen(
                     },
             confirmButton = {
                 Button(onClick = {
-                    onUpdateTripClick(trip)
+                    onUpdateTripClick(
+                        trip.copy(
+                            deliveryTimestamp = deliveryTimestampForDate(deliveryDate, trip.pickupTimestamp)
+                        )
+                    )
                     showCompletionDialog = false
                     selectedTripData = null
                 }) { Text("Confirm & File Log") }
@@ -820,6 +863,27 @@ fun DashboardScreen(
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.secondary
                                 )
+                            }
+                            if (trip.tripState == "COMPLETED") {
+                                var showEditDeliveryPicker by remember { mutableStateOf(false) }
+                                TextButton(onClick = { showEditDeliveryPicker = true }) {
+                                    Text("Edit delivery date")
+                                }
+                                if (showEditDeliveryPicker) {
+                                    DeliveryDatePickerDialog(
+                                        initialDate = Instant.ofEpochMilli(trip.deliveryTimestamp ?: trip.pickupTimestamp)
+                                            .atZone(zone).toLocalDate(),
+                                        minDate = Instant.ofEpochMilli(trip.pickupTimestamp).atZone(zone).toLocalDate(),
+                                        maxDate = LocalDate.now(zone),
+                                        onConfirm = { picked ->
+                                            val newTs = deliveryTimestampForDate(picked, trip.pickupTimestamp)
+                                            onEditDeliveryDate(trip, newTs)
+                                            selectedTripData = trip.copy(deliveryTimestamp = newTs)
+                                            showEditDeliveryPicker = false
+                                        },
+                                        onDismiss = { showEditDeliveryPicker = false }
+                                    )
+                                }
                             }
 
                             HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))

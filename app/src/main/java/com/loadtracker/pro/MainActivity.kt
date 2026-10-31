@@ -890,6 +890,9 @@ class MainActivity : ComponentActivity() {
                                                     tripForMap = load
                                                     currentScreen = "route_map"
                                                 },
+                                                onEditDeliveryDate = { load, ts ->
+                                                    viewModel.updateDeliveryTimestamp(load, ts)
+                                                },
                                                 onUpdateTripClick = { updatedTripEntity ->
                                                     if (updatedTripEntity.tripState == "COMPLETED") {
                                                         stopService(

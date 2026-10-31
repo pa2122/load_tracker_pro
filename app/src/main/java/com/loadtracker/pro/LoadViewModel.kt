@@ -137,6 +137,12 @@ class LoadViewModel(application: Application) :
         }
     }
 
+    fun updateDeliveryTimestamp(load: CurrentLoad, deliveryTimestamp: Long) {
+        viewModelScope.launch {
+            loadDao.insertLoad(load.copy(deliveryTimestamp = deliveryTimestamp))
+        }
+    }
+
     fun deleteLoad(load: CurrentLoad) {
         viewModelScope.launch {
             loadDao.deleteLoad(load)
