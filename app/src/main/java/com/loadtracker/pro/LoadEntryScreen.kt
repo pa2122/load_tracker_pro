@@ -143,11 +143,21 @@ fun LoadEntryScreen(
     var sLong by rememberSaveable { mutableStateOf(value = editingLoad?.shipperLong) }
     var isShipperVerified by rememberSaveable { mutableStateOf(value = editingLoad?.shipperLat != null) }
 
-    var cRawPaste by rememberSaveable { mutableStateOf(value = editingLoad?.consigneeName ?: "") }
-    var cName by rememberSaveable { mutableStateOf(value = editingLoad?.consigneeName?.lines()?.firstOrNull()?.trim() ?: "") }
+    var cRawPaste by rememberSaveable {
+        mutableStateOf(value = editingLoad?.consigneeName?.takeUnless { it == JOB_SITE_PLACEHOLDER_NAME } ?: "")
+    }
+    var cName by rememberSaveable {
+        mutableStateOf(
+            value = editingLoad?.consigneeName?.takeUnless { it == JOB_SITE_PLACEHOLDER_NAME }
+                ?.lines()?.firstOrNull()?.trim() ?: ""
+        )
+    }
     var cLat by rememberSaveable { mutableStateOf(value = editingLoad?.consigneeLat) }
     var cLong by rememberSaveable { mutableStateOf(value = editingLoad?.consigneeLong) }
     var isConsigneeVerified by rememberSaveable { mutableStateOf(value = editingLoad?.consigneeLat != null) }
+    var isConsigneeAddressTbd by rememberSaveable {
+        mutableStateOf(value = editingLoad?.isConsigneeAddressPending == true)
+    }
 
     var sApptText by rememberSaveable { mutableStateOf(value = editingLoad?.pickupApptText) }
     var sApptTimestamp by rememberSaveable { mutableStateOf(value = editingLoad?.pickupApptTimestamp) }
@@ -226,6 +236,8 @@ fun LoadEntryScreen(
             )
             for ((scanned, name) in candidates) {
                 if (scanned == null || name.isNullOrBlank()) continue
+                // A consignee with no address yet has no reliable identity; its notes are not saved.
+                if (name == JOB_SITE_PLACEHOLDER_NAME || (name == load.consigneeName && load.consigneeLat == null)) continue
                 val key = FacilityNotes.key(name)
                 // A scan only applies to the facility it was read for; the user may have changed the address since.
                 if (key != scanned.facilityKey) continue
@@ -666,6 +678,22 @@ fun LoadEntryScreen(
         HorizontalDivider()
 
         Text("Consignee Details (Required)", style = MaterialTheme.typography.titleMedium)
+        if (!isHistorical && !isManualEntry) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Checkbox(
+                    checked = isConsigneeAddressTbd,
+                    onCheckedChange = { checked ->
+                        isConsigneeAddressTbd = checked
+                        if (checked) {
+                            isConsigneeVerified = false
+                            cLat = null
+                            cLong = null
+                        }
+                    }
+                )
+                Text("Delivery address not known yet (job site)", style = MaterialTheme.typography.bodyMedium)
+            }
+        }
         OutlinedTextField(
             value = cRawPaste,
             onValueChange = { input ->
@@ -674,9 +702,11 @@ fun LoadEntryScreen(
                 cLat = null
                 cLong = null
             },
-            label = { Text("Paste Consignee Name & Address") },
+            label = {
+                Text(if (isConsigneeAddressTbd) "Consignee / Job Site Name (optional)" else "Paste Consignee Name & Address")
+            },
             modifier = Modifier.fillMaxWidth(),
-            minLines = 3
+            minLines = if (isConsigneeAddressTbd) 1 else 3
         )
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -685,11 +715,19 @@ fun LoadEntryScreen(
         ) {
             Column(modifier = Modifier.weight(weight = 1f)) {
                 Text(text = if (cName.isNotEmpty()) "Name: $cName" else "Name: Not Parsed", style = MaterialTheme.typography.bodySmall)
-                Text(text = if (isConsigneeVerified) "Location: Fixed 📍" else "Location: Pending", style = MaterialTheme.typography.bodySmall, color = if (isConsigneeVerified) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error)
+                Text(
+                    text = when {
+                        isConsigneeAddressTbd -> "Address: TBD - add it from the active load once you have it"
+                        isConsigneeVerified -> "Location: Fixed 📍"
+                        else -> "Location: Pending"
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (isConsigneeVerified || isConsigneeAddressTbd) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+                )
             }
             Button(
                 onClick = { resolveAddress(input = cRawPaste, isShipper = false) },
-                enabled = cRawPaste.isNotBlank() && !isConsigneeVerified,
+                enabled = cRawPaste.isNotBlank() && !isConsigneeVerified && !isConsigneeAddressTbd,
             ) {
                 Text(if (isConsigneeVerified) "Verified ✅" else "Verify")
             }
@@ -858,7 +896,14 @@ fun LoadEntryScreen(
                 dBounce.toDoubleOrNull() != null &&
                 dLoaded.toDoubleOrNull() != null &&
                 sLat != null &&
-                cLat != null
+                (cLat != null || isConsigneeAddressTbd)
+
+        val consigneeNameToSave = when {
+            cRawPaste.isNotBlank() -> cRawPaste.trim()
+            cName.isNotBlank() -> cName
+            isConsigneeAddressTbd -> JOB_SITE_PLACEHOLDER_NAME
+            else -> cName
+        }
 
         fun processSave(loadToSave: CurrentLoad) {
             if (editingLoad == null && existingProNumbers.contains(loadToSave.proNumber)) {
@@ -912,7 +957,7 @@ fun LoadEntryScreen(
                         shipperName = if (sRawPaste.isNotBlank()) sRawPaste.trim() else sName,
                         shipperLat = sLat,
                         shipperLong = sLong,
-                        consigneeName = if (cRawPaste.isNotBlank()) cRawPaste.trim() else cName,
+                        consigneeName = consigneeNameToSave,
                         consigneeLat = cLat,
                         consigneeLong = cLong,
                         pickupApptText = sApptText,
@@ -945,7 +990,7 @@ fun LoadEntryScreen(
                         shipperName = if (sRawPaste.isNotBlank()) sRawPaste.trim() else sName,
                         shipperLat = sLat,
                         shipperLong = sLong,
-                        consigneeName = if (cRawPaste.isNotBlank()) cRawPaste.trim() else cName,
+                        consigneeName = consigneeNameToSave,
                         consigneeLat = cLat,
                         consigneeLong = cLong,
                         pickupApptText = sApptText,
@@ -955,14 +1000,23 @@ fun LoadEntryScreen(
                         consigneeApptTimestamp = cApptTimestamp,
                         consigneeApptType = cApptType
                     )
-                    TrackingService.resetTrackingState(ctx)
-                    TrackingService.activeProNumber = proNum.trim()
-                    TrackingService.activeTripState = "ACTIVE_BOUNCE"
-                    TrackingService.targetLat = sLat
-                    TrackingService.targetLong = sLong
-                    TrackingService.targetName = sName
-                    TrackingService.isGeofenceActive = true
-                    ContextCompat.startForegroundService(ctx, Intent(ctx, TrackingService::class.java))
+                    if (editingLoad == null) {
+                        TrackingService.resetTrackingState(ctx)
+                        TrackingService.activeProNumber = proNum.trim()
+                        TrackingService.activeTripState = "ACTIVE_BOUNCE"
+                        TrackingService.targetLat = sLat
+                        TrackingService.targetLong = sLong
+                        TrackingService.targetName = sName
+                        TrackingService.isGeofenceActive = true
+                        ContextCompat.startForegroundService(ctx, Intent(ctx, TrackingService::class.java))
+                    } else if (editingLoad.tripState == "ACTIVE_LOADED" &&
+                        editingLoad.consigneeLat == null && cLat != null && cLong != null
+                    ) {
+                        TrackingService.targetLat = cLat
+                        TrackingService.targetLong = cLong
+                        TrackingService.targetName = consigneeNameToSave
+                        TrackingService.isGeofenceActive = true
+                    }
                     processSave(draftData)
                 }
             },

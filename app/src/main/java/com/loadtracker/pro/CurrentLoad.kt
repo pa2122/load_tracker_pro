@@ -44,6 +44,12 @@ data class CurrentLoad(
     val detentionFlatPay: Double = 0.0
 )
 
+internal const val JOB_SITE_PLACEHOLDER_NAME = "Job site (address TBD)"
+
+// An in-progress load whose delivery address has not been added yet.
+internal val CurrentLoad.isConsigneeAddressPending: Boolean
+    get() = tripState.startsWith("ACTIVE") && consigneeLat == null
+
 @Entity(tableName = "trip_breadcrumbs")
 data class TripBreadcrumb(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
