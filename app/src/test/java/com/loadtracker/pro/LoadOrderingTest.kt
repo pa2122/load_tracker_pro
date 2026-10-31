@@ -35,6 +35,25 @@ class LoadOrderingTest {
     }
 
     @Test
+    fun forgottenFridayDeliveryFilesUnderThatWeek() {
+        val pickup = millis(2026, 10, 15)
+        val now = millis(2026, 10, 19, 14)
+        val ts = deliveryTimestampForDate(java.time.LocalDate.of(2026, 10, 16), pickup, now, zone)
+        assertEquals(java.time.LocalDate.of(2026, 10, 12), getPayrollWeekStartDate(ts, zone))
+        assertEquals(java.time.LocalDate.of(2026, 10, 16), java.time.Instant.ofEpochMilli(ts).atZone(zone).toLocalDate())
+    }
+
+    @Test
+    fun deliveryIsClampedBetweenPickupAndNow() {
+        val pickup = millis(2026, 10, 15, 12)
+        val now = millis(2026, 10, 19, 9)
+        val future = deliveryTimestampForDate(java.time.LocalDate.of(2026, 10, 25), pickup, now, zone)
+        assertEquals(now, future)
+        val samePickupDayEarlierTime = deliveryTimestampForDate(java.time.LocalDate.of(2026, 10, 15), pickup, now, zone)
+        assertEquals(pickup, samePickupDayEarlierTime)
+    }
+
+    @Test
     fun formatsPickupAndDelivery() {
         val l = load("A", millis(2026, 10, 15), millis(2026, 10, 19))
         assertEquals("Picked up Thu 10/15 → Delivered Mon 10/19", formatLoadDates(l, zone))

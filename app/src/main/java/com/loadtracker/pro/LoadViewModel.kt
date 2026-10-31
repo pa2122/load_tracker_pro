@@ -144,6 +144,13 @@ class LoadViewModel(application: Application) :
         }
     }
 
+    fun updateDeliveryTimestamp(load: CurrentLoad, deliveryTimestamp: Long) {
+        viewModelScope.launch {
+            DatabaseBackupManager.createDailyBackupBeforeMutation(getApplication())
+            loadDao.insertLoad(load.copy(deliveryTimestamp = deliveryTimestamp))
+        }
+    }
+
     fun deleteLoad(load: CurrentLoad) {
         viewModelScope.launch {
             DatabaseBackupManager.createDailyBackupBeforeMutation(getApplication())
