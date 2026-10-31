@@ -576,13 +576,7 @@ internal object ScreenshotBatchParser {
         ).find(rawText)?.groupValues?.get(1)
             ?: Regex("""\b\d{6,10}\b""").find(rawText)?.value.orEmpty()
 
-        val pay = Regex(
-            """(?:Gross\s*Pay|Gross|Pay|Linehaul|Total\s*Pay|Amount)\D*?\$?\s*(\d{1,3}(?:,\d{3})+|\d+)(?:\.(\d{1,2}))?""",
-            RegexOption.IGNORE_CASE
-        ).find(rawText)?.let { match ->
-            match.groupValues[1].replace(",", "") +
-                    match.groupValues[2].takeIf { it.isNotBlank() }?.let { ".$it" }.orEmpty()
-        }.orEmpty()
+        val pay = OcrPayParser.parse(rawText).orEmpty()
 
         fun extractMiles(pattern: Regex): String = pattern.find(rawText)
             ?.groupValues?.get(1)?.replace(",", "").orEmpty()
