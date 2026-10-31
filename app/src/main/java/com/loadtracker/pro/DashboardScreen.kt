@@ -106,6 +106,7 @@ fun DashboardScreen(
         .toList()
 
     var showCompletionDialog by remember { mutableStateOf(value = false) }
+    var showMissingAddressDialog by remember { mutableStateOf(value = false) }
     var showHistoryDetailsDialog by remember { mutableStateOf(value = false) }
     var showWeeklyBreakdownDialog by remember { mutableStateOf(value = false) } 
     var selectedTripData by remember { mutableStateOf<CurrentLoad?>(null) }
@@ -485,6 +486,18 @@ fun DashboardScreen(
                                 HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp), color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.2f))
                                 Spacer(modifier = Modifier.height(4.dp))
 
+                                if (activeTrip.isConsigneeAddressPending) {
+                                    Text(
+                                        "⚠️ Delivery address needed",
+                                        style = MaterialTheme.typography.labelLarge,
+                                        color = MaterialTheme.colorScheme.error
+                                    )
+                                    OutlinedButton(
+                                        onClick = { onEditTripClick(activeTrip) },
+                                        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+                                    ) { Text("Add Delivery Address") }
+                                }
+
                                 val (targetLat, targetLong, targetName) = when (activeTrip.tripState) {
                                     "ACTIVE_BOUNCE", "ACTIVE_SHIPPER" ->
                                         Triple(activeTrip.shipperLat, activeTrip.shipperLong, activeTrip.shipperName ?: "Shipper")
@@ -621,7 +634,11 @@ fun DashboardScreen(
                                                         loadedMilesEnd = liveLoadedMiles,
                                                         deliveryTimestamp = System.currentTimeMillis()
                                                     )
-                                                    showCompletionDialog = true
+                                                    if (activeTrip.isConsigneeAddressPending) {
+                                                        showMissingAddressDialog = true
+                                                    } else {
+                                                        showCompletionDialog = true
+                                                    }
                                                 }
                                             },
                                             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
@@ -775,6 +792,26 @@ fun DashboardScreen(
                         }
                     }
                 }
+            }
+
+            if (showMissingAddressDialog && selectedTripData != null) {
+                AlertDialog(
+                    onDismissRequest = { showMissingAddressDialog = false },
+                    title = { Text("Delivery address missing") },
+                    text = { Text("This load has no delivery address. You can add it now, or complete the load without it.") },
+                    confirmButton = {
+                        Button(onClick = {
+                            showMissingAddressDialog = false
+                            activeTrip?.let(onEditTripClick)
+                        }) { Text("Add Address") }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = {
+                            showMissingAddressDialog = false
+                            showCompletionDialog = true
+                        }) { Text("Complete Anyway") }
+                    }
+                )
             }
 
             if (showCompletionDialog && selectedTripData != null) {

@@ -58,6 +58,12 @@ data class CurrentLoad(
     val lastStopLoadedMiles: Double = 0.0
 )
 
+internal const val JOB_SITE_PLACEHOLDER_NAME = "Job site (address TBD)"
+
+// An in-progress load whose delivery address has not been added yet.
+internal val CurrentLoad.isConsigneeAddressPending: Boolean
+    get() = tripState.startsWith("ACTIVE") && consigneeLat == null
+
 internal fun CurrentLoad.extraStopPayCents(ratePerStop: Double): Long =
     Math.round(ratePerStop * 100.0) * extraStopCount.toLong()
 
