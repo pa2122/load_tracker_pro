@@ -150,31 +150,6 @@ class MainActivity : ComponentActivity() {
             android.widget.Toast.makeText(this, "⚠️ App recovered after unexpected shutdown. Active load tracking resumed.", android.widget.Toast.LENGTH_LONG).show()
         }
 
-        // Activity-level Wear OS Message Listener (Guaranteed active on launch)
-        com.google.android.gms.wearable.Wearable.getMessageClient(this).addListener { messageEvent ->
-            android.util.Log.d("WEAR_DEBUG", "Phone Activity received Wear message on path: ${messageEvent.path}")
-            if (messageEvent.path == WearableDataSyncManager.PATH_REQUEST_ACTIVE_TRIP_STATE) {
-                lifecycleScope.launch(Dispatchers.IO) {
-                    val dao = AppDatabase.getDatabase(applicationContext).loadDao()
-                    val loads: List<CurrentLoad> = dao.getAllLoads().firstOrNull() ?: emptyList()
-                    val activeLoad = loads.firstOrNull { it.tripState != "COMPLETED" }
-
-                    val payload = if (activeLoad != null) {
-                        WearableDataSyncManager.WearTripStatePayload(
-                            proNumber = activeLoad.proNumber,
-                            tripState = activeLoad.tripState,
-                            bounceMiles = if (activeLoad.bounceMilesEnd > 0) activeLoad.bounceMilesEnd else activeLoad.dispatchedBounceMiles,
-                            loadedMiles = if (activeLoad.loadedMilesEnd > 0) activeLoad.loadedMilesEnd else activeLoad.dispatchedLoadedMiles,
-                            dockArrivalTime = activeLoad.dockArrivalTime ?: activeLoad.pickupTimestamp
-                        )
-                    } else {
-                        WearableDataSyncManager.WearTripStatePayload(proNumber = "", tripState = "COMPLETED", bounceMiles = 0.0, loadedMiles = 0.0)
-                    }
-                    WearableDataSyncManager.syncTripStateToWearable(this@MainActivity, payload)
-                }
-            }
-        }
-
         setContent {
             LoadTrackerProTheme {
                 Surface(
@@ -651,28 +626,6 @@ class MainActivity : ComponentActivity() {
                                     )
 
                                     NavigationDrawerItem(
-                                        label = { Text("⚡ Broadcast Load to Watch") },
-                                        selected = false,
-                                        onClick = {
-                                            scope.launch { drawerState.close() }
-                                            val activeLoad = viewModel.allLoads.value.firstOrNull { it.tripState != "COMPLETED" }
-                                            val payload = if (activeLoad != null) {
-                                                WearableDataSyncManager.WearTripStatePayload(
-                                                    proNumber = activeLoad.proNumber,
-                                                    tripState = activeLoad.tripState,
-                                                    bounceMiles = if (activeLoad.bounceMilesEnd > 0) activeLoad.bounceMilesEnd else activeLoad.dispatchedBounceMiles,
-                                                    loadedMiles = if (activeLoad.loadedMilesEnd > 0) activeLoad.loadedMilesEnd else activeLoad.dispatchedLoadedMiles,
-                                                    dockArrivalTime = activeLoad.dockArrivalTime ?: activeLoad.pickupTimestamp
-                                                )
-                                            } else {
-                                                WearableDataSyncManager.WearTripStatePayload(proNumber = "", tripState = "COMPLETED", bounceMiles = 0.0, loadedMiles = 0.0)
-                                            }
-                                            WearableDataSyncManager.syncTripStateToWearable(this@MainActivity, payload)
-                                            Toast.makeText(this@MainActivity, "⚡ Broadcasted active load PRO #${payload.proNumber.ifBlank { "NONE" }} to watch!", Toast.LENGTH_LONG).show()
-                                        }
-                                    )
-
-                                    NavigationDrawerItem(
                                         label = { Text("🐛 Report Bug / Feedback") },
                                         selected = false,
                                         onClick = {
@@ -721,51 +674,7 @@ class MainActivity : ComponentActivity() {
                             }
                         }
                     ) {
-                        val isWatchDevice = remember { packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_WATCH) }
-                        val allLoadsList by viewModel.allLoads.collectAsState(initial = emptyList())
-                        val activeWatchLoad = remember(allLoadsList) { allLoadsList.firstOrNull { it.tripState != "COMPLETED" } }
-
-                        DisposableEffect(allLoadsList) {
-                            val messageListener = com.google.android.gms.wearable.MessageClient.OnMessageReceivedListener { messageEvent ->
-                                android.util.Log.d("WEAR_DEBUG", "Phone received Wear message on path: ${messageEvent.path}")
-                                if (messageEvent.path == WearableDataSyncManager.PATH_REQUEST_ACTIVE_TRIP_STATE) {
-                                    val activeLoad = allLoadsList.firstOrNull { it.tripState != "COMPLETED" }
-                                    val payload = if (activeLoad != null) {
-                                        WearableDataSyncManager.WearTripStatePayload(
-                                            proNumber = activeLoad.proNumber,
-                                            tripState = activeLoad.tripState,
-                                            bounceMiles = if (activeLoad.bounceMilesEnd > 0) activeLoad.bounceMilesEnd else activeLoad.dispatchedBounceMiles,
-                                            loadedMiles = if (activeLoad.loadedMilesEnd > 0) activeLoad.loadedMilesEnd else activeLoad.dispatchedLoadedMiles,
-                                            dockArrivalTime = activeLoad.dockArrivalTime ?: activeLoad.pickupTimestamp
-                                        )
-                                    } else {
-                                        WearableDataSyncManager.WearTripStatePayload(proNumber = "", tripState = "COMPLETED", bounceMiles = 0.0, loadedMiles = 0.0)
-                                    }
-                                    WearableDataSyncManager.syncTripStateToWearable(this@MainActivity, payload)
-                                }
-                            }
-
-                            com.google.android.gms.wearable.Wearable.getMessageClient(this@MainActivity).addListener(messageListener)
-
-                            onDispose {
-                                com.google.android.gms.wearable.Wearable.getMessageClient(this@MainActivity).removeListener(messageListener)
-                            }
-                        }
-
-                        if (isWatchDevice) {
-                            WearActiveTripHud(
-                                activeLoad = activeWatchLoad,
-                                onWristAction = { action ->
-                                    val activePro = activeWatchLoad?.proNumber ?: return@WearActiveTripHud
-                                    when (action) {
-                                        WearableDataSyncManager.ACTION_ARRIVE_SHIPPER -> viewModel.updateTripState(activePro, "ACTIVE_SHIPPER")
-                                        WearableDataSyncManager.ACTION_DEPART_SHIPPER -> viewModel.updateTripState(activePro, "ACTIVE_LOADED")
-                                        WearableDataSyncManager.ACTION_ARRIVE_CONSIGNEE -> viewModel.updateTripState(activePro, "ACTIVE_CONSIGNEE")
-                                        WearableDataSyncManager.ACTION_COMPLETE_LOAD -> viewModel.updateTripState(activePro, "COMPLETED")
-                                    }
-                                }
-                            )
-                        } else {
+                        run {
                             val configuration = LocalConfiguration.current
                             val isTablet = configuration.screenWidthDp >= 600
 
