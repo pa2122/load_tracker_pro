@@ -64,7 +64,7 @@ class DatabaseMigrationTest {
             .allowMainThreadQueries()
             .build()
         try {
-            assertEquals(10, database.openHelper.writableDatabase.version)
+            assertEquals(14, database.openHelper.writableDatabase.version)
 
             val migratedLoad = database.loadDao().getAllLoads().first().single()
             assertEquals("MIGRATION-TEST-1", migratedLoad.proNumber)

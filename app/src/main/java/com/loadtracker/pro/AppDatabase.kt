@@ -7,7 +7,7 @@ import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
-@Database(entities = [CurrentLoad::class, TripBreadcrumb::class], version = 13, exportSchema = true)
+@Database(entities = [CurrentLoad::class, TripBreadcrumb::class, FacilityNoteEntity::class], version = 14, exportSchema = true)
 abstract class AppDatabase : RoomDatabase() {
 
     abstract fun loadDao(): LoadDao
@@ -28,7 +28,8 @@ abstract class AppDatabase : RoomDatabase() {
                 MIGRATION_9_10,
                 MIGRATION_10_11,
                 MIGRATION_11_12,
-                MIGRATION_12_13
+                MIGRATION_12_13,
+                MIGRATION_13_14
             )
 
         private fun hasTable(db: SupportSQLiteDatabase, tableName: String): Boolean {
@@ -166,6 +167,91 @@ abstract class AppDatabase : RoomDatabase() {
         private val MIGRATION_12_13 = object : Migration(12, 13) {
             // Version 12's columns already exist; version 13 revalidates them against the corrected Room defaults.
             override fun migrate(db: SupportSQLiteDatabase) {}
+        }
+
+        private val MIGRATION_13_14 = object : Migration(13, 14) {
+            // One notes record per facility (name + address); backfilled from the notes blobs saved on past loads.
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS facility_notes (
+                        facilityKey TEXT NOT NULL,
+                        displayName TEXT NOT NULL,
+                        instructions TEXT NOT NULL,
+                        directions TEXT NOT NULL,
+                        parking TEXT NOT NULL,
+                        updatedAt INTEGER NOT NULL,
+                        PRIMARY KEY(facilityKey)
+                    )
+                    """.trimIndent()
+                )
+                if (hasTable(db, "trucking_loads") &&
+                    hasColumn(db, "trucking_loads", "tripNotes") &&
+                    hasColumn(db, "trucking_loads", "shipperName") &&
+                    hasColumn(db, "trucking_loads", "consigneeName")
+                ) {
+                    try {
+                        backfillFacilityNotes(db)
+                    } catch (e: Exception) {
+                        // Notes are a convenience; never block the upgrade over unparseable history.
+                        e.printStackTrace()
+                    }
+                }
+            }
+        }
+
+        private fun backfillFacilityNotes(db: SupportSQLiteDatabase) {
+            val placeholders = setOf(
+                "origin", "pickup", "shipper", "final dropoff", "dropoff", "drop", "consignee", "delivery"
+            )
+            val merged = linkedMapOf<String, FacilityNoteEntity>()
+
+            fun absorb(name: String?, fields: FacilityNoteFields, timestamp: Long) {
+                val displayName = name?.trim().orEmpty()
+                if (displayName.isEmpty() || displayName.lowercase() in placeholders || fields.isEmpty) return
+                val key = FacilityNotes.key(displayName)
+                if (key.isEmpty()) return
+                val combined = merged[key]?.let { FacilityNotes.merge(it.fields(), fields) } ?: fields
+                merged[key] = FacilityNoteEntity(
+                    facilityKey = key,
+                    displayName = displayName,
+                    instructions = combined.instructions,
+                    directions = combined.directions,
+                    parking = combined.parking,
+                    updatedAt = timestamp
+                )
+            }
+
+            // Oldest first so the newest load's notes win.
+            val cursor = db.query(
+                "SELECT shipperName, consigneeName, tripNotes, pickupTimestamp FROM trucking_loads " +
+                    "WHERE tripNotes IS NOT NULL AND TRIM(tripNotes) != '' ORDER BY pickupTimestamp ASC"
+            )
+            try {
+                while (cursor.moveToNext()) {
+                    val (shipperFields, consigneeFields) = FacilityNotes.parseTripNotes(cursor.getString(2).orEmpty())
+                    val timestamp = cursor.getLong(3)
+                    absorb(cursor.getString(0), shipperFields, timestamp)
+                    absorb(cursor.getString(1), consigneeFields, timestamp)
+                }
+            } finally {
+                cursor.close()
+            }
+
+            merged.values.forEach { note ->
+                db.insert(
+                    "facility_notes",
+                    android.database.sqlite.SQLiteDatabase.CONFLICT_REPLACE,
+                    android.content.ContentValues().apply {
+                        put("facilityKey", note.facilityKey)
+                        put("displayName", note.displayName)
+                        put("instructions", note.instructions)
+                        put("directions", note.directions)
+                        put("parking", note.parking)
+                        put("updatedAt", note.updatedAt)
+                    }
+                )
+            }
         }
 
         // Safe singleton factory constructor to control access to your data file

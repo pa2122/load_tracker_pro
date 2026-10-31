@@ -81,23 +81,12 @@ interface LoadDao {
     @Query("SELECT COUNT(*) FROM trip_breadcrumbs")
     fun getBreadcrumbCount(): Flow<Int>
 
-    @Query("""
-        SELECT DISTINCT shipperName FROM trucking_loads 
-        WHERE shipperName IS NOT NULL AND LOWER(shipperName) NOT IN ('origin', 'pickup', 'shipper', '')
-        UNION 
-        SELECT DISTINCT consigneeName FROM trucking_loads 
-        WHERE consigneeName IS NOT NULL AND LOWER(consigneeName) NOT IN ('final dropoff', 'dropoff', 'drop', 'consignee', 'delivery', '')
-    """)
-    fun getAllFacilityNames(): Flow<List<String>>
+    @Query("SELECT * FROM facility_notes ORDER BY displayName COLLATE NOCASE")
+    fun getAllFacilityNotes(): Flow<List<FacilityNoteEntity>>
 
-    @Query("SELECT tripNotes, pickupTimestamp, proNumber, shipperName, consigneeName FROM trucking_loads WHERE (shipperName = :name OR consigneeName = :name) AND tripNotes IS NOT NULL AND TRIM(tripNotes) != ''")
-    fun getNotesForFacility(name: String): Flow<List<FacilityNote>>
+    @Query("SELECT * FROM facility_notes WHERE facilityKey = :key")
+    suspend fun getFacilityNote(key: String): FacilityNoteEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertFacilityNote(note: FacilityNoteEntity)
 }
-
-data class FacilityNote(
-    val tripNotes: String,
-    val pickupTimestamp: Long,
-    val proNumber: String,
-    val shipperName: String,
-    val consigneeName: String
-)
