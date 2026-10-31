@@ -100,10 +100,9 @@ fun DashboardScreen(
         }
     }
     val currentPayrollWeekStart = getPayrollWeekStartDate(System.currentTimeMillis())
-    val completedLoads = pastLoads.asSequence()
+    val completedLoads = pastLoads
         .filter { it.payrollWeekStartDate() == currentPayrollWeekStart }
-        .sortedByDescending { it.pickupTimestamp }
-        .toList()
+        .sortedByNewestDelivery()
 
     var showCompletionDialog by remember { mutableStateOf(value = false) }
     var showMissingAddressDialog by remember { mutableStateOf(value = false) }
@@ -947,6 +946,33 @@ fun DashboardScreen(
                             verticalArrangement = Arrangement.spacedBy(space = 8.dp)
                         ) {
                             Text(
+                                "Dates",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            val dateTimeFmt = remember { DateTimeFormatter.ofPattern("EEE MM/dd/yyyy h:mm a", Locale.US) }
+                            val zone = ZoneId.systemDefault()
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text("Picked up:")
+                                Text(Instant.ofEpochMilli(trip.pickupTimestamp).atZone(zone).format(dateTimeFmt))
+                            }
+                            trip.deliveryTimestamp?.let { delivered ->
+                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                    Text("Delivered:")
+                                    Text(Instant.ofEpochMilli(delivered).atZone(zone).format(dateTimeFmt))
+                                }
+                            }
+                            trip.payrollWeekStartDate()?.let { weekStart ->
+                                Text(
+                                    "Pay week: ${weekStart.format(DateTimeFormatter.ofPattern("MM/dd"))} - " +
+                                            weekStart.plusDays(6).format(DateTimeFormatter.ofPattern("MM/dd/yyyy")),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.secondary
+                                )
+                            }
+
+                            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                            Text(
                                 "Shipper & Consignee Details",
                                 style = MaterialTheme.typography.labelLarge,
                                 color = MaterialTheme.colorScheme.primary
@@ -1161,7 +1187,7 @@ fun DashboardScreen(
 
                 val weeklyTrips = pastLoads.filter { load ->
                     load.payrollWeekStartDate() == currentPayrollWeekStart
-                }
+                }.sortedByNewestDelivery()
 
                 LazyColumn(
                     verticalArrangement = Arrangement.spacedBy(space = 10.dp),
@@ -1480,7 +1506,7 @@ fun DashboardScreen(
         val weekStart = selectedWeekStart!!
         val weeklyTrips = pastLoads.filter { load ->
             load.payrollWeekStartDate() == weekStart
-        }
+        }.sortedByNewestDelivery()
 
         val totalGross = weeklyTrips.sumOf { it.loadPay }
         val totalDriverBase = weeklyTrips.sumOf { it.loadPay * (it.percentageRate / 100.0) }
@@ -1627,6 +1653,7 @@ fun DashboardScreen(
                                         Text("Gross: $${String.format(Locale.US, "%.2f", trip.loadPay)} (${trip.percentageRate.toInt()}%)", style = MaterialTheme.typography.bodySmall)
                                         Text("${trip.dispatchedLoadedMiles.toInt()} mi Loaded", style = MaterialTheme.typography.bodySmall)
                                     }
+                                    Text(formatLoadDates(trip), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
                                 }
                             }
                         }
