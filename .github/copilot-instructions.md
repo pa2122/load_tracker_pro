@@ -130,7 +130,7 @@ This file provides guidance for GitHub Copilot when working on the load_tracker_
 ## 🌿 Git & Branching
 
 ### Active Branches
-- **`master`:** Stable v1.x production release
+- **`v1.x`:** Stable v1.x production release
 - **`v2`:** Version 2.0 UI/UX redesign and Owner-Operator features (current main development branch)
 
 ### Before Starting Work
