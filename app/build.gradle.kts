@@ -142,11 +142,8 @@ dependencies {
     implementation(libs.compose.markdown)
     implementation(libs.coil.compose)
 
-    // 🗺️ Google Maps & Wearable Sync
+    // 🗺️ Google Maps
     implementation(libs.maps.compose)
     implementation(libs.play.services.maps)
-    implementation(libs.play.services.wearable)
     implementation(libs.kotlinx.coroutines.play.services)
-    implementation(libs.androidx.wear.compose.material)
-    implementation(libs.androidx.wear.compose.foundation)
 }

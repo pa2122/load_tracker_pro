@@ -145,21 +145,10 @@ class LoadViewModel(application: Application) :
         }
     }
 
-    private fun notifyWearableOfTripState(proNumber: String, state: String, bounce: Double = 0.0, loaded: Double = 0.0) {
-        val payload = WearableDataSyncManager.WearTripStatePayload(
-            proNumber = proNumber,
-            tripState = state,
-            bounceMiles = bounce,
-            loadedMiles = loaded
-        )
-        WearableDataSyncManager.syncTripStateToWearable(getApplication(), payload)
-    }
-
     fun deleteLoad(load: CurrentLoad) {
         viewModelScope.launch {
             DatabaseBackupManager.createDailyBackupBeforeMutation(getApplication())
             loadDao.deleteLoad(load)
-            notifyWearableOfTripState(load.proNumber, "COMPLETED")
         }
     }
 
@@ -167,7 +156,6 @@ class LoadViewModel(application: Application) :
         viewModelScope.launch {
             DatabaseBackupManager.createDailyBackupBeforeMutation(getApplication())
             loadDao.updateTripState(proNumber, newState)
-            notifyWearableOfTripState(proNumber, newState)
         }
     }
 
