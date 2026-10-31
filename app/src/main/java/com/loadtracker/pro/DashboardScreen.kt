@@ -76,11 +76,10 @@ fun DashboardScreen(
     onDismissHelpDialog: () -> Unit,
 ) {
     val activeTrip = pastLoads.find { it.tripState != "COMPLETED" }
-    val currentTargetFriday = getPayPeriodDate(System.currentTimeMillis())
-    val completedLoads = pastLoads.asSequence()
-        .filter { (it.tripState == "COMPLETED") && (getPayPeriodDate(it.pickupTimestamp) == currentTargetFriday) }
-        .sortedByDescending { it.pickupTimestamp }
-        .toList()
+    val currentPayrollWeekStart = getPayrollWeekStartDate(System.currentTimeMillis())
+    val completedLoads = pastLoads
+        .filter { it.payrollWeekStartDate() == currentPayrollWeekStart }
+        .sortedByNewestDelivery()
 
     var showCompletionDialog by remember { mutableStateOf(value = false) }
     var showMissingAddressDialog by remember { mutableStateOf(value = false) }
@@ -798,6 +797,33 @@ fun DashboardScreen(
                             verticalArrangement = Arrangement.spacedBy(space = 8.dp)
                         ) {
                             Text(
+                                "Dates",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            val dateTimeFmt = remember { DateTimeFormatter.ofPattern("EEE MM/dd/yyyy h:mm a", Locale.US) }
+                            val zone = java.time.ZoneId.systemDefault()
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text("Picked up:")
+                                Text(Instant.ofEpochMilli(trip.pickupTimestamp).atZone(zone).format(dateTimeFmt))
+                            }
+                            trip.deliveryTimestamp?.let { delivered ->
+                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                    Text("Delivered:")
+                                    Text(Instant.ofEpochMilli(delivered).atZone(zone).format(dateTimeFmt))
+                                }
+                            }
+                            trip.payrollWeekStartDate()?.let { weekStart ->
+                                Text(
+                                    "Pay week: ${weekStart.format(DateTimeFormatter.ofPattern("MM/dd"))} - " +
+                                            weekStart.plusDays(6).format(DateTimeFormatter.ofPattern("MM/dd/yyyy")),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.secondary
+                                )
+                            }
+
+                            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                            Text(
                                 "Shipper & Consignee Details",
                                 style = MaterialTheme.typography.labelLarge,
                                 color = MaterialTheme.colorScheme.primary
@@ -968,11 +994,9 @@ fun DashboardScreen(
             onDismissRequest = { showWeeklyBreakdownDialog = false },
             title = { Text("Weekly Earnings Breakdown") },
             text = {
-                val currentTargetFriday = getPayPeriodDate(System.currentTimeMillis())
-
                 val weeklyTrips = pastLoads.filter { load ->
-                    getPayPeriodDate(load.pickupTimestamp) == currentTargetFriday && load.tripState == "COMPLETED"
-                }
+                    load.payrollWeekStartDate() == currentPayrollWeekStart
+                }.sortedByNewestDelivery()
 
                 LazyColumn(
                     verticalArrangement = Arrangement.spacedBy(space = 10.dp),
@@ -1209,7 +1233,7 @@ fun DashboardScreen(
     if (showStatementHistoryDialog) {
         val grouped = remember(key1 = pastLoads) {
             pastLoads.asSequence().filter { it.tripState == "COMPLETED" }
-                .groupBy { load -> getPayPeriodDate(load.pickupTimestamp) }
+                .groupBy { load -> load.payrollWeekStartDate()!! }
                 .toSortedMap(reverseOrder())
         }
 
@@ -1249,8 +1273,8 @@ fun DashboardScreen(
                                             horizontalArrangement = Arrangement.SpaceBetween
                                         ) {
                                             Column {
-                                                Text("Week Ending:", style = MaterialTheme.typography.labelSmall)
-                                                Text(friday.format(DateTimeFormatter.ofPattern("MM/dd/yyyy")), style = MaterialTheme.typography.titleMedium)
+                                                Text("Pay Week:", style = MaterialTheme.typography.labelSmall)
+                                                Text("${friday.format(DateTimeFormatter.ofPattern("MM/dd"))} - ${friday.plusDays(6).format(DateTimeFormatter.ofPattern("MM/dd/yyyy"))}", style = MaterialTheme.typography.titleMedium)
                                                 Text("${loads.size} load(s) • Gross: $${String.format(Locale.US, "%.2f", totalWeekGross)}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
                                             }
                                             Column(horizontalAlignment = Alignment.End) {
@@ -1272,10 +1296,10 @@ fun DashboardScreen(
     }
 
     if (selectedWeekFriday != null) {
-        val weekFriday = selectedWeekFriday!!
+        val weekStart = selectedWeekFriday!!
         val weeklyTrips = pastLoads.filter { load ->
-            getPayPeriodDate(load.pickupTimestamp) == weekFriday && load.tripState == "COMPLETED"
-        }
+            load.payrollWeekStartDate() == weekStart
+        }.sortedByNewestDelivery()
 
         val totalGross = weeklyTrips.sumOf { it.loadPay }
         val totalDriverBase = weeklyTrips.sumOf { it.loadPay * (it.percentageRate / 100.0) }
@@ -1297,7 +1321,7 @@ fun DashboardScreen(
 
         AlertDialog(
             onDismissRequest = { selectedWeekFriday = null },
-            title = { Text("Statement: ${weekFriday.format(DateTimeFormatter.ofPattern("MM/dd/yyyy"))}") },
+            title = { Text("Statement: ${weekStart.format(DateTimeFormatter.ofPattern("MM/dd"))} - ${weekStart.plusDays(6).format(DateTimeFormatter.ofPattern("MM/dd/yyyy"))}") },
             text = {
                 Box(modifier = Modifier.heightIn(max = 500.dp)) {
                     LazyColumn(verticalArrangement = Arrangement.spacedBy(space = 10.dp)) {
@@ -1405,6 +1429,7 @@ fun DashboardScreen(
                                         Text("Gross: $${String.format(Locale.US, "%.2f", trip.loadPay)} (${trip.percentageRate.toInt()}%)", style = MaterialTheme.typography.bodySmall)
                                         Text("${trip.dispatchedLoadedMiles.toInt()} mi Loaded", style = MaterialTheme.typography.bodySmall)
                                     }
+                                    Text(formatLoadDates(trip), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
                                 }
                             }
                         }

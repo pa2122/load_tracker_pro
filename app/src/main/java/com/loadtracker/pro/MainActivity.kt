@@ -306,7 +306,9 @@ class MainActivity : ComponentActivity() {
                     }
 
                     LaunchedEffect(Unit) {
-                        resolveHomeAddress("15381 TX-198, Mabank, TX 75147")
+                        withContext(Dispatchers.IO) {
+                            resolveHomeAddress("15381 TX-198, Mabank, TX 75147")
+                        }
                     }
 
                     var isTrainingActive by remember { mutableStateOf(value = false) }
@@ -362,13 +364,13 @@ class MainActivity : ComponentActivity() {
                         }
                     }
 
-                    val currentTargetFriday = remember {
-                        getPayPeriodDate(System.currentTimeMillis())
+                    val currentWeekStart = remember {
+                        getPayrollWeekStartDate(System.currentTimeMillis())
                     }
 
-                    val currentWeekHasTrainingLoad = remember(savedLoads, currentTargetFriday) {
+                    val currentWeekHasTrainingLoad = remember(savedLoads, currentWeekStart) {
                         savedLoads.any { load ->
-                            (getPayPeriodDate(load.pickupTimestamp) == currentTargetFriday) && load.isTrainingWeek
+                            (load.payrollWeekStartDate() == currentWeekStart) && load.isTrainingWeek
                         }
                     }
 

@@ -155,7 +155,7 @@ class LoadViewModel(application: Application) :
         isTrainingGlobal: Boolean,
         trainerRate: Double
     ): WeekSummary {
-        val targetFriday = getPayPeriodDate(
+        val targetWeekStart = getPayrollWeekStartDate(
             System.currentTimeMillis()
         )
 
@@ -165,14 +165,12 @@ class LoadViewModel(application: Application) :
         var totalOutOfRouteMiles = 0.0
         var weekContainsTrainingLoad = false
 
-        val weekLoads = _allLoads.value.filter { getPayPeriodDate(it.pickupTimestamp) == targetFriday }
+        val weekLoads = _allLoads.value.filter { it.payrollWeekStartDate() == targetWeekStart }
 
         _allLoads.value.forEach { load ->
-            val loadFriday = getPayPeriodDate(
-                load.pickupTimestamp
-            )
+            val loadWeekStart = load.payrollWeekStartDate()
 
-            if (loadFriday == targetFriday) {
+            if (loadWeekStart == targetWeekStart) {
                 if (load.isTrainingWeek) weekContainsTrainingLoad = true
 
                 val grossCents = load.loadPay.toCents()

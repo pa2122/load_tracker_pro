@@ -263,10 +263,11 @@ fun LedgerScreen(
                         }
                     }
                 } else {
-                    // Group by Week-Ending Friday Cutoff
+                    // Group by Monday-Sunday pay week (delivery date), newest first
                     val groupedByFriday = remember(completedLoads) {
-                        completedLoads.groupBy { load ->
-                            getPayPeriodDate(load.pickupTimestamp).format(DateTimeFormatter.ofPattern("MM/dd/yyyy"))
+                        completedLoads.sortedByNewestDelivery().groupBy { load ->
+                            val start = load.payrollWeekStartDate() ?: getPayrollWeekStartDate(load.pickupTimestamp)
+                            "${start.format(DateTimeFormatter.ofPattern("MM/dd"))} - ${start.plusDays(6).format(DateTimeFormatter.ofPattern("MM/dd/yyyy"))}"
                         }
                     }
 
@@ -297,7 +298,7 @@ fun LedgerScreen(
                                         modifier = Modifier.fillMaxWidth(),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Text("Week Ending $fridayStr", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                                        Text("Pay Week $fridayStr", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                                         Spacer(modifier = Modifier.weight(1f))
                                         Text("${loadsInGroup.size} Load${if (loadsInGroup.size > 1) "s" else ""}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
                                     }
